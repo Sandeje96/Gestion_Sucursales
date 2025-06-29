@@ -1,0 +1,665 @@
+{# app/templates/daily_records/create.html #}
+{% extends "layout/base.html" %}
+
+{% block title %}
+    {{ 'Editar Registro' if record else 'Crear Registro Diario' }} - {{ current_user.branch_name }}
+{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- Header -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h4 class="mb-0">
+                                <i class="fas {{ 'fa-edit' if record else 'fa-plus' }} me-2"></i>
+                                {{ 'Editar Registro Diario' if record else 'Crear Nuevo Registro' }}
+                            </h4>
+                            <small class="opacity-75">
+                                Sucursal: {{ current_user.branch_name }}
+                                {% if record %}
+                                    - {{ record.record_date.strftime('%d/%m/%Y') }}
+                                {% endif %}
+                            </small>
+                        </div>
+                        <a href="{{ url_for('daily_records.index') }}" class="btn btn-light btn-sm">
+                            <i class="fas fa-arrow-left me-1"></i>Volver
+                        </a>
+                    </div>
+                </div>
+                
+                {% if record %}
+                <div class="card-body bg-light">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <small class="text-muted">Estado actual:</small>
+                            <div>
+                                {% if record.is_verified %}
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-check me-1"></i>Verificado
+                                    </span>
+                                    {% if record.verified_at %}
+                                        <small class="text-muted ms-2">
+                                            {{ record.verified_at.strftime('%d/%m/%Y %H:%M') }}
+                                        </small>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="badge bg-warning">
+                                        <i class="fas fa-clock me-1"></i>Pendiente de verificación
+                                    </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <small class="text-muted">Última modificación:</small>
+                            <div>{{ record.updated_at.strftime('%d/%m/%Y %H:%M') }}</div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Formulario principal -->
+            <form method="POST" novalidate id="dailyRecordForm">
+                {{ form.hidden_tag() }}
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-calendar-day me-2"></i>Información del Registro
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <!-- Fecha del registro -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                {{ form.record_date.label(class="form-label fw-semibold") }}
+                                {{ form.record_date(class="form-control" + (' is-invalid' if form.record_date.errors else '')) }}
+                                {% if form.record_date.errors %}
+                                    <div class="invalid-feedback">
+                                        {% for error in form.record_date.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                <div class="form-text">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Selecciona la fecha correspondiente al registro
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Resumen Actual</label>
+                                <div class="card bg-light">
+                                    <div class="card-body py-2">
+                                        <div class="row text-center">
+                                            <div class="col-6">
+                                                <small class="text-muted">Total Ventas</small>
+                                                <div class="fw-bold text-success" id="totalSalesDisplay">$0.00</div>
+                                            </div>
+                                            <div class="col-6">
+                                                <small class="text-muted">Ganancia Neta</small>
+                                                <div class="fw-bold" id="netProfitDisplay">$0.00</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ventas por método de pago -->
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-credit-card me-2"></i>Ventas por Método de Pago
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <!-- Efectivo -->
+                            <div class="col-md-6">
+                                {{ form.cash_sales.label(class="form-label fw-semibold") }}
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="fas fa-money-bill text-success"></i>
+                                    </span>
+                                    {{ form.cash_sales(class="form-control sales-input" + (' is-invalid' if form.cash_sales.errors else '')) }}
+                                </div>
+                                {% if form.cash_sales.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.cash_sales.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <!-- MercadoPago -->
+                            <div class="col-md-6">
+                                {{ form.mercadopago_sales.label(class="form-label fw-semibold") }}
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="fas fa-mobile-alt text-primary"></i>
+                                    </span>
+                                    {{ form.mercadopago_sales(class="form-control sales-input" + (' is-invalid' if form.mercadopago_sales.errors else '')) }}
+                                </div>
+                                {% if form.mercadopago_sales.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.mercadopago_sales.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <!-- Débito -->
+                            <div class="col-md-6">
+                                {{ form.debit_sales.label(class="form-label fw-semibold") }}
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="fas fa-credit-card text-warning"></i>
+                                    </span>
+                                    {{ form.debit_sales(class="form-control sales-input" + (' is-invalid' if form.debit_sales.errors else '')) }}
+                                </div>
+                                {% if form.debit_sales.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.debit_sales.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <!-- Crédito -->
+                            <div class="col-md-6">
+                                {{ form.credit_sales.label(class="form-label fw-semibold") }}
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="fas fa-credit-card text-info"></i>
+                                    </span>
+                                    {{ form.credit_sales(class="form-control sales-input" + (' is-invalid' if form.credit_sales.errors else '')) }}
+                                </div>
+                                {% if form.credit_sales.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.credit_sales.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Distribución visual en tiempo real -->
+                        <div class="row mt-4">
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Distribución de Ventas</label>
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <canvas id="salesDistributionChart" height="100"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gastos -->
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-receipt me-2"></i>Gastos del Día
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                {{ form.total_expenses.label(class="form-label fw-semibold") }}
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="fas fa-minus-circle text-danger"></i>
+                                    </span>
+                                    {{ form.total_expenses(class="form-control" + (' is-invalid' if form.total_expenses.errors else ''), id="expensesInput") }}
+                                </div>
+                                {% if form.total_expenses.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.total_expenses.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                <div class="form-text">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Incluye todos los gastos operativos del día
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Análisis de Rentabilidad</label>
+                                <div class="card bg-light">
+                                    <div class="card-body py-2">
+                                        <div class="row text-center">
+                                            <div class="col-4">
+                                                <small class="text-muted">Margen</small>
+                                                <div class="fw-bold" id="marginDisplay">0%</div>
+                                            </div>
+                                            <div class="col-4">
+                                                <small class="text-muted">Rentabilidad</small>
+                                                <div class="fw-bold" id="profitabilityDisplay">0%</div>
+                                            </div>
+                                            <div class="col-4">
+                                                <small class="text-muted">Estado</small>
+                                                <div id="statusDisplay">
+                                                    <span class="badge bg-secondary">-</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notas adicionales -->
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-sticky-note me-2"></i>Notas Adicionales
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        {{ form.notes.label(class="form-label fw-semibold") }}
+                        {{ form.notes(class="form-control" + (' is-invalid' if form.notes.errors else '')) }}
+                        {% if form.notes.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.notes.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <div class="form-text">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Información adicional relevante del día (opcional)
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Botones de acción -->
+                <div class="card mt-4">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="d-flex gap-2">
+                                    {{ form.submit(class="btn btn-primary btn-lg", id="submitBtn") }}
+                                    
+                                    <a href="{{ url_for('daily_records.index') }}" class="btn btn-outline-secondary btn-lg">
+                                        <i class="fas fa-times me-2"></i>Cancelar
+                                    </a>
+                                    
+                                    {% if record %}
+                                    <button type="button" class="btn btn-outline-info btn-lg" id="previewBtn">
+                                        <i class="fas fa-eye me-2"></i>Vista Previa
+                                    </button>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="mt-2">
+                                    <small class="text-muted">
+                                        <i class="fas fa-save me-1"></i>
+                                        Los datos se guardarán automáticamente
+                                        {% if record and record.is_verified %}
+                                        <br><i class="fas fa-exclamation-triangle text-warning me-1"></i>
+                                        Al editar un registro verificado, se marcará como pendiente
+                                        {% endif %}
+                                    </small>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="card bg-light">
+                                    <div class="card-body py-3">
+                                        <h6 class="card-title mb-2">Resumen Final</h6>
+                                        <div class="row text-center">
+                                            <div class="col-12 mb-2">
+                                                <small class="text-muted">Total Ventas</small>
+                                                <div class="fw-bold text-success fs-5" id="finalTotalSales">$0.00</div>
+                                            </div>
+                                            <div class="col-6">
+                                                <small class="text-muted">Gastos</small>
+                                                <div class="fw-bold text-danger" id="finalTotalExpenses">$0.00</div>
+                                            </div>
+                                            <div class="col-6">
+                                                <small class="text-muted">Ganancia</small>
+                                                <div class="fw-bold" id="finalNetProfit">$0.00</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de vista previa -->
+{% if record %}
+<div class="modal fade" id="previewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-eye me-2"></i>Vista Previa del Registro
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Información General</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <td><strong>Fecha:</strong></td>
+                                <td id="previewDate">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Sucursal:</strong></td>
+                                <td>{{ current_user.branch_name }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Total Ventas:</strong></td>
+                                <td class="text-success fw-bold" id="previewTotalSales">$0.00</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Total Gastos:</strong></td>
+                                <td class="text-danger fw-bold" id="previewTotalExpenses">$0.00</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Ganancia Neta:</strong></td>
+                                <td class="fw-bold" id="previewNetProfit">$0.00</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Desglose de Ventas</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <td><i class="fas fa-money-bill text-success me-2"></i>Efectivo:</td>
+                                <td class="fw-bold" id="previewCash">$0.00</td>
+                            </tr>
+                            <tr>
+                                <td><i class="fas fa-mobile-alt text-primary me-2"></i>MercadoPago:</td>
+                                <td class="fw-bold" id="previewMercadoPago">$0.00</td>
+                            </tr>
+                            <tr>
+                                <td><i class="fas fa-credit-card text-warning me-2"></i>Débito:</td>
+                                <td class="fw-bold" id="previewDebit">$0.00</td>
+                            </tr>
+                            <tr>
+                                <td><i class="fas fa-credit-card text-info me-2"></i>Crédito:</td>
+                                <td class="fw-bold" id="previewCredit">$0.00</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="mt-3" id="previewNotesSection" style="display: none;">
+                    <h6>Notas</h6>
+                    <div class="alert alert-info" id="previewNotes"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    Cerrar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="document.getElementById('submitBtn').click()">
+                    <i class="fas fa-save me-2"></i>Guardar Cambios
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<!-- Chart.js para el gráfico de distribución -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Referencias a elementos del DOM
+    const salesInputs = document.querySelectorAll('.sales-input');
+    const expensesInput = document.getElementById('expensesInput');
+    const totalSalesDisplay = document.getElementById('totalSalesDisplay');
+    const netProfitDisplay = document.getElementById('netProfitDisplay');
+    const marginDisplay = document.getElementById('marginDisplay');
+    const profitabilityDisplay = document.getElementById('profitabilityDisplay');
+    const statusDisplay = document.getElementById('statusDisplay');
+    const finalTotalSales = document.getElementById('finalTotalSales');
+    const finalTotalExpenses = document.getElementById('finalTotalExpenses');
+    const finalNetProfit = document.getElementById('finalNetProfit');
+    
+    // Configuración del gráfico de distribución
+    const ctx = document.getElementById('salesDistributionChart').getContext('2d');
+    const salesChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Efectivo', 'MercadoPago', 'Débito', 'Crédito'],
+            datasets: [{
+                data: [0, 0, 0, 0],
+                backgroundColor: [
+                    '#10b981', // Verde para efectivo
+                    '#3b82f6', // Azul para MercadoPago
+                    '#f59e0b', // Amarillo para débito
+                    '#ef4444'  // Rojo para crédito
+                ],
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const value = context.parsed;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                            return `${context.label}: ${value.toFixed(2)} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+    
+    // Función para actualizar todos los cálculos
+    function updateCalculations() {
+        // Obtener valores de ventas
+        const cash = parseFloat(document.getElementById('id_cash_sales').value) || 0;
+        const mercadopago = parseFloat(document.getElementById('id_mercadopago_sales').value) || 0;
+        const debit = parseFloat(document.getElementById('id_debit_sales').value) || 0;
+        const credit = parseFloat(document.getElementById('id_credit_sales').value) || 0;
+        const expenses = parseFloat(expensesInput.value) || 0;
+        
+        // Calcular totales
+        const totalSales = cash + mercadopago + debit + credit;
+        const netProfit = totalSales - expenses;
+        
+        // Actualizar displays
+        totalSalesDisplay.textContent = `${totalSales.toFixed(2)}`;
+        netProfitDisplay.textContent = `${netProfit.toFixed(2)}`;
+        finalTotalSales.textContent = `${totalSales.toFixed(2)}`;
+        finalTotalExpenses.textContent = `${expenses.toFixed(2)}`;
+        finalNetProfit.textContent = `${netProfit.toFixed(2)}`;
+        
+        // Cambiar color según ganancia/pérdida
+        netProfitDisplay.className = netProfit >= 0 ? 'fw-bold text-success' : 'fw-bold text-danger';
+        finalNetProfit.className = netProfit >= 0 ? 'fw-bold text-success' : 'fw-bold text-danger';
+        
+        // Calcular métricas de rentabilidad
+        const margin = totalSales > 0 ? ((netProfit / totalSales) * 100) : 0;
+        const profitability = expenses > 0 ? ((netProfit / expenses) * 100) : 0;
+        
+        marginDisplay.textContent = `${margin.toFixed(1)}%`;
+        profitabilityDisplay.textContent = `${profitability.toFixed(1)}%`;
+        
+        // Determinar estado
+        let status, statusClass;
+        if (netProfit > 0) {
+            if (margin > 20) {
+                status = 'Excelente';
+                statusClass = 'bg-success';
+            } else if (margin > 10) {
+                status = 'Bueno';
+                statusClass = 'bg-primary';
+            } else {
+                status = 'Regular';
+                statusClass = 'bg-warning';
+            }
+        } else if (netProfit === 0) {
+            status = 'Equilibrio';
+            statusClass = 'bg-secondary';
+        } else {
+            status = 'Pérdida';
+            statusClass = 'bg-danger';
+        }
+        
+        statusDisplay.innerHTML = `<span class="badge ${statusClass}">${status}</span>`;
+        
+        // Actualizar gráfico
+        salesChart.data.datasets[0].data = [cash, mercadopago, debit, credit];
+        salesChart.update();
+    }
+    
+    // Event listeners para inputs
+    salesInputs.forEach(input => {
+        input.addEventListener('input', updateCalculations);
+    });
+    
+    expensesInput.addEventListener('input', updateCalculations);
+    
+    // Función para vista previa
+    {% if record %}
+    document.getElementById('previewBtn').addEventListener('click', function() {
+        // Actualizar datos de vista previa
+        const recordDate = document.getElementById('id_record_date').value;
+        const formattedDate = new Date(recordDate).toLocaleDateString('es-AR');
+        
+        document.getElementById('previewDate').textContent = formattedDate;
+        document.getElementById('previewTotalSales').textContent = totalSalesDisplay.textContent;
+        document.getElementById('previewTotalExpenses').textContent = finalTotalExpenses.textContent;
+        document.getElementById('previewNetProfit').textContent = finalNetProfit.textContent;
+        document.getElementById('previewNetProfit').className = finalNetProfit.className;
+        
+        // Desglose de ventas
+        document.getElementById('previewCash').textContent = `${(parseFloat(document.getElementById('id_cash_sales').value) || 0).toFixed(2)}`;
+        document.getElementById('previewMercadoPago').textContent = `${(parseFloat(document.getElementById('id_mercadopago_sales').value) || 0).toFixed(2)}`;
+        document.getElementById('previewDebit').textContent = `${(parseFloat(document.getElementById('id_debit_sales').value) || 0).toFixed(2)}`;
+        document.getElementById('previewCredit').textContent = `${(parseFloat(document.getElementById('id_credit_sales').value) || 0).toFixed(2)}`;
+        
+        // Notas
+        const notes = document.getElementById('id_notes').value.trim();
+        if (notes) {
+            document.getElementById('previewNotes').textContent = notes;
+            document.getElementById('previewNotesSection').style.display = 'block';
+        } else {
+            document.getElementById('previewNotesSection').style.display = 'none';
+        }
+        
+        // Mostrar modal
+        new bootstrap.Modal(document.getElementById('previewModal')).show();
+    });
+    {% endif %}
+    
+    // Validación en tiempo real
+    const form = document.getElementById('dailyRecordForm');
+    form.addEventListener('submit', function(e) {
+        const totalSales = parseFloat(totalSalesDisplay.textContent.replace(', ''));
+        const totalExpenses = parseFloat(expensesInput.value) || 0;
+        
+        if (totalSales === 0 && totalExpenses === 0) {
+            e.preventDefault();
+            alert('Debe registrar al menos alguna venta o gasto.');
+            return false;
+        }
+        
+        // Mostrar estado de carga en el botón
+        const submitBtn = document.getElementById('submitBtn');
+        submitBtn.classList.add('btn-loading');
+        submitBtn.disabled = true;
+    });
+    
+    // Auto-guardado (opcional - para futuras mejoras)
+    let autoSaveTimeout;
+    function scheduleAutoSave() {
+        clearTimeout(autoSaveTimeout);
+        autoSaveTimeout = setTimeout(() => {
+            // Aquí se podría implementar auto-guardado vía AJAX
+            console.log('Auto-guardado programado...');
+        }, 30000); // 30 segundos
+    }
+    
+    // Programar auto-guardado cuando cambien los valores
+    [...salesInputs, expensesInput].forEach(input => {
+        input.addEventListener('input', scheduleAutoSave);
+    });
+    
+    // Inicializar cálculos con valores existentes
+    updateCalculations();
+    
+    // Formateo automático de números
+    [...salesInputs, expensesInput].forEach(input => {
+        input.addEventListener('blur', function() {
+            const value = parseFloat(this.value) || 0;
+            this.value = value.toFixed(2);
+            updateCalculations();
+        });
+    });
+    
+    // Validación de fecha
+    const dateInput = document.getElementById('id_record_date');
+    const today = new Date().toISOString().split('T')[0];
+    dateInput.setAttribute('max', today);
+    
+    // Warning si la fecha es muy antigua
+    dateInput.addEventListener('change', function() {
+        const selectedDate = new Date(this.value);
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        
+        if (selectedDate < thirtyDaysAgo) {
+            if (!confirm('La fecha seleccionada es de hace más de 30 días. ¿Está seguro de continuar?')) {
+                this.value = today;
+            }
+        }
+    });
+});
+
+// Función para formatear números mientras el usuario escribe
+function formatCurrencyInput(input) {
+    let value = input.value.replace(/[^\d.-]/g, '');
+    if (value !== '') {
+        input.value = parseFloat(value).toFixed(2);
+    }
+}
+
+// Aplicar formato al perder el foco
+document.querySelectorAll('input[type="number"]').forEach(input => {
+    input.addEventListener('blur', function() {
+        formatCurrencyInput(this);
+    });
+});
+</script>
+{% endblock %}

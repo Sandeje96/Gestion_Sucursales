@@ -1,0 +1,481 @@
+{# app/templates/daily_records/index.html #}
+{% extends "layout/base.html" %}
+
+{% block title %}
+    Registros Diarios - {{ current_user.branch_name if not current_user.is_admin_user() else 'Sistema' }}
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid my-4">
+    <div class="row">
+        <!-- Header con título y botones -->
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-1">
+                        <i class="fas fa-calendar-day text-primary me-2"></i>
+                        Registros Diarios
+                        {% if not current_user.is_admin_user() %}
+                            - {{ current_user.branch_name }}
+                        {% endif %}
+                    </h1>
+                    <p class="text-muted mb-0">
+                        {% if current_user.is_admin_user() %}
+                            Gestiona y supervisa todos los registros del sistema
+                        {% else %}
+                            Gestiona los registros diarios de tu sucursal
+                        {% endif %}
+                    </p>
+                </div>
+                
+                <div class="d-flex gap-2">
+                    {% if not current_user.is_admin_user() %}
+                        <a href="{{ url_for('daily_records.create') }}" class="btn btn-primary">
+                            <i class="fas fa-plus me-2"></i>Nuevo Registro
+                        </a>
+                    {% endif %}
+                    
+                    <a href="{{ url_for('daily_records.stats') }}" class="btn btn-outline-info">
+                        <i class="fas fa-chart-bar me-2"></i>Estadísticas
+                    </a>
+                    
+                    {% if current_user.is_admin_user() %}
+                        <a href="{{ url_for('reports.index') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-file-chart me-2"></i>Reportes
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estadísticas rápidas -->
+    {% if stats %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="row g-3">
+                <!-- Estadísticas de hoy -->
+                <div class="col-md-3">
+                    <div class="card bg-primary text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h6 class="card-title mb-1">Ventas Hoy</h6>
+                                    <h4 class="mb-0">${{ "%.2f"|format(stats.today.total_sales) }}</h4>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-cash-register fa-2x opacity-75"></i>
+                                </div>
+                            </div>
+                            <small class="opacity-75">
+                                {{ stats.today.records_count }} registro(s)
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-3">
+                    <div class="card bg-success text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h6 class="card-title mb-1">Ganancia Hoy</h6>
+                                    <h4 class="mb-0">${{ "%.2f"|format(stats.today.net_amount) }}</h4>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-chart-line fa-2x opacity-75"></i>
+                                </div>
+                            </div>
+                            <small class="opacity-75">
+                                Gastos: ${{ "%.2f"|format(stats.today.total_expenses) }}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-3">
+                    <div class="card bg-info text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h6 class="card-title mb-1">Ventas del Mes</h6>
+                                    <h4 class="mb-0">${{ "%.2f"|format(stats.month.total_sales) }}</h4>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-calendar-month fa-2x opacity-75"></i>
+                                </div>
+                            </div>
+                            <small class="opacity-75">
+                                {{ stats.month.records_count }} registro(s)
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-3">
+                    <div class="card bg-warning text-dark">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h6 class="card-title mb-1">Ganancia del Mes</h6>
+                                    <h4 class="mb-0">${{ "%.2f"|format(stats.month.net_amount) }}</h4>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-trophy fa-2x opacity-75"></i>
+                                </div>
+                            </div>
+                            <small class="opacity-75">
+                                Gastos: ${{ "%.2f"|format(stats.month.total_expenses) }}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Filtros de búsqueda -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-filter me-2"></i>Filtros de Búsqueda
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <form method="GET" class="row g-3">
+                        <div class="col-md-3">
+                            {{ filter_form.start_date.label(class="form-label") }}
+                            {{ filter_form.start_date(class="form-control", value=request.args.get('start_date', '')) }}
+                        </div>
+                        
+                        <div class="col-md-3">
+                            {{ filter_form.end_date.label(class="form-label") }}
+                            {{ filter_form.end_date(class="form-control", value=request.args.get('end_date', '')) }}
+                        </div>
+                        
+                        {% if current_user.is_admin_user() %}
+                        <div class="col-md-3">
+                            {{ filter_form.branch_filter.label(class="form-label") }}
+                            {{ filter_form.branch_filter(class="form-select", value=request.args.get('branch_filter', '')) }}
+                        </div>
+                        {% endif %}
+                        
+                        <div class="col-md-3 d-flex align-items-end">
+                            <div class="d-grid gap-2 d-md-flex w-100">
+                                <button type="submit" class="btn btn-primary flex-fill">
+                                    <i class="fas fa-search me-2"></i>Filtrar
+                                </button>
+                                <a href="{{ url_for('daily_records.index') }}" class="btn btn-outline-secondary">
+                                    <i class="fas fa-times"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de registros -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="fas fa-list me-2"></i>
+                        Lista de Registros 
+                        {% if records.total %}
+                            ({{ records.total }} total{{ 'es' if records.total != 1 else '' }})
+                        {% endif %}
+                    </h6>
+                    
+                    {% if records.items %}
+                    <div class="dropdown">
+                        <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-download me-1"></i>Exportar
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('reports.export_csv', **request.args) }}">
+                                    <i class="fas fa-file-csv me-2"></i>Exportar CSV
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="card-body p-0">
+                    {% if records.items %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Fecha</th>
+                                    {% if current_user.is_admin_user() %}
+                                    <th>Sucursal</th>
+                                    {% endif %}
+                                    <th>Ventas Totales</th>
+                                    <th>Efectivo</th>
+                                    <th>MercadoPago</th>
+                                    <th>Débito</th>
+                                    <th>Crédito</th>
+                                    <th>Gastos</th>
+                                    <th>Ganancia</th>
+                                    <th>Estado</th>
+                                    <th width="150">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for record in records.items %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ record.record_date.strftime('%d/%m/%Y') }}</strong>
+                                        <br><small class="text-muted">{{ record.record_date.strftime('%A') }}</small>
+                                    </td>
+                                    {% if current_user.is_admin_user() %}
+                                    <td>
+                                        <span class="badge bg-secondary">{{ record.branch_name }}</span>
+                                    </td>
+                                    {% endif %}
+                                    <td>
+                                        <strong class="text-success">${{ "%.2f"|format(record.total_sales) }}</strong>
+                                    </td>
+                                    <td>${{ "%.2f"|format(record.cash_sales) }}</td>
+                                    <td>${{ "%.2f"|format(record.mercadopago_sales) }}</td>
+                                    <td>${{ "%.2f"|format(record.debit_sales) }}</td>
+                                    <td>${{ "%.2f"|format(record.credit_sales) }}</td>
+                                    <td>
+                                        <span class="text-danger">${{ "%.2f"|format(record.total_expenses) }}</span>
+                                    </td>
+                                    <td>
+                                        {% set net = record.get_net_amount() %}
+                                        <strong class="{{ 'text-success' if net >= 0 else 'text-danger' }}">
+                                            ${{ "%.2f"|format(net) }}
+                                        </strong>
+                                    </td>
+                                    <td>
+                                        {% if record.is_verified %}
+                                            <span class="badge bg-success">
+                                                <i class="fas fa-check me-1"></i>Verificado
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-warning">
+                                                <i class="fas fa-clock me-1"></i>Pendiente
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <a href="{{ url_for('daily_records.view', id=record.id) }}" 
+                                               class="btn btn-outline-primary" 
+                                               data-bs-toggle="tooltip" 
+                                               title="Ver detalles">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            
+                                            {% if current_user.can_edit_record(record) %}
+                                            <a href="{{ url_for('daily_records.edit', id=record.id) }}" 
+                                               class="btn btn-outline-warning"
+                                               data-bs-toggle="tooltip" 
+                                               title="Editar">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            {% endif %}
+                                            
+                                            {% if current_user.is_admin_user() %}
+                                            <form method="POST" 
+                                                  action="{{ url_for('daily_records.verify', id=record.id) }}" 
+                                                  class="d-inline">
+                                                <button type="submit" 
+                                                        class="btn {{ 'btn-outline-secondary' if record.is_verified else 'btn-outline-success' }}"
+                                                        data-bs-toggle="tooltip" 
+                                                        title="{{ 'Desverificar' if record.is_verified else 'Verificar' }}">
+                                                    <i class="fas {{ 'fa-times' if record.is_verified else 'fa-check' }}"></i>
+                                                </button>
+                                            </form>
+                                            {% endif %}
+                                            
+                                            {% if current_user.can_edit_record(record) %}
+                                            <button type="button" 
+                                                    class="btn btn-outline-danger"
+                                                    data-bs-toggle="modal" 
+                                                    data-bs-target="#deleteModal{{ record.id }}"
+                                                    title="Eliminar">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Paginación -->
+                    {% if records.pages > 1 %}
+                    <div class="card-footer">
+                        <nav aria-label="Paginación de registros">
+                            <ul class="pagination justify-content-center mb-0">
+                                {% if records.has_prev %}
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ url_for('daily_records.index', page=records.prev_num, **request.args) }}">
+                                        <i class="fas fa-chevron-left"></i>
+                                    </a>
+                                </li>
+                                {% endif %}
+                                
+                                {% for page_num in records.iter_pages() %}
+                                    {% if page_num %}
+                                        {% if page_num != records.page %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="{{ url_for('daily_records.index', page=page_num, **request.args) }}">
+                                                {{ page_num }}
+                                            </a>
+                                        </li>
+                                        {% else %}
+                                        <li class="page-item active">
+                                            <span class="page-link">{{ page_num }}</span>
+                                        </li>
+                                        {% endif %}
+                                    {% else %}
+                                    <li class="page-item disabled">
+                                        <span class="page-link">...</span>
+                                    </li>
+                                    {% endif %}
+                                {% endfor %}
+                                
+                                {% if records.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ url_for('daily_records.index', page=records.next_num, **request.args) }}">
+                                        <i class="fas fa-chevron-right"></i>
+                                    </a>
+                                </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                        
+                        <div class="text-center mt-2">
+                            <small class="text-muted">
+                                Mostrando {{ records.per_page * (records.page - 1) + 1 }} - 
+                                {{ records.per_page * (records.page - 1) + records.items|length }} 
+                                de {{ records.total }} registros
+                            </small>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% else %}
+                    <!-- Estado vacío -->
+                    <div class="text-center py-5">
+                        <i class="fas fa-inbox fa-4x text-muted mb-3"></i>
+                        <h5 class="text-muted">No hay registros</h5>
+                        <p class="text-muted mb-4">
+                            {% if request.args %}
+                                No se encontraron registros que coincidan con los filtros aplicados.
+                            {% else %}
+                                Aún no hay registros diarios cargados.
+                            {% endif %}
+                        </p>
+                        
+                        {% if not current_user.is_admin_user() %}
+                        <a href="{{ url_for('daily_records.create') }}" class="btn btn-primary">
+                            <i class="fas fa-plus me-2"></i>Crear Primer Registro
+                        </a>
+                        {% endif %}
+                        
+                        {% if request.args %}
+                        <a href="{{ url_for('daily_records.index') }}" class="btn btn-outline-secondary ms-2">
+                            <i class="fas fa-times me-2"></i>Limpiar Filtros
+                        </a>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modales de confirmación para eliminar -->
+{% for record in records.items %}
+{% if current_user.can_edit_record(record) %}
+<div class="modal fade" id="deleteModal{{ record.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                    Confirmar Eliminación
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de que deseas eliminar el registro del <strong>{{ record.record_date.strftime('%d/%m/%Y') }}</strong>?</p>
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-circle me-2"></i>
+                    <strong>Esta acción no se puede deshacer.</strong>
+                </div>
+                <div class="row">
+                    <div class="col-6">
+                        <small class="text-muted">Ventas totales:</small>
+                        <div><strong>${{ "%.2f"|format(record.total_sales) }}</strong></div>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted">Gastos:</small>
+                        <div><strong>${{ "%.2f"|format(record.total_expenses) }}</strong></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    Cancelar
+                </button>
+                <form method="POST" action="{{ url_for('daily_records.delete', id=record.id) }}" class="d-inline">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash me-2"></i>Eliminar Registro
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    
+    // Auto-submit del formulario de filtros cuando cambian las fechas
+    const startDate = document.querySelector('input[name="start_date"]');
+    const endDate = document.querySelector('input[name="end_date"]');
+    const branchFilter = document.querySelector('select[name="branch_filter"]');
+    
+    if (startDate && endDate) {
+        [startDate, endDate, branchFilter].forEach(element => {
+            if (element) {
+                element.addEventListener('change', function() {
+                    // Debounce para evitar múltiples envíos
+                    clearTimeout(this.submitTimeout);
+                    this.submitTimeout = setTimeout(() => {
+                        this.closest('form').submit();
+                    }, 500);
+                });
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
+                                    

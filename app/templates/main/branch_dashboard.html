@@ -1,47 +1,505 @@
-{# app/templates/main/branch_dashboard.html #} {% extends "layout/base.html" %} {% block title %} Panel de Sucursal - {{ current_user.branch_name }} | Sistema de Control de Sucursales {% endblock %} {% block content %}
-Bienvenido, {{ current_user.username }}
-Sucursal: {{ current_user.branch_name }}
+{# app/templates/main/branch_dashboard.html #}
+{% extends "layout/base.html" %}
 
-{{ moment().format('DD/MM/YYYY') if moment else "Hoy" }}
-{# Flash messages #} {% with messages = get_flashed_messages(with_categories=true) %} {% if messages %} {% for category, message in messages %} {% set alert_class = 'success' if category == 'success' else 'danger' if category == 'error' else 'warning' if category == 'warning' else 'info' %}
-{{ message }} 
-{% endfor %} {% endif %} {% endwith %} {% if stats %}
-Ventas del Mes
-${{ "%.2f"|format(stats.monthly.total_sales) }}
-Ganancia Neta
-${{ "%.2f"|format(stats.monthly.net_amount) }}
-Registros del Mes
-{{ stats.monthly.records_count }}
-Gastos del Mes
-${{ "%.2f"|format(stats.monthly.total_expenses) }}
-{% endif %}
-{% if stats and stats.today_record %}
-¡Registro de hoy completado!
-Ya has cargado el registro del día de hoy. Ventas: ${{ "%.2f"|format(stats.today_record.total_sales) }}, Gastos: ${{ "%.2f"|format(stats.today_record.total_expenses) }}
+{% block title %}
+    Panel de Sucursal - {{ current_user.branch_name }} | Sistema de Control de Sucursales
+{% endblock %}
 
-{% else %}
-Pendiente: Registro del día
-Aún no has cargado el registro diario de hoy. Recuerda registrar las ventas y gastos del día.
+{% block extra_css %}
+<style>
+    .dashboard-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        border: none;
+        border-radius: 15px;
+        overflow: hidden;
+    }
+    
+    .dashboard-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    }
+    
+    .metric-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+    
+    .trend-indicator {
+        font-size: 0.85rem;
+        display: flex;
+        align-items: center;
+        margin-top: 0.25rem;
+    }
+    
+    .chart-container {
+        height: 250px;
+        position: relative;
+    }
+    
+    .status-badge {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .quick-action-btn {
+        border-radius: 12px;
+        padding: 1rem;
+        text-decoration: none;
+        display: block;
+        transition: all 0.2s ease;
+    }
+    
+    .quick-action-btn:hover {
+        transform: translateY(-2px);
+        text-decoration: none;
+    }
+</style>
+{% endblock %}
 
-{% endif %}
-Cargar Nuevo Registro Diario
-Ingresa las ventas y gastos del día. Es importante mantener actualizada la información diaria.
+{% block content %}
+<div class="container-fluid my-4">
+    <!-- Header personalizado -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card dashboard-card bg-gradient-primary text-white">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h2 class="mb-1">
+                                <i class="fas fa-store me-2"></i>
+                                Bienvenido, {{ current_user.username }}
+                            </h2>
+                            <h4 class="mb-2 opacity-90">Sucursal: {{ current_user.branch_name }}</h4>
+                            <p class="mb-0 opacity-75">
+                                <i class="fas fa-calendar me-2"></i>
+                                {{ moment().format('dddd, DD [de] MMMM [de] YYYY') if moment else "Hoy" }}
+                            </p>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <div class="d-flex justify-content-end align-items-center">
+                                <div class="me-3">
+                                    <div class="text-center">
+                                        <div class="h1 mb-0">{{ moment().format('HH:mm') if moment else "" }}</div>
+                                        <small class="opacity-75">Hora actual</small>
+                                    </div>
+                                </div>
+                                <div class="metric-icon bg-white bg-opacity-20">
+                                    <i class="fas fa-clock text-white"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                {% if stats and stats.today_record %}
+                <div class="status-badge bg-success text-white">
+                    <i class="fas fa-check-circle me-1"></i>Registro de hoy completado
+                </div>
+                {% else %}
+                <div class="status-badge bg-warning text-dark">
+                    <i class="fas fa-exclamation-triangle me-1"></i>Registro pendiente
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
 
-Cargar Registro
-Ver Historial de Registros
-Consulta todos los registros anteriores de tu sucursal y analiza tendencias de ventas.
+    {# Flash messages #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="row mb-4">
+                <div class="col-12">
+                    {% for category, message in messages %}
+                        {% set alert_class = 'success' if category == 'success' else 'danger' if category == 'error' else 'warning' if category == 'warning' else 'info' %}
+                        <div class="alert alert-{{ alert_class }} alert-dismissible fade show" role="alert">
+                            <i class="fas fa-{% if category == 'success' %}check-circle{% elif category == 'error' %}exclamation-triangle{% elif category == 'warning' %}exclamation-circle{% else %}info-circle{% endif %} me-2"></i>
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+    {% endwith %}
 
-Ver Historial
-{% if stats and stats.recent_records %}
-Registros Recientes
-{% for record in stats.recent_records %} {% endfor %}
-Fecha	Ventas	Gastos	Ganancia	Estado
-{{ record.record_date.strftime('%d/%m/%Y') }}	${{ "%.2f"|format(record.total_sales) }}	${{ "%.2f"|format(record.total_expenses) }}	{% set net = record.total_sales - record.total_expenses %} ${{ "%.2f"|format(net) }}	{% if record.is_verified %} Verificado {% else %} Pendiente {% endif %}
-Ver todos los registros
-{% else %}
-Aún no tienes registros
-Comienza cargando tu primer registro diario para ver estadísticas y análisis de tu sucursal.
+    {% if stats %}
+    <!-- Métricas principales -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="metric-icon bg-success bg-opacity-10 text-success me-3">
+                            <i class="fas fa-dollar-sign"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h6 class="text-muted mb-1">Ventas del Mes</h6>
+                            <h3 class="mb-0 text-success">${{ "%.2f"|format(stats.monthly.total_sales) }}</h3>
+                            <div class="trend-indicator text-success">
+                                <i class="fas fa-arrow-up me-1"></i>
+                                <span>+5.2% vs mes anterior</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="metric-icon bg-primary bg-opacity-10 text-primary me-3">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h6 class="text-muted mb-1">Ganancia Neta</h6>
+                            <h3 class="mb-0 {{ 'text-success' if stats.monthly.net_amount >= 0 else 'text-danger' }}">
+                                ${{ "%.2f"|format(stats.monthly.net_amount) }}
+                            </h3>
+                            <div class="trend-indicator {{ 'text-success' if stats.monthly.net_amount >= 0 else 'text-danger' }}">
+                                <i class="fas {{ 'fa-arrow-up' if stats.monthly.net_amount >= 0 else 'fa-arrow-down' }} me-1"></i>
+                                <span>Gastos: ${{ "%.2f"|format(stats.monthly.total_expenses) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="metric-icon bg-info bg-opacity-10 text-info me-3">
+                            <i class="fas fa-calendar-check"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h6 class="text-muted mb-1">Registros del Mes</h6>
+                            <h3 class="mb-0 text-info">{{ stats.monthly.records_count }}</h3>
+                            <div class="trend-indicator text-muted">
+                                <i class="fas fa-calendar me-1"></i>
+                                <span>{{ ((stats.monthly.records_count / moment().day) * 100)|round|int if moment else 0 }}% del mes</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card dashboard-card h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="metric-icon bg-warning bg-opacity-10 text-warning me-3">
+                            <i class="fas fa-receipt"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h6 class="text-muted mb-1">Gastos del Mes</h6>
+                            <h3 class="mb-0 text-warning">${{ "%.2f"|format(stats.monthly.total_expenses) }}</h3>
+                            <div class="trend-indicator text-muted">
+                                <i class="fas fa-percent me-1"></i>
+                                <span>{{ ((stats.monthly.total_expenses / stats.monthly.total_sales * 100) if stats.monthly.total_sales > 0 else 0)|round|int }}% de ventas</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-Cargar mi primer registro
-{% endif %}
+    <!-- Estado del registro de hoy -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            {% if stats.today_record %}
+            <div class="card dashboard-card bg-light-success">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="metric-icon bg-success text-white me-3">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h5 class="mb-1 text-success">¡Registro de hoy completado!</h5>
+                            <p class="mb-0 text-muted">
+                                Ya has cargado el registro del día de hoy. 
+                                Ventas: <strong>${{ "%.2f"|format(stats.today_record.total_sales) }}</strong>, 
+                                Gastos: <strong>${{ "%.2f"|format(stats.today_record.total_expenses) }}</strong>
+                            </p>
+                        </div>
+                        <div>
+                            <a href="{{ url_for('daily_records.edit', id=stats.today_record.id) }}" 
+                               class="btn btn-outline-success">
+                                <i class="fas fa-edit me-2"></i>Editar
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="card dashboard-card bg-light-warning">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="metric-icon bg-warning text-white me-3">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h5 class="mb-1 text-warning">Pendiente: Registro del día</h5>
+                            <p class="mb-0 text-muted">
+                                Aún no has cargado el registro diario de hoy. 
+                                Recuerda registrar las ventas y gastos del día.
+                            </p>
+                        </div>
+                        <div>
+                            <a href="{{ url_for('daily_records.create') }}" 
+                               class="btn btn-warning">
+                                <i class="fas fa-plus me-2"></i>Cargar Ahora
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card dashboard-card h-100">
+                <div class="card-body text-center">
+                    <div class="metric-icon bg-info bg-opacity-10 text-info mx-auto mb-3">
+                        <i class="fas fa-lightbulb"></i>
+                    </div>
+                    <h6 class="mb-2">Consejo del día</h6>
+                    <p class="small text-muted mb-0">
+                        {% set tips = [
+                            "Registra tus ventas al final del día para no olvidar ningún detalle.",
+                            "Revisa que todos los métodos de pago sumen correctamente.",
+                            "Guarda los comprobantes de gastos para futuras consultas.",
+                            "Compara tus ventas con días anteriores para detectar tendencias.",
+                            "Mantén un registro detallado de gastos extraordinarios."
+                        ] %}
+                        {{ tips[range(0, tips|length)|random] }}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Gráfico de tendencias -->
+    {% if stats and stats.weekly_records %}
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card dashboard-card">
+                <div class="card-header bg-transparent">
+                    <h6 class="mb-0">
+                        <i class="fas fa-chart-area me-2"></i>Tendencia de Ventas (Últimos 7 días)
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="weeklyTrendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card dashboard-card h-100">
+                <div class="card-header bg-transparent">
+                    <h6 class="mb-0">
+                        <i class="fas fa-trophy me-2"></i>Mejores Días
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% set sorted_records = stats.weekly_records|sort(attribute='total_sales', reverse=true) %}
+                    {% for record in sorted_records[:3] %}
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <div class="fw-bold">{{ record.record_date.strftime('%d/%m') }}</div>
+                            <small class="text-muted">{{ record.record_date.strftime('%A') }}</small>
+                        </div>
+                        <div class="text-end">
+                            <div class="fw-bold text-success">${{ "%.0f"|format(record.total_sales) }}</div>
+                            <small class="text-muted">
+                                {% if loop.index == 1 %}🥇{% elif loop.index == 2 %}🥈{% else %}🥉{% endif %}
+                            </small>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Acciones rápidas -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card dashboard-card">
+                <div class="card-header bg-transparent">
+                    <h6 class="mb-0">
+                        <i class="fas fa-bolt me-2"></i>Acciones Rápidas
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <a href="{{ url_for('daily_records.create') }}" 
+                               class="quick-action-btn btn btn-primary h-100 d-flex align-items-center">
+                                <div class="text-center w-100">
+                                    <i class="fas fa-plus fa-2x mb-2"></i>
+                                    <div class="fw-bold">Cargar Nuevo Registro Diario</div>
+                                    <small class="opacity-75">Ingresa las ventas y gastos del día. Es importante mantener actualizada la información diaria.</small>
+                                </div>
+                            </a>
+                        </div>
+                        
+                        <div class="col-md-3">
+                            <a href="{{ url_for('daily_records.index') }}" 
+                               class="quick-action-btn btn btn-outline-info h-100 d-flex align-items-center">
+                                <div class="text-center w-100">
+                                    <i class="fas fa-history fa-2x mb-2"></i>
+                                    <div class="fw-bold">Ver Historial de Registros</div>
+                                    <small class="opacity-75">Consulta todos los registros anteriores de tu sucursal y analiza tendencias de ventas.</small>
+                                </div>
+                            </a>
+                        </div>
+                        
+                        <div class="col-md-3">
+                            <a href="{{ url_for('daily_records.stats') }}" 
+                               class="quick-action-btn btn btn-outline-success h-100 d-flex align-items-center">
+                                <div class="text-center w-100">
+                                    <i class="fas fa-chart-bar fa-2x mb-2"></i>
+                                    <div class="fw-bold">Ver Estadísticas</div>
+                                    <small class="opacity-75">Analiza el rendimiento de tu sucursal con gráficos detallados.</small>
+                                </div>
+                            </a>
+                        </div>
+                        
+                        <div class="col-md-3">
+                            <a href="{{ url_for('auth.profile') }}" 
+                               class="quick-action-btn btn btn-outline-secondary h-100 d-flex align-items-center">
+                                <div class="text-center w-100">
+                                    <i class="fas fa-user-cog fa-2x mb-2"></i>
+                                    <div class="fw-bold">Mi Perfil</div>
+                                    <small class="opacity-75">Gestiona tu cuenta y configuración personal.</small>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if stats and stats.recent_records %}
+    <!-- Registros recientes -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card dashboard-card">
+                <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="fas fa-list me-2"></i>Registros Recientes
+                    </h6>
+                    <a href="{{ url_for('daily_records.index') }}" class="btn btn-sm btn-outline-primary">
+                        Ver todos los registros
+                    </a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Ventas</th>
+                                    <th>Gastos</th>
+                                    <th>Ganancia</th>
+                                    <th>Estado</th>
+                                    <th width="100">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for record in stats.recent_records %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ record.record_date.strftime('%d/%m/%Y') }}</strong>
+                                        <br><small class="text-muted">{{ record.record_date.strftime('%A') }}</small>
+                                    </td>
+                                    <td>
+                                        <strong class="text-success">${{ "%.2f"|format(record.total_sales) }}</strong>
+                                    </td>
+                                    <td>
+                                        <span class="text-danger">${{ "%.2f"|format(record.total_expenses) }}</span>
+                                    </td>
+                                    <td>
+                                        {% set net = record.total_sales - record.total_expenses %}
+                                        <strong class="{{ 'text-success' if net >= 0 else 'text-danger' }}">
+                                            ${{ "%.2f"|format(net) }}
+                                        </strong>
+                                    </td>
+                                    <td>
+                                        {% if record.is_verified %}
+                                            <span class="badge bg-success">
+                                                <i class="fas fa-check me-1"></i>Verificado
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-warning">
+                                                <i class="fas fa-clock me-1"></i>Pendiente
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{{ url_for('daily_records.view', id=record.id) }}" 
+                                               class="btn btn-outline-primary" 
+                                               data-bs-toggle="tooltip" 
+                                               title="Ver">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            <a href="{{ url_for('daily_records.edit', id=record.id) }}" 
+                                               class="btn btn-outline-warning"
+                                               data-bs-toggle="tooltip" 
+                                               title="Editar">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <!-- Estado sin registros -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card dashboard-card">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-inbox fa-4x text-muted mb-3"></i>
+                    <h5 class="text-muted">Aún no tienes registros</h5>
+                    <p class="text-muted mb-4">
+                        Comienza cargando tu primer registro diario para ver estadísticas y análisis de tu sucursal.
+                    </p>
+                    <a href="{{ url_for('daily_records.create') }}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-plus me-2"></i>Cargar mi primer registro
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
 {% endblock %}
