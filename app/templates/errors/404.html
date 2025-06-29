@@ -1,0 +1,252 @@
+{# app/templates/errors/404.html #}
+{% extends "layout/base.html" %}
+
+{% block title %}
+    Página no encontrada - 404 | Sistema de Control de Sucursales
+{% endblock %}
+
+{% block content %}
+<div class="container text-center my-5 py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="error-container">
+                <!-- Icono de error -->
+                <div class="error-icon mb-4">
+                    <i class="fas fa-unlink fa-5x text-warning"></i>
+                    <div class="error-code mt-3">
+                        <span class="display-1 fw-bold text-primary">404</span>
+                    </div>
+                </div>
+                
+                <!-- Título y mensaje -->
+                <div class="error-content">
+                    <h1 class="display-4 fw-bold text-dark mb-3">¡Oops! Página no encontrada</h1>
+                    <p class="lead text-muted mb-4">
+                        Parece que la página que estás buscando no existe o se ha movido a otra ubicación.
+                    </p>
+                    <p class="text-muted mb-4">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Esto puede suceder si escribiste mal la URL o si el enlace que seguiste está roto.
+                    </p>
+                </div>
+                
+                <!-- Botones de acción -->
+                <div class="error-actions">
+                    <div class="d-grid gap-2 d-md-block">
+                        <a href="{{ url_for('main.index') }}" class="btn btn-primary btn-lg px-4">
+                            <i class="fas fa-home me-2"></i>Volver al inicio
+                        </a>
+                        
+                        {% if current_user.is_authenticated %}
+                            {% if current_user.is_admin_user() %}
+                                <a href="{{ url_for('main.admin_dashboard') }}" class="btn btn-outline-primary btn-lg px-4">
+                                    <i class="fas fa-tachometer-alt me-2"></i>Panel Admin
+                                </a>
+                            {% else %}
+                                <a href="{{ url_for('main.branch_dashboard') }}" class="btn btn-outline-primary btn-lg px-4">
+                                    <i class="fas fa-building me-2"></i>Mi Sucursal
+                                </a>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Botón de ir atrás -->
+                    <div class="mt-3">
+                        <button onclick="goBack()" class="btn btn-link text-muted">
+                            <i class="fas fa-arrow-left me-2"></i>Volver a la página anterior
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Enlaces útiles -->
+                <div class="error-help mt-5">
+                    <div class="row text-center">
+                        <div class="col-md-12">
+                            <p class="text-muted mb-3">¿Necesitas ayuda? Prueba estas opciones:</p>
+                        </div>
+                    </div>
+                    <div class="row justify-content-center">
+                        {% if not current_user.is_authenticated %}
+                            <div class="col-auto">
+                                <a href="{{ url_for('auth.login') }}" class="btn btn-sm btn-outline-secondary">
+                                    <i class="fas fa-sign-in-alt me-1"></i>Iniciar Sesión
+                                </a>
+                            </div>
+                            <div class="col-auto">
+                                <a href="{{ url_for('auth.register') }}" class="btn btn-sm btn-outline-secondary">
+                                    <i class="fas fa-user-plus me-1"></i>Registrarse
+                                </a>
+                            </div>
+                        {% else %}
+                            <div class="col-auto">
+                                <a href="{{ url_for('daily_records.index') }}" class="btn btn-sm btn-outline-secondary">
+                                    <i class="fas fa-calendar-day me-1"></i>Registros
+                                </a>
+                            </div>
+                            {% if current_user.is_admin_user() %}
+                                <div class="col-auto">
+                                    <a href="{{ url_for('reports.index') }}" class="btn btn-sm btn-outline-secondary">
+                                        <i class="fas fa-chart-bar me-1"></i>Reportes
+                                    </a>
+                                </div>
+                            {% endif %}
+                        {% endif %}
+                        <div class="col-auto">
+                            <a href="mailto:soporte@mundolimp.com" class="btn btn-sm btn-outline-secondary">
+                                <i class="fas fa-envelope me-1"></i>Contacto
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- URL de referencia (para debugging) -->
+                {% if config.DEBUG %}
+                    <div class="error-debug mt-4 p-3 bg-light rounded">
+                        <small class="text-muted">
+                            <strong>Debug Info:</strong> 
+                            URL solicitada: <code>{{ request.url }}</code><br>
+                            Método: <code>{{ request.method }}</code><br>
+                            User Agent: <code>{{ request.user_agent.string[:100] }}...</code>
+                        </small>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Animación de entrada -->
+<style>
+.error-container {
+    animation: fadeInUp 0.6s ease-out;
+}
+
+.error-icon {
+    animation: bounceIn 0.8s ease-out;
+}
+
+.error-code {
+    opacity: 0.8;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes bounceIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.3);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.05);
+    }
+    70% {
+        transform: scale(0.9);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.btn {
+    transition: all 0.3s ease;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.error-help .btn-sm:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .display-1 {
+        font-size: 4rem;
+    }
+    
+    .display-4 {
+        font-size: 2rem;
+    }
+    
+    .fa-5x {
+        font-size: 3em;
+    }
+    
+    .error-help .row {
+        gap: 0.5rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    
+    .btn-lg {
+        padding: 0.75rem 1.5rem;
+        font-size: 1rem;
+    }
+    
+    .error-help .col-auto {
+        flex: 0 0 auto;
+        width: auto;
+        margin-bottom: 0.5rem;
+    }
+}
+</style>
+
+<script>
+// Función para volver a la página anterior
+function goBack() {
+    // Verificar si hay historial
+    if (window.history.length > 1) {
+        window.history.back();
+    } else {
+        // Si no hay historial, ir al inicio
+        window.location.href = "{{ url_for('main.index') }}";
+    }
+}
+
+// Log del error para analytics (opcional)
+document.addEventListener('DOMContentLoaded', function() {
+    // Solo en producción, puedes enviar el error a un servicio de analytics
+    if (!{{ config.DEBUG | lower }}) {
+        console.log('404 Error logged:', {
+            url: window.location.href,
+            referrer: document.referrer,
+            timestamp: new Date().toISOString(),
+            userAgent: navigator.userAgent
+        });
+        
+        // Aquí podrías enviar la información a un servicio de analytics
+        // como Google Analytics, Mixpanel, etc.
+    }
+});
+
+// Efecto de parallax sutil en el icono
+document.addEventListener('mousemove', function(e) {
+    const icon = document.querySelector('.error-icon i');
+    if (icon) {
+        const x = (e.clientX / window.innerWidth) * 100;
+        const y = (e.clientY / window.innerHeight) * 100;
+        
+        icon.style.transform = `translate(${x/50}px, ${y/50}px)`;
+    }
+});
+</script>
+{% endblock %}

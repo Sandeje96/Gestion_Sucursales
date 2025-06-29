@@ -1,0 +1,47 @@
+{# app/templates/main/branch_dashboard.html #} {% extends "layout/base.html" %} {% block title %} Panel de Sucursal - {{ current_user.branch_name }} | Sistema de Control de Sucursales {% endblock %} {% block content %}
+Bienvenido, {{ current_user.username }}
+Sucursal: {{ current_user.branch_name }}
+
+{{ moment().format('DD/MM/YYYY') if moment else "Hoy" }}
+{# Flash messages #} {% with messages = get_flashed_messages(with_categories=true) %} {% if messages %} {% for category, message in messages %} {% set alert_class = 'success' if category == 'success' else 'danger' if category == 'error' else 'warning' if category == 'warning' else 'info' %}
+{{ message }} 
+{% endfor %} {% endif %} {% endwith %} {% if stats %}
+Ventas del Mes
+${{ "%.2f"|format(stats.monthly.total_sales) }}
+Ganancia Neta
+${{ "%.2f"|format(stats.monthly.net_amount) }}
+Registros del Mes
+{{ stats.monthly.records_count }}
+Gastos del Mes
+${{ "%.2f"|format(stats.monthly.total_expenses) }}
+{% endif %}
+{% if stats and stats.today_record %}
+¡Registro de hoy completado!
+Ya has cargado el registro del día de hoy. Ventas: ${{ "%.2f"|format(stats.today_record.total_sales) }}, Gastos: ${{ "%.2f"|format(stats.today_record.total_expenses) }}
+
+{% else %}
+Pendiente: Registro del día
+Aún no has cargado el registro diario de hoy. Recuerda registrar las ventas y gastos del día.
+
+{% endif %}
+Cargar Nuevo Registro Diario
+Ingresa las ventas y gastos del día. Es importante mantener actualizada la información diaria.
+
+Cargar Registro
+Ver Historial de Registros
+Consulta todos los registros anteriores de tu sucursal y analiza tendencias de ventas.
+
+Ver Historial
+{% if stats and stats.recent_records %}
+Registros Recientes
+{% for record in stats.recent_records %} {% endfor %}
+Fecha	Ventas	Gastos	Ganancia	Estado
+{{ record.record_date.strftime('%d/%m/%Y') }}	${{ "%.2f"|format(record.total_sales) }}	${{ "%.2f"|format(record.total_expenses) }}	{% set net = record.total_sales - record.total_expenses %} ${{ "%.2f"|format(net) }}	{% if record.is_verified %} Verificado {% else %} Pendiente {% endif %}
+Ver todos los registros
+{% else %}
+Aún no tienes registros
+Comienza cargando tu primer registro diario para ver estadísticas y análisis de tu sucursal.
+
+Cargar mi primer registro
+{% endif %}
+{% endblock %}
