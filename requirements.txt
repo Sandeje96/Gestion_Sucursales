@@ -8,5 +8,8 @@ psycopg2-binary==2.9.9
 python-dotenv==1.0.0
 gunicorn==21.2.0
 bcrypt==4.0.1
-pandas==2.1.3 # Ya lo tenías, pero lo confirmo
-openpyxl==3.1.2 # Ya lo tenías, pero lo confirmo
+pandas==2.1.3
+openpyxl==3.1.2
+WTForms==3.1.0
+email-validator==2.1.0
+python-dateutil==2.8.2

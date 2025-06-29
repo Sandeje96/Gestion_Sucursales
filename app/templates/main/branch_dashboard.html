@@ -503,3 +503,358 @@
     {% endif %}
 </div>
 {% endblock %}
+
+{% block scripts %}
+<!-- Chart.js para gráficos -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    
+    // Inicializar gráfico de tendencias semanales
+    {% if stats and stats.weekly_records %}
+    initializeWeeklyTrendChart();
+    {% endif %}
+    
+    // Actualizar reloj cada minuto
+    updateClock();
+    setInterval(updateClock, 60000);
+    
+    // Animaciones de entrada para las tarjetas
+    animateCards();
+});
+
+{% if stats and stats.weekly_records %}
+function initializeWeeklyTrendChart() {
+    const ctx = document.getElementById('weeklyTrendChart').getContext('2d');
+    
+    // Preparar datos
+    const weeklyData = {{ stats.weekly_records | tojson }};
+    const labels = weeklyData.map(record => {
+        const date = new Date(record.record_date);
+        return date.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric' });
+    });
+    
+    const salesData = weeklyData.map(record => parseFloat(record.total_sales));
+    const expensesData = weeklyData.map(record => parseFloat(record.total_expenses));
+    const netData = weeklyData.map((record, index) => salesData[index] - expensesData[index]);
+    
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Ventas',
+                    data: salesData,
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                    pointBackgroundColor: '#10b981',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    pointRadius: 4
+                },
+                {
+                    label: 'Gastos',
+                    data: expensesData,
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                    pointBackgroundColor: '#ef4444',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    pointRadius: 4
+                },
+                {
+                    label: 'Ganancia Neta',
+                    data: netData,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4,
+                    fill: false,
+                    pointBackgroundColor: '#3b82f6',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
+                    borderDash: [5, 5]
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        usePointStyle: true,
+                        padding: 20
+                    }
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    titleColor: '#fff',
+                    bodyColor: '#fff',
+                    borderColor: '#ddd',
+                    borderWidth: 1,
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': $' + context.parsed.y.toFixed(2);
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.1)'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value.toFixed(0);
+                        }
+                    }
+                },
+                x: {
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.1)'
+                    }
+                }
+            },
+            interaction: {
+                mode: 'nearest',
+                axis: 'x',
+                intersect: false
+            },
+            elements: {
+                point: {
+                    hoverRadius: 8
+                }
+            }
+        }
+    });
+}
+{% endif %}
+
+function updateClock() {
+    const now = new Date();
+    const timeString = now.toLocaleTimeString('es-AR', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+    });
+    
+    const clockElement = document.querySelector('.h1');
+    if (clockElement && clockElement.textContent !== timeString) {
+        clockElement.textContent = timeString;
+    }
+}
+
+function animateCards() {
+    // Intersection Observer para animar las tarjetas cuando entran en vista
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry, index) => {
+            if (entry.isIntersecting) {
+                setTimeout(() => {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }, index * 100);
+                observer.unobserve(entry.target);
+            }
+        });
+    }, {
+        threshold: 0.1
+    });
+
+    // Aplicar animación a las tarjetas del dashboard
+    document.querySelectorAll('.dashboard-card').forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+        observer.observe(card);
+    });
+}
+
+// Función para mostrar notificaciones de recordatorio
+function showDailyReminder() {
+    const now = new Date();
+    const currentHour = now.getHours();
+    
+    // Mostrar recordatorio al final del día si no hay registro
+    {% if not (stats and stats.today_record) %}
+    if (currentHour >= 18 && currentHour <= 22) {
+        setTimeout(() => {
+            if (typeof showToast === 'function') {
+                showToast(
+                    'Recordatorio: No olvides cargar el registro diario antes de cerrar.',
+                    'warning'
+                );
+            }
+        }, 5000);
+    }
+    {% endif %}
+}
+
+// Ejecutar recordatorio
+showDailyReminder();
+
+// Función para exportar datos de la sucursal
+function exportBranchData() {
+    const today = new Date();
+    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    
+    const startDate = firstDayOfMonth.toISOString().split('T')[0];
+    const endDate = today.toISOString().split('T')[0];
+    
+    const exportUrl = `{{ url_for('reports.export_csv') }}?start_date=${startDate}&end_date=${endDate}&branch={{ current_user.branch_name }}`;
+    window.open(exportUrl, '_blank');
+}
+
+// Función para obtener estadísticas en tiempo real
+async function refreshStats() {
+    try {
+        const response = await fetch('{{ url_for('main.api_branch_stats') }}');
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            // Actualizar métricas sin recargar la página
+            const stats = data.data;
+            
+            // Actualizar ventas del mes
+            const monthlySalesEl = document.querySelector('.text-success h3');
+            if (monthlySalesEl) {
+                monthlySalesEl.textContent = ' + stats.monthly.total_sales.toFixed(2);
+            }
+            
+            // Mostrar notificación de actualización
+            if (typeof showToast === 'function') {
+                showToast('Estadísticas actualizadas', 'success');
+            }
+        }
+    } catch (error) {
+        console.error('Error actualizando estadísticas:', error);
+    }
+}
+
+// Auto-refresh cada 10 minutos
+setInterval(refreshStats, 600000);
+
+// Función para predicciones simples
+function calculateProjections() {
+    {% if stats and stats.monthly.records_count > 0 %}
+    const currentDayOfMonth = new Date().getDate();
+    const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+    
+    const avgDailySales = {{ stats.monthly.total_sales }} / {{ stats.monthly.records_count }};
+    const remainingDays = daysInMonth - currentDayOfMonth;
+    const projectedMonthlyTotal = {{ stats.monthly.total_sales }} + (avgDailySales * remainingDays);
+    
+    // Mostrar proyección en consola (se puede implementar en la UI)
+    console.log(`Proyección del mes: ${projectedMonthlyTotal.toFixed(2)}`);
+    {% endif %}
+}
+
+// Calcular proyecciones al cargar
+calculateProjections();
+
+// Manejo de errores globales para el dashboard
+window.addEventListener('error', function(e) {
+    console.error('Error en dashboard:', e.error);
+});
+
+// Función para mostrar sugerencias basadas en datos
+function showInsights() {
+    {% if stats and stats.monthly.records_count > 0 %}
+    const avgSales = {{ stats.monthly.total_sales }} / {{ stats.monthly.records_count }};
+    const expenseRatio = ({{ stats.monthly.total_expenses }} / {{ stats.monthly.total_sales }}) * 100;
+    
+    let insights = [];
+    
+    if (expenseRatio > 30) {
+        insights.push('Los gastos representan más del 30% de las ventas. Considera revisar los costos operativos.');
+    }
+    
+    if (avgSales < 1000) {
+        insights.push('El promedio de ventas diarias está por debajo de $1000. Evalúa estrategias para incrementar las ventas.');
+    }
+    
+    if ({{ stats.monthly.net_amount }} < 0) {
+        insights.push('La sucursal está operando con pérdidas este mes. Es importante analizar las causas.');
+    }
+    
+    // Mostrar insights en consola (se puede implementar modal o sección dedicada)
+    if (insights.length > 0) {
+        console.log('Insights para {{ current_user.branch_name }}:', insights);
+    }
+    {% endif %}
+}
+
+// Generar insights
+setTimeout(showInsights, 3000);
+
+// Funciones de utilidad para el dashboard
+const DashboardUtils = {
+    formatCurrency: function(amount) {
+        return new Intl.NumberFormat('es-AR', {
+            style: 'currency',
+            currency: 'ARS'
+        }).format(amount);
+    },
+    
+    formatPercentage: function(value) {
+        return (value * 100).toFixed(1) + '%';
+    },
+    
+    getDateRange: function(days) {
+        const end = new Date();
+        const start = new Date();
+        start.setDate(start.getDate() - days);
+        return { start, end };
+    },
+    
+    animateNumber: function(element, finalValue, duration = 1000) {
+        const startValue = 0;
+        const startTime = performance.now();
+        
+        function updateValue(currentTime) {
+            const elapsedTime = currentTime - startTime;
+            const progress = Math.min(elapsedTime / duration, 1);
+            const currentValue = startValue + (finalValue - startValue) * progress;
+            
+            element.textContent = DashboardUtils.formatCurrency(currentValue);
+            
+            if (progress < 1) {
+                requestAnimationFrame(updateValue);
+            }
+        }
+        
+        requestAnimationFrame(updateValue);
+    }
+};
+
+// Animar números al cargar
+document.querySelectorAll('h3').forEach(el => {
+    const text = el.textContent;
+    const match = text.match(/\$?([\d,]+\.?\d*)/);
+    if (match) {
+        const value = parseFloat(match[1].replace(',', ''));
+        if (!isNaN(value)) {
+            el.textContent = '$0.00';
+            setTimeout(() => {
+                DashboardUtils.animateNumber(el, value);
+            }, 500);
+        }
+    }
+});
+</script>
+{% endblock %}
