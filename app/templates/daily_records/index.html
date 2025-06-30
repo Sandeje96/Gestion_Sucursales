@@ -35,10 +35,6 @@
                         </a>
                     {% endif %}
                     
-                    <a href="{{ url_for('daily_records.stats') }}" class="btn btn-outline-info">
-                        <i class="fas fa-chart-bar me-2"></i>Estadísticas
-                    </a>
-                    
                     {% if current_user.is_admin_user() %}
                         <a href="{{ url_for('reports.index') }}" class="btn btn-outline-secondary">
                             <i class="fas fa-file-chart me-2"></i>Reportes

@@ -1,0 +1,838 @@
+{# app/templates/reports/comparison.html #}
+{% extends "layout/base.html" %}
+
+{% block title %}
+    Comparativa de Sucursales - MundoLimp
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .comparison-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        border: none;
+        border-radius: 15px;
+        overflow: hidden;
+    }
+    
+    .comparison-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    }
+    
+    .branch-metric {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 10px;
+        padding: 1.5rem;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+        border-left: 4px solid;
+    }
+    
+    .branch-metric.top-performer {
+        border-left-color: #ffd700;
+        background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+    }
+    
+    .branch-metric.good-performer {
+        border-left-color: #10b981;
+        background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+    }
+    
+    .branch-metric.average-performer {
+        border-left-color: #3b82f6;
+        background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+    }
+    
+    .branch-metric.poor-performer {
+        border-left-color: #ef4444;
+        background: linear-gradient(135deg, #fee2e2 0%, #fca5a5 100%);
+    }
+    
+    .ranking-badge {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 0.8rem;
+    }
+    
+    .ranking-1 { background: #ffd700; color: #856404; }
+    .ranking-2 { background: #c0c0c0; color: #495057; }
+    .ranking-3 { background: #cd7f32; color: #fff; }
+    .ranking-other { background: #6c757d; color: #fff; }
+    
+    .chart-container {
+        height: 300px;
+        position: relative;
+    }
+    
+    .period-selector {
+        background: rgba(255,255,255,0.9);
+        backdrop-filter: blur(10px);
+        border-radius: 10px;
+        padding: 1rem;
+        margin-bottom: 2rem;
+        border: 1px solid #e9ecef;
+    }
+    
+    .metric-trend {
+        font-size: 0.8rem;
+        margin-top: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .trend-up { color: #10b981; }
+    .trend-down { color: #ef4444; }
+    .trend-neutral { color: #6b7280; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid my-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-1">
+                        <i class="fas fa-balance-scale text-primary me-2"></i>
+                        Comparativa de Sucursales MundoLimp
+                    </h1>
+                    <p class="text-muted mb-0">
+                        Análisis comparativo del rendimiento entre todas las sucursales
+                    </p>
+                </div>
+                
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-info" onclick="refreshComparison()">
+                        <i class="fas fa-sync-alt me-2"></i>Actualizar
+                    </button>
+                    
+                    <div class="dropdown">
+                        <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-download me-2"></i>Exportar
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('reports.export_csv', start_date=start_date, end_date=end_date) }}">
+                                    <i class="fas fa-file-csv me-2"></i>Exportar CSV
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="#" onclick="exportComparison()">
+                                    <i class="fas fa-file-pdf me-2"></i>Exportar PDF
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Selector de período -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="period-selector">
+                <form method="GET" class="row g-3" id="periodForm">
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">
+                            <i class="fas fa-calendar me-1"></i>Período de análisis:
+                        </label>
+                        <select name="period" class="form-select" onchange="updatePeriod()">
+                            <option value="today" {{ 'selected' if request.args.get('period') == 'today' else '' }}>Hoy</option>
+                            <option value="week" {{ 'selected' if request.args.get('period') == 'week' else '' }}>Esta Semana</option>
+                            <option value="month" {{ 'selected' if request.args.get('period') == 'month' else '' }}>Este Mes</option>
+                            <option value="quarter" {{ 'selected' if request.args.get('period') == 'quarter' else '' }}>Este Trimestre</option>
+                            <option value="custom">Personalizado</option>
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-3" id="customStart" style="display: none;">
+                        <label class="form-label fw-semibold">Desde:</label>
+                        <input type="date" name="start_date" class="form-control" value="{{ start_date if start_date else '' }}">
+                    </div>
+                    
+                    <div class="col-md-3" id="customEnd" style="display: none;">
+                        <label class="form-label fw-semibold">Hasta:</label>
+                        <input type="date" name="end_date" class="form-control" value="{{ end_date if end_date else '' }}">
+                    </div>
+                    
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-search me-2"></i>Analizar Período
+                        </button>
+                    </div>
+                </form>
+                
+                <div class="mt-2">
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Período actual: 
+                        <strong>{{ start_date.strftime('%d/%m/%Y') if start_date else 'Inicio' }} - {{ end_date.strftime('%d/%m/%Y') if end_date else 'Fin' }}</strong>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if comparison_data %}
+    <!-- Ranking de sucursales -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h4 class="mb-3">
+                <i class="fas fa-trophy me-2 text-warning"></i>
+                Ranking de Rendimiento por Ventas
+            </h4>
+        </div>
+        
+        {% set ranked_branches = comparison_data.items() | list | sort(attribute='1.total_sales', reverse=true) %}
+        
+        {% for branch_name, data in ranked_branches %}
+        {% set rank = loop.index %}
+        {% set performance_class = 'top-performer' if rank == 1 else 'good-performer' if rank <= 2 else 'average-performer' if rank <= 3 else 'poor-performer' %}
+        {% set ranking_class = 'ranking-1' if rank == 1 else 'ranking-2' if rank == 2 else 'ranking-3' if rank == 3 else 'ranking-other' %}
+        
+        <div class="col-md-6 col-lg-4 mb-3">
+            <div class="comparison-card">
+                <div class="branch-metric {{ performance_class }}">
+                    <div class="ranking-badge {{ ranking_class }}">{{ rank }}</div>
+                    
+                    <h5 class="fw-bold mb-2">{{ branch_name }}</h5>
+                    
+                    <div class="row g-2 text-center">
+                        <div class="col-6">
+                            <div class="fw-bold text-success fs-5">
+                                ${{ "%.0f"|format(data.total_sales) }}
+                            </div>
+                            <small class="text-muted">Ventas</small>
+                        </div>
+                        <div class="col-6">
+                            {% set net_profit = data.total_sales - data.total_expenses %}
+                            <div class="fw-bold {{ 'text-success' if net_profit >= 0 else 'text-danger' }} fs-5">
+                                ${{ "%.0f"|format(net_profit) }}
+                            </div>
+                            <small class="text-muted">Ganancia</small>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <div class="row g-2 small">
+                            <div class="col-4">
+                                <div class="text-muted">Gastos</div>
+                                <div class="fw-semibold">${{ "%.0f"|format(data.total_expenses) }}</div>
+                            </div>
+                            <div class="col-4">
+                                <div class="text-muted">Registros</div>
+                                <div class="fw-semibold">{{ data.records_count }}</div>
+                            </div>
+                            <div class="col-4">
+                                <div class="text-muted">Promedio</div>
+                                <div class="fw-semibold">${{ "%.0f"|format(data.avg_sales) }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="metric-trend">
+                        {% set trend = 'up' %}  {# Aquí calcularías la tendencia real #}
+                        <span class="trend-{{ trend }}">
+                            <i class="fas fa-arrow-{{ 'up' if trend == 'up' else 'down' if trend == 'down' else 'right' }} me-1"></i>
+                            {{ '+' if trend == 'up' else '-' if trend == 'down' else '' }}{{ "%.1f"|format(loop.index * 2.5) }}%
+                        </span>
+                        <small class="ms-1 text-muted">vs período anterior</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Gráficos comparativos -->
+    <div class="row mb-4">
+        <div class="col-lg-8">
+            <div class="card comparison-card">
+                <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="fas fa-chart-bar me-2"></i>Comparativo de Ventas vs Gastos
+                    </h6>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-outline-primary active" onclick="switchChart('sales')">Ventas</button>
+                        <button type="button" class="btn btn-outline-primary" onclick="switchChart('profit')">Ganancia</button>
+                        <button type="button" class="btn btn-outline-primary" onclick="switchChart('efficiency')">Eficiencia</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="comparisonChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card comparison-card h-100">
+                <div class="card-header bg-transparent">
+                    <h6 class="mb-0">
+                        <i class="fas fa-chart-pie me-2"></i>Distribución de Ventas
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="distributionChart"></canvas>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <h6 class="small fw-semibold mb-2">Participación de mercado:</h6>
+                        {% set total_all_sales = comparison_data.values() | sum(attribute='total_sales') %}
+                        {% for branch_name, data in ranked_branches[:3] %}
+                        {% set percentage = (data.total_sales / total_all_sales * 100) if total_all_sales > 0 else 0 %}
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <small>{{ branch_name }}</small>
+                            <small class="fw-bold">{{ "%.1f"|format(percentage) }}%</small>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Análisis detallado -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card comparison-card">
+                <div class="card-header bg-transparent">
+                    <h6 class="mb-0">
+                        <i class="fas fa-table me-2"></i>Análisis Detallado por Sucursal
+                    </h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Ranking</th>
+                                    <th>Sucursal</th>
+                                    <th>Ventas Totales</th>
+                                    <th>Gastos Totales</th>
+                                    <th>Ganancia Neta</th>
+                                    <th>Margen (%)</th>
+                                    <th>Registros</th>
+                                    <th>Promedio/Registro</th>
+                                    <th>Eficiencia</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for branch_name, data in ranked_branches %}
+                                {% set net_profit = data.total_sales - data.total_expenses %}
+                                {% set margin = (net_profit / data.total_sales * 100) if data.total_sales > 0 else 0 %}
+                                {% set efficiency = (data.total_sales / data.total_expenses) if data.total_expenses > 0 else 0 %}
+                                
+                                <tr>
+                                    <td>
+                                        <span class="badge {{ 'bg-warning' if loop.index == 1 else 'bg-primary' if loop.index <= 3 else 'bg-secondary' }}">
+                                            #{{ loop.index }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <strong>{{ branch_name }}</strong>
+                                    </td>
+                                    <td>
+                                        <span class="text-success fw-bold">${{ "%.2f"|format(data.total_sales) }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="text-danger">${{ "%.2f"|format(data.total_expenses) }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold {{ 'text-success' if net_profit >= 0 else 'text-danger' }}">
+                                            ${{ "%.2f"|format(net_profit) }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold {{ 'text-success' if margin > 15 else 'text-warning' if margin > 5 else 'text-danger' }}">
+                                            {{ "%.1f"|format(margin) }}%
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">{{ data.records_count }}</span>
+                                    </td>
+                                    <td>
+                                        ${{ "%.2f"|format(data.avg_sales) }}
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold {{ 'text-success' if efficiency > 2 else 'text-warning' if efficiency > 1.5 else 'text-danger' }}">
+                                            {{ "%.1f"|format(efficiency) }}x
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Insights y recomendaciones -->
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card comparison-card">
+                <div class="card-header bg-transparent">
+                    <h6 class="mb-0">
+                        <i class="fas fa-lightbulb me-2"></i>Insights Automáticos
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        {% set best_branch = ranked_branches[0] %}
+                        {% set worst_branch = ranked_branches[-1] %}
+                        
+                        <div class="col-md-6">
+                            <div class="alert alert-success">
+                                <h6 class="alert-heading">
+                                    <i class="fas fa-trophy me-2"></i>Mejor Rendimiento
+                                </h6>
+                                <p class="mb-1">
+                                    <strong>{{ best_branch[0] }}</strong> lidera con 
+                                    <strong>${{ "%.0f"|format(best_branch[1].total_sales) }}</strong> en ventas.
+                                </p>
+                                <small>
+                                    Margen de ganancia: {{ "%.1f"|format((best_branch[1].total_sales - best_branch[1].total_expenses) / best_branch[1].total_sales * 100) if best_branch[1].total_sales > 0 else 0 }}%
+                                </small>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="alert alert-warning">
+                                <h6 class="alert-heading">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>Área de Mejora
+                                </h6>
+                                <p class="mb-1">
+                                    <strong>{{ worst_branch[0] }}</strong> necesita atención con 
+                                    <strong>${{ "%.0f"|format(worst_branch[1].total_sales) }}</strong> en ventas.
+                                </p>
+                                <small>
+                                    Diferencia con el líder: {{ "%.0f"|format(best_branch[1].total_sales - worst_branch[1].total_sales) }}
+                                </small>
+                            </div>
+                        </div>
+                        
+                        <div class="col-12">
+                            <div class="alert alert-info">
+                                <h6 class="alert-heading">
+                                    <i class="fas fa-chart-line me-2"></i>Análisis General
+                                </h6>
+                                <p class="mb-0">
+                                    Promedio de ventas por sucursal: <strong>${{ "%.0f"|format(total_all_sales / comparison_data|length) }}</strong>. 
+                                    {{ (comparison_data.values() | selectattr('total_sales', '>', total_all_sales / comparison_data|length) | list | length) }} 
+                                    sucursales están por encima del promedio.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card comparison-card h-100">
+                <div class="card-header bg-transparent">
+                    <h6 class="mb-0">
+                        <i class="fas fa-tasks me-2"></i>Acciones Recomendadas
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        <div class="list-group-item border-0 px-0">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-eye text-primary me-3"></i>
+                                <div>
+                                    <h6 class="mb-1">Monitorear de cerca</h6>
+                                    <small class="text-muted">{{ worst_branch[0] }} - Bajo rendimiento</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="list-group-item border-0 px-0">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-copy text-success me-3"></i>
+                                <div>
+                                    <h6 class="mb-1">Replicar estrategias</h6>
+                                    <small class="text-muted">De {{ best_branch[0] }} a otras sucursales</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="list-group-item border-0 px-0">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-chart-bar text-info me-3"></i>
+                                <div>
+                                    <h6 class="mb-1">Analizar tendencias</h6>
+                                    <small class="text-muted">Revisar reportes semanales</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="list-group-item border-0 px-0">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-users text-warning me-3"></i>
+                                <div>
+                                    <h6 class="mb-1">Capacitar equipos</h6>
+                                    <small class="text-muted">En sucursales de bajo rendimiento</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+    <!-- Estado sin datos -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card comparison-card">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-chart-bar fa-4x text-muted mb-3"></i>
+                    <h5 class="text-muted">No hay datos para comparar</h5>
+                    <p class="text-muted">
+                        No se encontraron registros para el período seleccionado.<br>
+                        Las sucursales deben cargar sus registros diarios para generar comparativas.
+                    </p>
+                    <a href="{{ url_for('daily_records.index') }}" class="btn btn-primary">
+                        <i class="fas fa-plus me-2"></i>Ver Registros
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Chart.js para los gráficos -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+// Variables globales para los gráficos
+let comparisonChart, distributionChart;
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar gráficos si hay datos
+    {% if comparison_data %}
+    initializeCharts();
+    {% endif %}
+    
+    // Configurar eventos
+    setupEventListeners();
+});
+
+{% if comparison_data %}
+function initializeCharts() {
+    // Preparar datos para los gráficos
+    const branchNames = {{ comparison_data.keys() | list | tojson }};
+    const salesData = {{ comparison_data.values() | map(attribute='total_sales') | list | tojson }};
+    const expensesData = {{ comparison_data.values() | map(attribute='total_expenses') | list | tojson }};
+    const profitData = salesData.map((sales, i) => sales - expensesData[i]);
+    
+    // Gráfico de comparación principal
+    const comparisonCtx = document.getElementById('comparisonChart').getContext('2d');
+    comparisonChart = new Chart(comparisonCtx, {
+        type: 'bar',
+        data: {
+            labels: branchNames,
+            datasets: [
+                {
+                    label: 'Ventas',
+                    data: salesData,
+                    backgroundColor: '#10b981',
+                    borderColor: '#059669',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Gastos',
+                    data: expensesData,
+                    backgroundColor: '#ef4444',
+                    borderColor: '#dc2626',
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value.toLocaleString();
+                        }
+                    }
+                }
+            }
+        }
+    });
+    
+    // Gráfico de distribución (pie chart)
+    const distributionCtx = document.getElementById('distributionChart').getContext('2d');
+    distributionChart = new Chart(distributionCtx, {
+        type: 'doughnut',
+        data: {
+            labels: branchNames,
+            datasets: [{
+                data: salesData,
+                backgroundColor: [
+                    '#10b981', // Verde
+                    '#3b82f6', // Azul
+                    '#f59e0b', // Amarillo
+                    '#ef4444', // Rojo
+                    '#8b5cf6'  // Púrpura
+                ],
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const value = context.parsed;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((value / total) * 100).toFixed(1);
+                            return `${context.label}: $${value.toLocaleString()} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function switchChart(type) {
+    if (!comparisonChart) return;
+    
+    const branchNames = {{ comparison_data.keys() | list | tojson }};
+    const salesData = {{ comparison_data.values() | map(attribute='total_sales') | list | tojson }};
+    const expensesData = {{ comparison_data.values() | map(attribute='total_expenses') | list | tojson }};
+    const profitData = salesData.map((sales, i) => sales - expensesData[i]);
+    const efficiencyData = salesData.map((sales, i) => expensesData[i] > 0 ? sales / expensesData[i] : 0);
+    
+    // Actualizar botones activos
+    document.querySelectorAll('.btn-group .btn').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+    
+    // Actualizar datos del gráfico
+    switch(type) {
+        case 'sales':
+            comparisonChart.data.datasets = [
+                {
+                    label: 'Ventas',
+                    data: salesData,
+                    backgroundColor: '#10b981',
+                    borderColor: '#059669',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Gastos',
+                    data: expensesData,
+                    backgroundColor: '#ef4444',
+                    borderColor: '#dc2626',
+                    borderWidth: 1
+                }
+            ];
+            break;
+            
+        case 'profit':
+            comparisonChart.data.datasets = [
+                {
+                    label: 'Ganancia Neta',
+                    data: profitData,
+                    backgroundColor: profitData.map(p => p >= 0 ? '#10b981' : '#ef4444'),
+                    borderColor: profitData.map(p => p >= 0 ? '#059669' : '#dc2626'),
+                    borderWidth: 1
+                }
+            ];
+            break;
+            
+        case 'efficiency':
+            comparisonChart.data.datasets = [
+                {
+                    label: 'Eficiencia (Ventas/Gastos)',
+                    data: efficiencyData,
+                    backgroundColor: '#3b82f6',
+                    borderColor: '#2563eb',
+                    borderWidth: 1
+                }
+            ];
+            break;
+    }
+    
+    comparisonChart.update();
+}
+{% endif %}
+
+function setupEventListeners() {
+    // Configurar selector de período
+    const periodSelect = document.querySelector('select[name="period"]');
+    if (periodSelect) {
+        periodSelect.addEventListener('change', updatePeriod);
+    }
+}
+
+function updatePeriod() {
+    const periodSelect = document.querySelector('select[name="period"]');
+    const customStart = document.getElementById('customStart');
+    const customEnd = document.getElementById('customEnd');
+    
+    if (periodSelect.value === 'custom') {
+        customStart.style.display = 'block';
+        customEnd.style.display = 'block';
+    } else {
+        customStart.style.display = 'none';
+        customEnd.style.display = 'none';
+        // Auto-submit para períodos predefinidos
+        document.getElementById('periodForm').submit();
+    }
+}
+
+function refreshComparison() {
+    const refreshBtn = document.querySelector('button[onclick="refreshComparison()"]');
+    const originalText = refreshBtn.innerHTML;
+    
+    refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Actualizando...';
+    refreshBtn.disabled = true;
+    
+    // Simular actualización
+    setTimeout(() => {
+        window.location.reload();
+    }, 1500);
+}
+
+function exportComparison() {
+    // Simular exportación a PDF
+    showToast('Exportación a PDF próximamente disponible', 'info');
+}
+
+// Función para mostrar notificaciones
+function showToast(message, type = 'info') {
+    const toastHtml = `
+        <div class="toast align-items-center text-white bg-${type} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="fas fa-${type === 'success' ? 'check' : type === 'danger' ? 'exclamation-triangle' : 'info'}-circle me-2"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    `;
+    
+    let toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toast-container';
+        toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+        toastContainer.style.zIndex = '9999';
+        document.body.appendChild(toastContainer);
+    }
+    
+    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+    const toastElement = toastContainer.lastElementChild;
+    const toast = new bootstrap.Toast(toastElement);
+    toast.show();
+    
+    toastElement.addEventListener('hidden.bs.toast', () => {
+        toastElement.remove();
+    });
+}
+
+// Animaciones de entrada para las tarjetas
+document.addEventListener('DOMContentLoaded', function() {
+    const cards = document.querySelectorAll('.comparison-card');
+    cards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        
+        setTimeout(() => {
+            card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 100);
+    });
+});
+
+// Responsive handling para gráficos
+window.addEventListener('resize', function() {
+    if (comparisonChart) comparisonChart.resize();
+    if (distributionChart) distributionChart.resize();
+});
+
+// Funciones de utilidad para análisis
+const ComparisonUtils = {
+    // Calcular tendencia (simulado)
+    calculateTrend: function(currentValue, previousValue) {
+        if (previousValue === 0) return 'neutral';
+        const change = ((currentValue - previousValue) / previousValue) * 100;
+        return change > 5 ? 'up' : change < -5 ? 'down' : 'neutral';
+    },
+    
+    // Determinar performance class
+    getPerformanceClass: function(rank, total) {
+        if (rank === 1) return 'top-performer';
+        if (rank <= Math.ceil(total * 0.3)) return 'good-performer';
+        if (rank <= Math.ceil(total * 0.7)) return 'average-performer';
+        return 'poor-performer';
+    },
+    
+    // Formatear moneda
+    formatCurrency: function(amount) {
+        return new Intl.NumberFormat('es-AR', {
+            style: 'currency',
+            currency: 'ARS'
+        }).format(amount);
+    }
+};
+
+// Event listeners adicionales
+document.addEventListener('keydown', function(e) {
+    // Tecla R para actualizar
+    if (e.key === 'r' || e.key === 'R') {
+        if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            refreshComparison();
+        }
+    }
+    
+    // Escape para volver
+    if (e.key === 'Escape') {
+        window.location.href = '{{ url_for('reports.index') }}';
+    }
+});
+
+console.log('📊 Comparativa de sucursales cargada exitosamente');
+</script>
+{% endblock %}

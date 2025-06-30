@@ -1,0 +1,470 @@
+{# app/templates/daily_records/view.html #}
+{% extends "layout/base.html" %}
+
+{% block title %}
+    Registro del {{ record.record_date.strftime('%d/%m/%Y') }} - {{ record.branch_name }}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .detail-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        border: none;
+        border-radius: 15px;
+        overflow: hidden;
+    }
+    
+    .detail-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+    }
+    
+    .metric-display {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 10px;
+        padding: 1.5rem;
+        text-align: center;
+        border-left: 4px solid;
+    }
+    
+    .metric-display.sales {
+        border-left-color: #10b981;
+    }
+    
+    .metric-display.expenses {
+        border-left-color: #ef4444;
+    }
+    
+    .metric-display.net {
+        border-left-color: #3b82f6;
+    }
+    
+    .payment-breakdown {
+        background: white;
+        border-radius: 10px;
+        padding: 1rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .payment-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .payment-item:last-child {
+        border-bottom: none;
+    }
+    
+    .status-badge {
+        font-size: 1.1rem;
+        padding: 0.5rem 1rem;
+    }
+    
+    .print-hidden {
+        display: block;
+    }
+    
+    @media print {
+        .print-hidden {
+            display: none !important;
+        }
+        
+        .card {
+            box-shadow: none !important;
+            border: 1px solid #ccc !important;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <!-- Header con información básica -->
+            <div class="card detail-card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h4 class="mb-0">
+                                <i class="fas fa-calendar-day me-2"></i>
+                                Registro Diario - {{ record.record_date.strftime('%d/%m/%Y') }}
+                            </h4>
+                            <p class="mb-0 opacity-75">
+                                <i class="fas fa-building me-2"></i>{{ record.branch_name }}
+                                <span class="ms-3">
+                                    <i class="fas fa-user me-1"></i>Creado por: {{ record.creator.username if record.creator else 'Usuario eliminado' }}
+                                </span>
+                            </p>
+                        </div>
+                        <div class="text-end print-hidden">
+                            {% if record.is_verified %}
+                                <span class="status-badge badge bg-success">
+                                    <i class="fas fa-check-circle me-1"></i>Verificado
+                                </span>
+                                {% if record.verified_at %}
+                                <div class="small opacity-75 mt-1">
+                                    Verificado el {{ record.verified_at.strftime('%d/%m/%Y %H:%M') }}
+                                    {% if record.verifier %}
+                                        por {{ record.verifier.username }}
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                            {% else %}
+                                <span class="status-badge badge bg-warning text-dark">
+                                    <i class="fas fa-clock me-1"></i>Pendiente de verificación
+                                </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Resumen principal -->
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="metric-display sales">
+                        <h6 class="text-muted mb-2">Total de Ventas</h6>
+                        <h2 class="text-success mb-0">${{ "%.2f"|format(record.total_sales) }}</h2>
+                        <small class="text-muted">Suma de todos los métodos de pago</small>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="metric-display expenses">
+                        <h6 class="text-muted mb-2">Total de Gastos</h6>
+                        <h2 class="text-danger mb-0">${{ "%.2f"|format(record.total_expenses) }}</h2>
+                        <small class="text-muted">Gastos operativos del día</small>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    {% set net_amount = record.get_net_amount() %}
+                    <div class="metric-display net">
+                        <h6 class="text-muted mb-2">Ganancia Neta</h6>
+                        <h2 class="{{ 'text-success' if net_amount >= 0 else 'text-danger' }} mb-0">
+                            ${{ "%.2f"|format(net_amount) }}
+                        </h2>
+                        <small class="text-muted">
+                            {{ 'Ganancia' if net_amount >= 0 else 'Pérdida' }} del día
+                        </small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <!-- Desglose de ventas por método de pago -->
+                <div class="col-lg-6 mb-4">
+                    <div class="card detail-card h-100">
+                        <div class="card-header bg-transparent">
+                            <h6 class="mb-0">
+                                <i class="fas fa-credit-card me-2"></i>Desglose de Ventas por Método
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="payment-breakdown">
+                                {% set payment_methods = [
+                                    ('cash_sales', 'Efectivo', 'money-bill-wave', '#10b981'),
+                                    ('mercadopago_sales', 'MercadoPago', 'mobile-alt', '#3b82f6'),
+                                    ('debit_sales', 'Débito', 'credit-card', '#f59e0b'),
+                                    ('credit_sales', 'Crédito', 'credit-card', '#ef4444')
+                                ] %}
+                                
+                                {% for field, name, icon, color in payment_methods %}
+                                {% set amount = record[field]|float %}
+                                {% set percentage = (amount / record.total_sales|float * 100) if record.total_sales|float > 0 else 0 %}
+                                <div class="payment-item">
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-{{ icon }} me-3" style="color: {{ color }}; font-size: 1.2rem;"></i>
+                                        <div>
+                                            <div class="fw-semibold">{{ name }}</div>
+                                            <small class="text-muted">{{ "%.1f"|format(percentage) }}% del total</small>
+                                        </div>
+                                    </div>
+                                    <div class="text-end">
+                                        <div class="fw-bold" style="color: {{ color }};">
+                                            ${{ "%.2f"|format(amount) }}
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                                
+                                <div class="payment-item border-top-2 pt-3 mt-3">
+                                    <div class="fw-bold">
+                                        <i class="fas fa-calculator me-2 text-primary"></i>
+                                        Total de Ventas
+                                    </div>
+                                    <div class="fw-bold text-primary fs-5">
+                                        ${{ "%.2f"|format(record.total_sales) }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Información adicional y metadatos -->
+                <div class="col-lg-6 mb-4">
+                    <div class="card detail-card h-100">
+                        <div class="card-header bg-transparent">
+                            <h6 class="mb-0">
+                                <i class="fas fa-info-circle me-2"></i>Información Adicional
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <!-- Notas del registro -->
+                            {% if record.notes %}
+                            <div class="mb-4">
+                                <h6 class="fw-semibold mb-2">
+                                    <i class="fas fa-sticky-note me-2 text-warning"></i>Notas
+                                </h6>
+                                <div class="p-3 bg-light rounded">
+                                    <p class="mb-0">{{ record.notes }}</p>
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            <!-- Información de auditoría -->
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <h6 class="fw-semibold mb-3">
+                                        <i class="fas fa-history me-2 text-info"></i>Historial del Registro
+                                    </h6>
+                                </div>
+                                
+                                <div class="col-6">
+                                    <div class="bg-light p-3 rounded">
+                                        <small class="text-muted">Fecha de creación</small>
+                                        <div class="fw-semibold">
+                                            {{ record.created_at.strftime('%d/%m/%Y') }}
+                                        </div>
+                                        <small class="text-muted">
+                                            {{ record.created_at.strftime('%H:%M:%S') }}
+                                        </small>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-6">
+                                    <div class="bg-light p-3 rounded">
+                                        <small class="text-muted">Última modificación</small>
+                                        <div class="fw-semibold">
+                                            {{ record.updated_at.strftime('%d/%m/%Y') }}
+                                        </div>
+                                        <small class="text-muted">
+                                            {{ record.updated_at.strftime('%H:%M:%S') }}
+                                        </small>
+                                    </div>
+                                </div>
+                                
+                                {% if record.creator %}
+                                <div class="col-6">
+                                    <div class="bg-light p-3 rounded">
+                                        <small class="text-muted">Creado por</small>
+                                        <div class="fw-semibold">{{ record.creator.username }}</div>
+                                        <small class="text-muted">{{ record.creator.branch_name or 'Administrador' }}</small>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                {% if record.is_verified and record.verifier %}
+                                <div class="col-6">
+                                    <div class="bg-success bg-opacity-10 p-3 rounded border border-success border-opacity-25">
+                                        <small class="text-success">Verificado por</small>
+                                        <div class="fw-semibold text-success">{{ record.verifier.username }}</div>
+                                        <small class="text-success">Administrador</small>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <!-- Análisis rápido -->
+                            <div class="mt-4">
+                                <h6 class="fw-semibold mb-3">
+                                    <i class="fas fa-chart-pie me-2 text-success"></i>Análisis Rápido
+                                </h6>
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <small class="text-muted">Margen de ganancia:</small>
+                                        {% set margin = (net_amount / record.total_sales|float * 100) if record.total_sales|float > 0 else 0 %}
+                                        <div class="fw-bold {{ 'text-success' if margin > 10 else 'text-warning' if margin > 0 else 'text-danger' }}">
+                                            {{ "%.1f"|format(margin) }}%
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">Método más usado:</small>
+                                        {% set methods = [
+                                            ('Efectivo', record.cash_sales|float),
+                                            ('MercadoPago', record.mercadopago_sales|float),
+                                            ('Débito', record.debit_sales|float),
+                                            ('Crédito', record.credit_sales|float)
+                                        ] %}
+                                        {% set top_method = methods | max(attribute=1) %}
+                                        <div class="fw-bold text-primary">{{ top_method[0] }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Acciones disponibles -->
+            <div class="card detail-card print-hidden">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h6 class="mb-2">
+                                <i class="fas fa-tools me-2"></i>Acciones Disponibles
+                            </h6>
+                            <p class="text-muted mb-0">
+                                Gestiona este registro o vuelve a la lista principal.
+                            </p>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex gap-2 justify-content-end">
+                                <a href="{{ url_for('daily_records.index') }}" class="btn btn-outline-secondary">
+                                    <i class="fas fa-arrow-left me-2"></i>Volver
+                                </a>
+                                
+                                {% if current_user.can_edit_record(record) %}
+                                <a href="{{ url_for('daily_records.edit', id=record.id) }}" class="btn btn-warning">
+                                    <i class="fas fa-edit me-2"></i>Editar
+                                </a>
+                                {% endif %}
+                                
+                                {% if current_user.is_admin_user() and not record.is_verified %}
+                                <form method="POST" action="{{ url_for('daily_records.verify', id=record.id) }}" class="d-inline">
+                                    <button type="submit" class="btn btn-success" 
+                                            onclick="return confirm('¿Verificar este registro?')">
+                                        <i class="fas fa-check me-2"></i>Verificar
+                                    </button>
+                                </form>
+                                {% endif %}
+                                
+                                <button class="btn btn-info" onclick="window.print()">
+                                    <i class="fas fa-print me-2"></i>Imprimir
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Agregar animaciones a las métricas
+    animateMetrics();
+    
+    // Configurar impresión
+    setupPrintStyles();
+});
+
+function animateMetrics() {
+    const metrics = document.querySelectorAll('.metric-display h2');
+    
+    metrics.forEach((metric, index) => {
+        const text = metric.textContent;
+        const match = text.match(/\$?([\d,]+\.?\d*)/);
+        
+        if (match) {
+            const value = parseFloat(match[1].replace(',', ''));
+            if (!isNaN(value)) {
+                metric.textContent = '$0.00';
+                
+                setTimeout(() => {
+                    animateValue(metric, value);
+                }, index * 200);
+            }
+        }
+    });
+}
+
+function animateValue(element, targetValue) {
+    const duration = 1000;
+    const startTime = performance.now();
+    const startValue = 0;
+    
+    function updateValue(currentTime) {
+        const elapsedTime = currentTime - startTime;
+        const progress = Math.min(elapsedTime / duration, 1);
+        const currentValue = startValue + (targetValue - startValue) * progress;
+        
+        element.textContent = '$' + currentValue.toLocaleString('es-AR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+        
+        if (progress < 1) {
+            requestAnimationFrame(updateValue);
+        }
+    }
+    
+    requestAnimationFrame(updateValue);
+}
+
+function setupPrintStyles() {
+    // Configurar estilos adicionales para impresión
+    const printStyles = `
+        @media print {
+            body { font-size: 12pt; }
+            .card { break-inside: avoid; }
+            .row { break-inside: avoid; }
+            .btn, .print-hidden { display: none !important; }
+            .card-header { background: #f8f9fa !important; color: #000 !important; }
+        }
+    `;
+    
+    const styleSheet = document.createElement('style');
+    styleSheet.textContent = printStyles;
+    document.head.appendChild(styleSheet);
+}
+
+// Función para exportar/compartir datos del registro
+function exportRecord() {
+    const recordData = {
+        fecha: '{{ record.record_date.strftime('%d/%m/%Y') }}',
+        sucursal: '{{ record.branch_name }}',
+        ventas_total: {{ record.total_sales }},
+        gastos_total: {{ record.total_expenses }},
+        ganancia_neta: {{ record.get_net_amount() }},
+        efectivo: {{ record.cash_sales }},
+        mercadopago: {{ record.mercadopago_sales }},
+        debito: {{ record.debit_sales }},
+        credito: {{ record.credit_sales }},
+        verificado: {{ 'true' if record.is_verified else 'false' }}
+    };
+    
+    console.log('Datos del registro:', recordData);
+    
+    // Aquí podrías implementar exportación a Excel, PDF, etc.
+    alert('Funcionalidad de exportación próximamente disponible');
+}
+
+// Event listeners para acciones rápidas
+document.addEventListener('keydown', function(e) {
+    // Ctrl+P para imprimir
+    if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+        e.preventDefault();
+        window.print();
+    }
+    
+    // Escape para volver
+    if (e.key === 'Escape') {
+        window.location.href = '{{ url_for('daily_records.index') }}';
+    }
+});
+
+// Mostrar tooltip con información adicional
+document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(element) {
+    new bootstrap.Tooltip(element);
+});
+</script>
+{% endblock %}

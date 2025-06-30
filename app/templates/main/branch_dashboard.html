@@ -18,6 +18,11 @@
         transform: translateY(-5px);
         box-shadow: 0 10px 25px rgba(0,0,0,0.15);
     }
+
+    .row.g-3.centrar {
+        display: flex;
+        justify-content: center;
+    }
     
     .metric-icon {
         width: 60px;
@@ -132,215 +137,6 @@
         {% endif %}
     {% endwith %}
 
-    {% if stats %}
-    <!-- Métricas principales -->
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="card dashboard-card h-100">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="metric-icon bg-success bg-opacity-10 text-success me-3">
-                            <i class="fas fa-dollar-sign"></i>
-                        </div>
-                        <div class="flex-grow-1">
-                            <h6 class="text-muted mb-1">Ventas del Mes</h6>
-                            <h3 class="mb-0 text-success">${{ "%.2f"|format(stats.monthly.total_sales) }}</h3>
-                            <div class="trend-indicator text-success">
-                                <i class="fas fa-arrow-up me-1"></i>
-                                <span>+5.2% vs mes anterior</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-md-3">
-            <div class="card dashboard-card h-100">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="metric-icon bg-primary bg-opacity-10 text-primary me-3">
-                            <i class="fas fa-chart-line"></i>
-                        </div>
-                        <div class="flex-grow-1">
-                            <h6 class="text-muted mb-1">Ganancia Neta</h6>
-                            <h3 class="mb-0 {{ 'text-success' if stats.monthly.net_amount >= 0 else 'text-danger' }}">
-                                ${{ "%.2f"|format(stats.monthly.net_amount) }}
-                            </h3>
-                            <div class="trend-indicator {{ 'text-success' if stats.monthly.net_amount >= 0 else 'text-danger' }}">
-                                <i class="fas {{ 'fa-arrow-up' if stats.monthly.net_amount >= 0 else 'fa-arrow-down' }} me-1"></i>
-                                <span>Gastos: ${{ "%.2f"|format(stats.monthly.total_expenses) }}</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-md-3">
-            <div class="card dashboard-card h-100">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="metric-icon bg-info bg-opacity-10 text-info me-3">
-                            <i class="fas fa-calendar-check"></i>
-                        </div>
-                        <div class="flex-grow-1">
-                            <h6 class="text-muted mb-1">Registros del Mes</h6>
-                            <h3 class="mb-0 text-info">{{ stats.monthly.records_count }}</h3>
-                            <div class="trend-indicator text-muted">
-                                <i class="fas fa-calendar me-1"></i>
-                                <span>{{ ((stats.monthly.records_count / moment().day) * 100)|round|int if moment else 0 }}% del mes</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-md-3">
-            <div class="card dashboard-card h-100">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="metric-icon bg-warning bg-opacity-10 text-warning me-3">
-                            <i class="fas fa-receipt"></i>
-                        </div>
-                        <div class="flex-grow-1">
-                            <h6 class="text-muted mb-1">Gastos del Mes</h6>
-                            <h3 class="mb-0 text-warning">${{ "%.2f"|format(stats.monthly.total_expenses) }}</h3>
-                            <div class="trend-indicator text-muted">
-                                <i class="fas fa-percent me-1"></i>
-                                <span>{{ ((stats.monthly.total_expenses / stats.monthly.total_sales * 100) if stats.monthly.total_sales > 0 else 0)|round|int }}% de ventas</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Estado del registro de hoy -->
-    <div class="row mb-4">
-        <div class="col-md-8">
-            {% if stats.today_record %}
-            <div class="card dashboard-card bg-light-success">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="metric-icon bg-success text-white me-3">
-                            <i class="fas fa-check-circle"></i>
-                        </div>
-                        <div class="flex-grow-1">
-                            <h5 class="mb-1 text-success">¡Registro de hoy completado!</h5>
-                            <p class="mb-0 text-muted">
-                                Ya has cargado el registro del día de hoy. 
-                                Ventas: <strong>${{ "%.2f"|format(stats.today_record.total_sales) }}</strong>, 
-                                Gastos: <strong>${{ "%.2f"|format(stats.today_record.total_expenses) }}</strong>
-                            </p>
-                        </div>
-                        <div>
-                            <a href="{{ url_for('daily_records.edit', id=stats.today_record.id) }}" 
-                               class="btn btn-outline-success">
-                                <i class="fas fa-edit me-2"></i>Editar
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% else %}
-            <div class="card dashboard-card bg-light-warning">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="metric-icon bg-warning text-white me-3">
-                            <i class="fas fa-exclamation-triangle"></i>
-                        </div>
-                        <div class="flex-grow-1">
-                            <h5 class="mb-1 text-warning">Pendiente: Registro del día</h5>
-                            <p class="mb-0 text-muted">
-                                Aún no has cargado el registro diario de hoy. 
-                                Recuerda registrar las ventas y gastos del día.
-                            </p>
-                        </div>
-                        <div>
-                            <a href="{{ url_for('daily_records.create') }}" 
-                               class="btn btn-warning">
-                                <i class="fas fa-plus me-2"></i>Cargar Ahora
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-        </div>
-        
-        <div class="col-md-4">
-            <div class="card dashboard-card h-100">
-                <div class="card-body text-center">
-                    <div class="metric-icon bg-info bg-opacity-10 text-info mx-auto mb-3">
-                        <i class="fas fa-lightbulb"></i>
-                    </div>
-                    <h6 class="mb-2">Consejo del día</h6>
-                    <p class="small text-muted mb-0">
-                        {% set tips = [
-                            "Registra tus ventas al final del día para no olvidar ningún detalle.",
-                            "Revisa que todos los métodos de pago sumen correctamente.",
-                            "Guarda los comprobantes de gastos para futuras consultas.",
-                            "Compara tus ventas con días anteriores para detectar tendencias.",
-                            "Mantén un registro detallado de gastos extraordinarios."
-                        ] %}
-                        {{ tips[range(0, tips|length)|random] }}
-                    </p>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-    <!-- Gráfico de tendencias -->
-    {% if stats and stats.weekly_records %}
-    <div class="row mb-4">
-        <div class="col-md-8">
-            <div class="card dashboard-card">
-                <div class="card-header bg-transparent">
-                    <h6 class="mb-0">
-                        <i class="fas fa-chart-area me-2"></i>Tendencia de Ventas (Últimos 7 días)
-                    </h6>
-                </div>
-                <div class="card-body">
-                    <div class="chart-container">
-                        <canvas id="weeklyTrendChart"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-md-4">
-            <div class="card dashboard-card h-100">
-                <div class="card-header bg-transparent">
-                    <h6 class="mb-0">
-                        <i class="fas fa-trophy me-2"></i>Mejores Días
-                    </h6>
-                </div>
-                <div class="card-body">
-                    {% set sorted_records = stats.weekly_records|sort(attribute='total_sales', reverse=true) %}
-                    {% for record in sorted_records[:3] %}
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <div>
-                            <div class="fw-bold">{{ record.record_date.strftime('%d/%m') }}</div>
-                            <small class="text-muted">{{ record.record_date.strftime('%A') }}</small>
-                        </div>
-                        <div class="text-end">
-                            <div class="fw-bold text-success">${{ "%.0f"|format(record.total_sales) }}</div>
-                            <small class="text-muted">
-                                {% if loop.index == 1 %}🥇{% elif loop.index == 2 %}🥈{% else %}🥉{% endif %}
-                            </small>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
     <!-- Acciones rápidas -->
     <div class="row mb-4">
         <div class="col-12">
@@ -351,7 +147,7 @@
                     </h6>
                 </div>
                 <div class="card-body">
-                    <div class="row g-3">
+                    <div class="row g-3 centrar">
                         <div class="col-md-3">
                             <a href="{{ url_for('daily_records.create') }}" 
                                class="quick-action-btn btn btn-primary h-100 d-flex align-items-center">
@@ -359,39 +155,6 @@
                                     <i class="fas fa-plus fa-2x mb-2"></i>
                                     <div class="fw-bold">Cargar Nuevo Registro Diario</div>
                                     <small class="opacity-75">Ingresa las ventas y gastos del día. Es importante mantener actualizada la información diaria.</small>
-                                </div>
-                            </a>
-                        </div>
-                        
-                        <div class="col-md-3">
-                            <a href="{{ url_for('daily_records.index') }}" 
-                               class="quick-action-btn btn btn-outline-info h-100 d-flex align-items-center">
-                                <div class="text-center w-100">
-                                    <i class="fas fa-history fa-2x mb-2"></i>
-                                    <div class="fw-bold">Ver Historial de Registros</div>
-                                    <small class="opacity-75">Consulta todos los registros anteriores de tu sucursal y analiza tendencias de ventas.</small>
-                                </div>
-                            </a>
-                        </div>
-                        
-                        <div class="col-md-3">
-                            <a href="{{ url_for('daily_records.stats') }}" 
-                               class="quick-action-btn btn btn-outline-success h-100 d-flex align-items-center">
-                                <div class="text-center w-100">
-                                    <i class="fas fa-chart-bar fa-2x mb-2"></i>
-                                    <div class="fw-bold">Ver Estadísticas</div>
-                                    <small class="opacity-75">Analiza el rendimiento de tu sucursal con gráficos detallados.</small>
-                                </div>
-                            </a>
-                        </div>
-                        
-                        <div class="col-md-3">
-                            <a href="{{ url_for('auth.profile') }}" 
-                               class="quick-action-btn btn btn-outline-secondary h-100 d-flex align-items-center">
-                                <div class="text-center w-100">
-                                    <i class="fas fa-user-cog fa-2x mb-2"></i>
-                                    <div class="fw-bold">Mi Perfil</div>
-                                    <small class="opacity-75">Gestiona tu cuenta y configuración personal.</small>
                                 </div>
                             </a>
                         </div>
@@ -410,9 +173,6 @@
                     <h6 class="mb-0">
                         <i class="fas fa-list me-2"></i>Registros Recientes
                     </h6>
-                    <a href="{{ url_for('daily_records.index') }}" class="btn btn-sm btn-outline-primary">
-                        Ver todos los registros
-                    </a>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
@@ -431,17 +191,17 @@
                                 {% for record in stats.recent_records %}
                                 <tr>
                                     <td>
-                                        <strong>{{ record.record_date.strftime('%d/%m/%Y') }}</strong>
-                                        <br><small class="text-muted">{{ record.record_date.strftime('%A') }}</small>
+                                        <strong>{{ record.record_date }}</strong>
+                                        <br><small class="text-muted">{{ record.record_date }}</small>
                                     </td>
                                     <td>
-                                        <strong class="text-success">${{ "%.2f"|format(record.total_sales) }}</strong>
+                                        <strong class="text-success">${{ "%.2f"|format(record.total_sales or 0) }}</strong>
                                     </td>
                                     <td>
-                                        <span class="text-danger">${{ "%.2f"|format(record.total_expenses) }}</span>
+                                        <span class="text-danger">${{ "%.2f"|format(record.total_expenses or 0) }}</span>
                                     </td>
                                     <td>
-                                        {% set net = record.total_sales - record.total_expenses %}
+                                        {% set net = (record.total_sales or 0) - (record.total_expenses or 0) %}
                                         <strong class="{{ 'text-success' if net >= 0 else 'text-danger' }}">
                                             ${{ "%.2f"|format(net) }}
                                         </strong>
@@ -482,24 +242,6 @@
             </div>
         </div>
     </div>
-    {% else %}
-    <!-- Estado sin registros -->
-    <div class="row">
-        <div class="col-12">
-            <div class="card dashboard-card">
-                <div class="card-body text-center py-5">
-                    <i class="fas fa-inbox fa-4x text-muted mb-3"></i>
-                    <h5 class="text-muted">Aún no tienes registros</h5>
-                    <p class="text-muted mb-4">
-                        Comienza cargando tu primer registro diario para ver estadísticas y análisis de tu sucursal.
-                    </p>
-                    <a href="{{ url_for('daily_records.create') }}" class="btn btn-primary btn-lg">
-                        <i class="fas fa-plus me-2"></i>Cargar mi primer registro
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
     {% endif %}
 </div>
 {% endblock %}
@@ -531,8 +273,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 {% if stats and stats.weekly_records %}
 function initializeWeeklyTrendChart() {
-    const ctx = document.getElementById('weeklyTrendChart').getContext('2d');
-    
+    const ctx = document.getElementById('weeklyTrendChart')?.getContext('2d');
+    if (!ctx) return;
     // Preparar datos
     const weeklyData = {{ stats.weekly_records | tojson }};
     const labels = weeklyData.map(record => {
@@ -540,8 +282,8 @@ function initializeWeeklyTrendChart() {
         return date.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric' });
     });
     
-    const salesData = weeklyData.map(record => parseFloat(record.total_sales));
-    const expensesData = weeklyData.map(record => parseFloat(record.total_expenses));
+    const salesData = weeklyData.map(record => parseFloat(record.total_sales || 0));
+    const expensesData = weeklyData.map(record => parseFloat(record.total_expenses || 0));
     const netData = weeklyData.map((record, index) => salesData[index] - expensesData[index]);
     
     new Chart(ctx, {
@@ -712,11 +454,10 @@ showDailyReminder();
 function exportBranchData() {
     const today = new Date();
     const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    
     const startDate = firstDayOfMonth.toISOString().split('T')[0];
     const endDate = today.toISOString().split('T')[0];
-    
-    const exportUrl = `{{ url_for('reports.export_csv') }}?start_date=${startDate}&end_date=${endDate}&branch={{ current_user.branch_name }}`;
+    const branch = {{ current_user.branch_name | tojson }};
+    const exportUrl = `{{ url_for('reports.export_csv') }}?start_date=${startDate}&end_date=${endDate}&branch=${encodeURIComponent(branch)}`;
     window.open(exportUrl, '_blank');
 }
 
@@ -730,10 +471,10 @@ async function refreshStats() {
             // Actualizar métricas sin recargar la página
             const stats = data.data;
             
-            // Actualizar ventas del mes
+            // Actualizar ventas del mes (Ejemplo de actualización, depende de tu markup real)
             const monthlySalesEl = document.querySelector('.text-success h3');
             if (monthlySalesEl) {
-                monthlySalesEl.textContent = ' + stats.monthly.total_sales.toFixed(2);
+                monthlySalesEl.textContent = stats.monthly.total_sales.toFixed(2);
             }
             
             // Mostrar notificación de actualización
@@ -754,11 +495,9 @@ function calculateProjections() {
     {% if stats and stats.monthly.records_count > 0 %}
     const currentDayOfMonth = new Date().getDate();
     const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
-    
-    const avgDailySales = {{ stats.monthly.total_sales }} / {{ stats.monthly.records_count }};
+    const avgDailySales = {{ stats.monthly.total_sales or 0 }} / {{ stats.monthly.records_count or 1 }};
     const remainingDays = daysInMonth - currentDayOfMonth;
-    const projectedMonthlyTotal = {{ stats.monthly.total_sales }} + (avgDailySales * remainingDays);
-    
+    const projectedMonthlyTotal = {{ stats.monthly.total_sales or 0 }} + (avgDailySales * remainingDays);
     // Mostrar proyección en consola (se puede implementar en la UI)
     console.log(`Proyección del mes: ${projectedMonthlyTotal.toFixed(2)}`);
     {% endif %}
@@ -775,26 +514,21 @@ window.addEventListener('error', function(e) {
 // Función para mostrar sugerencias basadas en datos
 function showInsights() {
     {% if stats and stats.monthly.records_count > 0 %}
-    const avgSales = {{ stats.monthly.total_sales }} / {{ stats.monthly.records_count }};
-    const expenseRatio = ({{ stats.monthly.total_expenses }} / {{ stats.monthly.total_sales }}) * 100;
-    
+    const avgSales = {{ stats.monthly.total_sales or 0 }} / {{ stats.monthly.records_count or 1 }};
+    const expenseRatio = ({{ stats.monthly.total_expenses or 0 }} / ({{ stats.monthly.total_sales or 1 }}) ) * 100;
     let insights = [];
-    
     if (expenseRatio > 30) {
         insights.push('Los gastos representan más del 30% de las ventas. Considera revisar los costos operativos.');
     }
-    
     if (avgSales < 1000) {
         insights.push('El promedio de ventas diarias está por debajo de $1000. Evalúa estrategias para incrementar las ventas.');
     }
-    
-    if ({{ stats.monthly.net_amount }} < 0) {
+    if ({{ stats.monthly.net_amount or 0 }} < 0) {
         insights.push('La sucursal está operando con pérdidas este mes. Es importante analizar las causas.');
     }
-    
     // Mostrar insights en consola (se puede implementar modal o sección dedicada)
     if (insights.length > 0) {
-        console.log('Insights para {{ current_user.branch_name }}:', insights);
+        console.log('Insights para {{ current_user.branch_name|tojson }}:', insights);
     }
     {% endif %}
 }
@@ -810,34 +544,27 @@ const DashboardUtils = {
             currency: 'ARS'
         }).format(amount);
     },
-    
     formatPercentage: function(value) {
         return (value * 100).toFixed(1) + '%';
     },
-    
     getDateRange: function(days) {
         const end = new Date();
         const start = new Date();
         start.setDate(start.getDate() - days);
         return { start, end };
     },
-    
     animateNumber: function(element, finalValue, duration = 1000) {
         const startValue = 0;
         const startTime = performance.now();
-        
         function updateValue(currentTime) {
             const elapsedTime = currentTime - startTime;
             const progress = Math.min(elapsedTime / duration, 1);
             const currentValue = startValue + (finalValue - startValue) * progress;
-            
             element.textContent = DashboardUtils.formatCurrency(currentValue);
-            
             if (progress < 1) {
                 requestAnimationFrame(updateValue);
             }
         }
-        
         requestAnimationFrame(updateValue);
     }
 };

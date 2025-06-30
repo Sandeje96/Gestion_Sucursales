@@ -72,7 +72,7 @@ def create_app(config_name=None):
         # Crear todas las tablas si no existen
         db.create_all()
 
-     # Registro de Blueprints
+    # Registro de Blueprints - UNA SOLA VEZ
     # Blueprint de autenticación
     from app.routes.auth import auth_bp
     app.register_blueprint(auth_bp, url_prefix='/auth')
@@ -88,24 +88,6 @@ def create_app(config_name=None):
     # Blueprint de reportes
     from app.routes.reports import reports_bp
     app.register_blueprint(reports_bp, url_prefix='/reports')
-    
-    # Registro de Blueprints
-    # Blueprint de autenticación
-    from app.routes.auth import auth_bp
-    app.register_blueprint(auth_bp, url_prefix='/auth')
-    
-    # Blueprint principal
-    from app.routes.main import main_bp
-    app.register_blueprint(main_bp)
-    
-    # TODO: Los siguientes blueprints se registrarán cuando estén creados
-    # Blueprint de registros diarios
-    # from app.routes.daily_records import daily_records_bp
-    # app.register_blueprint(daily_records_bp, url_prefix='/daily-records')
-    
-    # Blueprint de reportes
-    # from app.routes.reports import reports_bp
-    # app.register_blueprint(reports_bp, url_prefix='/reports')
     
     # Manejadores de errores globales
     @app.errorhandler(404)

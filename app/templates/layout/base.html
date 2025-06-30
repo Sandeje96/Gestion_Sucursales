@@ -21,6 +21,42 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     
+    <!-- Fix para dropdown z-index -->
+    <style>
+        /* Arreglar z-index del navbar y dropdown */
+        .navbar {
+            z-index: 1030 !important;
+            position: relative;
+        }
+        
+        .navbar .dropdown-menu {
+            z-index: 9999 !important;
+            position: absolute !important;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15) !important;
+        }
+        
+        .navbar-nav .dropdown {
+            position: relative;
+        }
+        
+        /* Asegurar que el contenido principal no interfiera */
+        main {
+            position: relative;
+            z-index: 1;
+        }
+        
+        /* Mejorar el dropdown en móviles */
+        @media (max-width: 991.98px) {
+            .navbar-collapse {
+                background: rgba(13, 110, 253, 0.95);
+                padding: 1rem;
+                border-radius: 0 0 10px 10px;
+                margin-top: 10px;
+                z-index: 9999;
+            }
+        }
+    </style>
+    
     <!-- Block para CSS adicional específico de cada página -->
     {% block extra_css %}{% endblock %}
 </head>
@@ -45,12 +81,6 @@
                 <div class="collapse navbar-collapse" id="navbarNav">
                     <!-- Enlaces principales -->
                     <ul class="navbar-nav me-auto">
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('main.index') }}">
-                                <i class="fas fa-home me-1"></i>Inicio
-                            </a>
-                        </li>
-                        
                         {% if current_user.is_authenticated %}
                             <!-- Enlaces para usuarios autenticados -->
                             {% if current_user.role == 'admin' %}
@@ -68,11 +98,6 @@
                                 <li class="nav-item">
                                     <a class="nav-link" href="{{ url_for('main.branch_dashboard') }}">
                                         <i class="fas fa-building me-1"></i>Mi Sucursal
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link" href="{{ url_for('daily_records.index') }}">
-                                        <i class="fas fa-calendar-day me-1"></i>Registros Diarios
                                     </a>
                                 </li>
                             {% endif %}
@@ -95,7 +120,7 @@
                             </li>
                         {% else %}
                             <!-- Menú desplegable para usuarios autenticados -->
-                            <li class="nav-item dropdown">
+                            <li class="nav-item dropdown position-relative">
                                 <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                     <i class="fas fa-user-circle me-1"></i>
                                     <span class="d-none d-md-inline">{{ current_user.username }}</span>
@@ -103,7 +128,7 @@
                                         <span class="badge bg-warning text-dark ms-1">Admin</span>
                                     {% endif %}
                                 </a>
-                                <ul class="dropdown-menu dropdown-menu-end">
+                                <ul class="dropdown-menu dropdown-menu-end" style="z-index: 9999 !important;">
                                     <li>
                                         <h6 class="dropdown-header">
                                             <i class="fas fa-user me-1"></i>{{ current_user.username }}
@@ -282,6 +307,28 @@
                         this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Procesando...';
                     }
                 });
+            });
+
+            // Arreglar dropdown z-index específicamente
+            document.querySelectorAll('.dropdown').forEach(dropdown => {
+                const dropdownToggle = dropdown.querySelector('.dropdown-toggle');
+                const dropdownMenu = dropdown.querySelector('.dropdown-menu');
+                
+                if (dropdownToggle && dropdownMenu) {
+                    dropdownToggle.addEventListener('click', function(e) {
+                        // Asegurar que el dropdown esté por encima de todo
+                        dropdownMenu.style.zIndex = '9999';
+                        dropdown.style.zIndex = '9999';
+                    });
+                    
+                    // Cuando se cierre el dropdown, restaurar z-index
+                    dropdown.addEventListener('hide.bs.dropdown', function() {
+                        setTimeout(() => {
+                            dropdownMenu.style.zIndex = '';
+                            dropdown.style.zIndex = '';
+                        }, 300);
+                    });
+                }
             });
         });
 

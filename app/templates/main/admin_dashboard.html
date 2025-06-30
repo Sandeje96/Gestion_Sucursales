@@ -1,0 +1,681 @@
+{# app/templates/main/admin_dashboard.html #}
+{% extends "layout/base.html" %}
+
+{% block title %}
+    Panel de Administración - MundoLimp
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .dashboard-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        border: none;
+        border-radius: 15px;
+        overflow: hidden;
+    }
+    
+    .dashboard-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    }
+    
+    .metric-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+    
+    .chart-container {
+        height: 250px;
+        position: relative;
+    }
+    
+    /* Arreglar z-index del dropdown */
+    .navbar .dropdown-menu {
+        z-index: 9999 !important;
+        position: absolute !important;
+    }
+    
+    .navbar-nav .dropdown {
+        position: relative;
+    }
+    
+    /* Estilos para las métricas de pagos */
+    .payment-metric-card {
+        background: linear-gradient(135deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.9) 100%);
+        color: white !important;
+        border-radius: 15px;
+        padding: 1.5rem;
+        text-align: center;
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+    }
+    
+    .payment-metric-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+    
+    .payment-metric-card.efectivo {
+        border-color: #10b981;
+        background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    }
+    
+    .payment-metric-card.mercadopago {
+        border-color: #3b82f6;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    }
+    
+    .payment-metric-card.debito {
+        border-color: #f59e0b;
+        background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+    }
+    
+    .payment-metric-card.credito {
+        border-color: #ef4444;
+        background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    }
+    
+    .payment-metric-card h2 {
+        color: white !important;
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+    
+    .payment-metric-card h6 {
+        color: rgba(255,255,255,0.9) !important;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    .payment-metric-card small {
+        color: rgba(255,255,255,0.7) !important;
+    }
+    
+    .payment-icon {
+        font-size: 2rem;
+        margin-bottom: 1rem;
+        opacity: 0.9;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid my-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card dashboard-card bg-gradient-primary text-white">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h2 class="mb-1">
+                                <i class="fas fa-tachometer-alt me-2"></i>
+                                Panel de Control MundoLimp
+                            </h2>
+                            <h4 class="mb-2 opacity-90">Bienvenido, {{ current_user.username }}</h4>
+                            <p class="mb-0 opacity-75">
+                                <i class="fas fa-calendar me-2"></i>
+                                Resumen del día - {{ moment().format('dddd, DD [de] MMMM [de] YYYY') if moment else "Hoy" }}
+                            </p>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <div class="d-flex justify-content-end align-items-center">
+                                <div class="me-3">
+                                    <div class="text-center">
+                                        <div class="h1 mb-0" id="currentTime">{{ moment().format('HH:mm') if moment else "" }}</div>
+                                        <small class="opacity-75">Hora actual</small>
+                                    </div>
+                                </div>
+                                <div class="metric-icon bg-white bg-opacity-20">
+                                    <i class="fas fa-crown text-white"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Métricas de métodos de pago del día -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h4 class="mb-3">
+                <i class="fas fa-credit-card me-2 text-primary"></i>
+                Resumen de Ventas por Método de Pago - HOY
+            </h4>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="payment-metric-card efectivo">
+                <div class="payment-icon">
+                    <i class="fas fa-money-bill-wave"></i>
+                </div>
+                <h6>Efectivo</h6>
+                <h2 id="totalEfectivo">$<span data-target="0">0.00</span></h2>
+                <small>Total de todas las sucursales</small>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="payment-metric-card mercadopago">
+                <div class="payment-icon">
+                    <i class="fas fa-mobile-alt"></i>
+                </div>
+                <h6>MercadoPago</h6>
+                <h2 id="totalMercadoPago">$<span data-target="0">0.00</span></h2>
+                <small>Total de todas las sucursales</small>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="payment-metric-card debito">
+                <div class="payment-icon">
+                    <i class="fas fa-credit-card"></i>
+                </div>
+                <h6>Débito</h6>
+                <h2 id="totalDebito">$<span data-target="0">0.00</span></h2>
+                <small>Total de todas las sucursales</small>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="payment-metric-card credito">
+                <div class="payment-icon">
+                    <i class="fas fa-credit-card"></i>
+                </div>
+                <h6>Crédito</h6>
+                <h2 id="totalCredito">$<span data-target="0">0.00</span></h2>
+                <small>Total de todas las sucursales</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resumen del día y acciones rápidas -->
+    <div class="row mb-4">
+        <div class="col-lg-8">
+            <div class="card dashboard-card">
+                <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="fas fa-chart-pie me-2"></i>Resumen Consolidado del Día
+                    </h6>
+                    <button class="btn btn-outline-primary btn-sm" onclick="refreshData()">
+                        <i class="fas fa-sync-alt me-1"></i>Actualizar
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-4">
+                            <div class="border-end">
+                                <h5 class="text-success mb-1" id="totalVentasDia">$0.00</h5>
+                                <small class="text-muted">Ventas Totales del Día</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="border-end">
+                                <h5 class="text-danger mb-1" id="totalGastosDia">$0.00</h5>
+                                <small class="text-muted">Gastos Totales del Día</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <h5 class="mb-1" id="gananciaNeta">$0.00</h5>
+                            <small class="text-muted">Ganancia Neta del Día</small>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-3">
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <small class="text-muted">Sucursales que reportaron hoy:</small>
+                            <div class="mt-2" id="sucursalesReportaron">
+                                <span class="badge bg-secondary me-1">Cargando...</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <small class="text-muted">Pendientes de verificación:</small>
+                            <div class="mt-2">
+                                <span class="badge bg-warning text-dark" id="pendientesVerificacion">0</span>
+                                <small class="text-muted ms-2">registros</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card dashboard-card h-100">
+                <div class="card-header bg-transparent">
+                    <h6 class="mb-0">
+                        <i class="fas fa-bolt me-2"></i>Acciones Rápidas
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('daily_records.index') }}" class="btn btn-primary">
+                            <i class="fas fa-list me-2"></i>Ver Todos los Registros
+                        </a>
+                        
+                        <a href="{{ url_for('reports.index') }}" class="btn btn-success">
+                            <i class="fas fa-chart-bar me-2"></i>Panel de Reportes
+                        </a>
+                        
+                        <a href="{{ url_for('reports.comparison') }}" class="btn btn-info">
+                            <i class="fas fa-balance-scale me-2"></i>Comparar Sucursales
+                        </a>
+                        
+                        <button class="btn btn-warning" onclick="exportDailyData()">
+                            <i class="fas fa-download me-2"></i>Exportar Datos del Día
+                        </button>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Los datos se actualizan automáticamente cada 5 minutos.
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Últimos registros y estado de sucursales -->
+    <div class="row mb-4">
+        <div class="col-lg-8">
+            <div class="card dashboard-card">
+                <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="fas fa-clock me-2"></i>Registros del Día de Hoy
+                    </h6>
+                    <a href="{{ url_for('daily_records.index') }}" class="btn btn-sm btn-outline-primary">
+                        Ver todos
+                    </a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0" id="registrosHoyTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Sucursal</th>
+                                    <th>Ventas</th>
+                                    <th>Gastos</th>
+                                    <th>Ganancia</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="registrosHoyBody">
+                                <tr>
+                                    <td colspan="6" class="text-center py-3">
+                                        <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                                        Cargando registros del día...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card dashboard-card h-100">
+                <div class="card-header bg-transparent">
+                    <h6 class="mb-0">
+                        <i class="fas fa-store me-2"></i>Estado de Sucursales
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row g-2">
+                        {% for branch in ['Uruguay', 'Villa Cabello', 'Tacuari', 'Candelaria', 'Itaembe Mini'] %}
+                        <div class="col-12">
+                            <div class="d-flex justify-content-between align-items-center p-2 rounded bg-light">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-store text-primary me-2"></i>
+                                    <span class="fw-semibold">{{ branch }}</span>
+                                </div>
+                                <div id="status{{ branch.replace(' ', '') }}">
+                                    <span class="badge bg-secondary">Verificando...</span>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="mt-3 p-2 bg-light rounded">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            <strong id="totalSucursalesActivas">0</strong> de 5 sucursales han reportado hoy
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body text-center py-4">
+                <div class="spinner-border text-primary mb-3" role="status"></div>
+                <p class="mb-0">Actualizando datos...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Actualizar reloj cada minuto
+    updateClock();
+    setInterval(updateClock, 60000);
+    
+    // Cargar datos iniciales
+    loadDailyData();
+    
+    // Auto-refresh cada 5 minutos
+    setInterval(loadDailyData, 300000);
+    
+    // Arreglar z-index del dropdown al abrirse
+    document.querySelectorAll('.dropdown').forEach(dropdown => {
+        dropdown.addEventListener('show.bs.dropdown', function() {
+            this.style.zIndex = '9999';
+        });
+        
+        dropdown.addEventListener('hide.bs.dropdown', function() {
+            this.style.zIndex = '';
+        });
+    });
+});
+
+function updateClock() {
+    const now = new Date();
+    const timeString = now.toLocaleTimeString('es-AR', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+    });
+    
+    const clockElement = document.getElementById('currentTime');
+    if (clockElement) {
+        clockElement.textContent = timeString;
+    }
+}
+
+async function loadDailyData() {
+    try {
+        // Simular carga de datos (aquí deberías hacer llamadas AJAX reales)
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Cargar datos de métodos de pago del día
+        await loadPaymentMethodsData();
+        
+        // Cargar registros del día
+        await loadTodayRecords();
+        
+        // Actualizar estado de sucursales
+        updateBranchStatus();
+        
+    } catch (error) {
+        console.error('Error cargando datos:', error);
+        showToast('Error cargando datos del día', 'error');
+    }
+}
+
+async function loadPaymentMethodsData() {
+    try {
+        // Llamada real a la API
+        const response = await fetch('{{ url_for('main.api_daily_stats') }}');
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            const paymentMethods = data.data.payment_methods;
+            const totals = data.data.totals;
+            
+            // Actualizar las métricas con animación
+            animateValue('totalEfectivo span', paymentMethods.efectivo);
+            animateValue('totalMercadoPago span', paymentMethods.mercadopago);
+            animateValue('totalDebito span', paymentMethods.debito);
+            animateValue('totalCredito span', paymentMethods.credito);
+            
+            // Actualizar totales generales
+            document.getElementById('totalVentasDia').textContent = `${totals.ventas.toLocaleString('es-AR', {minimumFractionDigits: 2})}`;
+            document.getElementById('totalGastosDia').textContent = `${totals.gastos.toLocaleString('es-AR', {minimumFractionDigits: 2})}`;
+            
+            const gananciaNeta = totals.ganancia;
+            const gananciaElement = document.getElementById('gananciaNeta');
+            gananciaElement.textContent = `${gananciaNeta.toLocaleString('es-AR', {minimumFractionDigits: 2})}`;
+            gananciaElement.className = gananciaNeta >= 0 ? 'mb-1 text-success' : 'mb-1 text-danger';
+            
+            // Actualizar sucursales que reportaron
+            const sucursalesElement = document.getElementById('sucursalesReportaron');
+            if (data.data.branches_reported.length > 0) {
+                sucursalesElement.innerHTML = data.data.branches_reported.map(branch => 
+                    `<span class="badge bg-success me-1">${branch}</span>`
+                ).join('');
+            } else {
+                sucursalesElement.innerHTML = '<span class="badge bg-secondary">Ninguna sucursal ha reportado hoy</span>';
+            }
+            
+            // Actualizar contador de pendientes
+            document.getElementById('pendientesVerificacion').textContent = data.data.pending_verification;
+            
+        } else {
+            console.error('Error en la respuesta de la API:', data.message);
+            showErrorState();
+        }
+        
+    } catch (error) {
+        console.error('Error cargando datos de métodos de pago:', error);
+        showErrorState();
+    }
+}
+
+async function loadTodayRecords() {
+    try {
+        // Usar la misma API que ya carga los datos de métodos de pago
+        const response = await fetch('{{ url_for('main.api_daily_stats') }}');
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            const records = data.data.records;
+            const tbody = document.getElementById('registrosHoyBody');
+            tbody.innerHTML = '';
+            
+            if (records.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="text-center py-3 text-muted">
+                            <i class="fas fa-inbox me-2"></i>
+                            No hay registros cargados para el día de hoy
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            records.forEach(record => {
+                const row = `
+                    <tr>
+                        <td>
+                            <span class="badge bg-secondary">${record.sucursal}</span>
+                        </td>
+                        <td>
+                            <strong class="text-success">${record.ventas.toLocaleString('es-AR', {minimumFractionDigits: 2})}</strong>
+                        </td>
+                        <td>
+                            <span class="text-danger">${record.gastos.toLocaleString('es-AR', {minimumFractionDigits: 2})}</span>
+                        </td>
+                        <td>
+                            <strong class="${record.ganancia >= 0 ? 'text-success' : 'text-danger'}">
+                                ${record.ganancia.toLocaleString('es-AR', {minimumFractionDigits: 2})}
+                            </strong>
+                        </td>
+                        <td>
+                            ${record.verificado ? 
+                                '<span class="badge bg-success"><i class="fas fa-check me-1"></i>Verificado</span>' : 
+                                '<span class="badge bg-warning"><i class="fas fa-clock me-1"></i>Pendiente</span>'
+                            }
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary" onclick="viewRecord(${record.id})" title="Ver">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                ${!record.verificado ? 
+                                    `<button class="btn btn-outline-success" onclick="verifyRecord(${record.id})" title="Verificar">
+                                        <i class="fas fa-check"></i>
+                                    </button>` : ''
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+            
+        } else {
+            console.error('Error en la respuesta de la API:', data.message);
+            const tbody = document.getElementById('registrosHoyBody');
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="text-center py-3 text-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Error cargando registros del día
+                    </td>
+                </tr>
+            `;
+        }
+        
+    } catch (error) {
+        console.error('Error cargando registros del día:', error);
+        const tbody = document.getElementById('registrosHoyBody');
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center py-3 text-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Error de conexión
+                </td>
+            </tr>
+        `;
+    }
+}
+
+function updateBranchStatus() {
+    fetch('{{ url_for('main.api_branch_status') }}')
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                const branches = data.data.branches;
+                
+                Object.keys(branches).forEach(branchKey => {
+                    const branch = branches[branchKey];
+                    const cleanName = branchKey.replace(/\s+/g, '');
+                    const statusElement = document.getElementById(`status${cleanName}`);
+                    
+                    if (statusElement) {
+                        if (branch.has_reported) {
+                            statusElement.innerHTML = '<span class="badge bg-success">Reportó</span>';
+                        } else {
+                            statusElement.innerHTML = '<span class="badge bg-warning">Pendiente</span>';
+                        }
+                    }
+                });
+                
+                document.getElementById('totalSucursalesActivas').textContent = data.data.total_reported;
+            }
+        })
+        .catch(error => {
+            console.error('Error actualizando estado de sucursales:', error);
+        });
+}
+
+function showErrorState() {
+    // Mostrar estado de error para métricas de pago
+    document.querySelector('#totalEfectivo span').textContent = 'Error';
+    document.querySelector('#totalMercadoPago span').textContent = 'Error';
+    document.querySelector('#totalDebito span').textContent = 'Error';
+    document.querySelector('#totalCredito span').textContent = 'Error';
+    
+    showToast('Error cargando datos del día. Verifique la conexión.', 'error');
+}
+
+function animateValue(selector, targetValue) {
+    const element = document.querySelector(selector);
+    if (!element) return;
+    
+    const startValue = 0;
+    const duration = 1000;
+    const startTime = performance.now();
+    
+    function updateValue(currentTime) {
+        const elapsedTime = currentTime - startTime;
+        const progress = Math.min(elapsedTime / duration, 1);
+        const currentValue = startValue + (targetValue - startValue) * progress;
+        
+        element.textContent = currentValue.toLocaleString('es-AR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+        
+        if (progress < 1) {
+            requestAnimationFrame(updateValue);
+        }
+    }
+    
+    requestAnimationFrame(updateValue);
+}
+
+function refreshData() {
+    const modal = new bootstrap.Modal(document.getElementById('loadingModal'));
+    modal.show();
+    
+    setTimeout(() => {
+        loadDailyData();
+        modal.hide();
+        showToast('Datos actualizados correctamente', 'success');
+    }, 1500);
+}
+
+function exportDailyData() {
+    const today = new Date().toISOString().split('T')[0];
+    const url = `{{ url_for('reports.export_csv') }}?start_date=${today}&end_date=${today}`;
+    window.open(url, '_blank');
+    showToast('Descargando datos del día...', 'info');
+}
+
+function viewRecord(id) {
+    window.location.href = `/daily-records/view/${id}`;
+}
+
+function verifyRecord(id) {
+    if (confirm('¿Verificar este registro?')) {
+        // Aquí harías la llamada AJAX para verificar
+        showToast('Registro verificado correctamente', 'success');
+        setTimeout(() => loadTodayRecords(), 1000);
+    }
+}
+
+function showToast(message, type = 'info') {
+    // Implementar sistema de notificaciones toast
+    console.log(`${type.toUpperCase()}: ${message}`);
+}
+
+// Auto-actualización en tiempo real
+setInterval(() => {
+    loadPaymentMethodsData();
+}, 120000); // Cada 2 minutos
+</script>
+{% endblock %}

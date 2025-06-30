@@ -140,7 +140,7 @@ def admin_dashboard():
             'records': {
                 'recent_total': recent_records,
                 'unverified': unverified_records,
-                'latest': latest_records
+                'latest': [record.to_dict() for record in latest_records]
             },
             'branches': {
                 'active': active_branches
@@ -203,17 +203,18 @@ def branch_dashboard():
             DailyRecord.record_date <= today
         ).order_by(DailyRecord.record_date.asc()).all()
         
+        # AQUÍ ESTÁ LA CORRECCIÓN: Convertir objetos a diccionarios
         stats = {
             'branch_name': current_user.branch_name,
-            'recent_records': user_records,
-            'today_record': today_record,
+            'recent_records': [record.to_dict() for record in user_records],  # Convertir a dict
+            'today_record': today_record.to_dict() if today_record else None,  # Convertir a dict
             'monthly': {
                 'records_count': len(monthly_records),
                 'total_sales': monthly_sales,
                 'total_expenses': monthly_expenses,
                 'net_amount': monthly_net
             },
-            'weekly_records': weekly_records
+            'weekly_records': [record.to_dict() for record in weekly_records]  # Convertir a dict
         }
         
         return render_template(
@@ -418,3 +419,134 @@ def inject_main_data():
         })
     
     return data
+
+@main_bp.route('/api/daily-stats')
+@login_required
+@admin_required
+def api_daily_stats():
+    """
+    API endpoint para obtener estadísticas del día actual.
+    Solo para administradores.
+    """
+    try:
+        from sqlalchemy import func, and_
+        from datetime import date
+        
+        today = date.today()
+        
+        # Obtener totales por método de pago del día
+        daily_totals = db.session.query(
+            func.sum(DailyRecord.cash_sales).label('total_cash'),
+            func.sum(DailyRecord.mercadopago_sales).label('total_mercadopago'),
+            func.sum(DailyRecord.debit_sales).label('total_debit'),
+            func.sum(DailyRecord.credit_sales).label('total_credit'),
+            func.sum(DailyRecord.total_sales).label('total_sales'),
+            func.sum(DailyRecord.total_expenses).label('total_expenses'),
+            func.count(DailyRecord.id).label('records_count')
+        ).filter(
+            DailyRecord.record_date == today
+        ).first()
+        
+        # Obtener registros del día con información de sucursales
+        todays_records = DailyRecord.query.filter(
+            DailyRecord.record_date == today
+        ).all()
+        
+        # Obtener sucursales que reportaron hoy
+        branches_reported = list(set([record.branch_name for record in todays_records]))
+        
+        # Contar registros pendientes de verificación
+        pending_verification = DailyRecord.query.filter(
+            DailyRecord.record_date == today,
+            DailyRecord.is_verified == False
+        ).count()
+        
+        # Formatear datos para el frontend
+        payment_methods = {
+            'efectivo': float(daily_totals.total_cash or 0),
+            'mercadopago': float(daily_totals.total_mercadopago or 0),
+            'debito': float(daily_totals.total_debit or 0),
+            'credito': float(daily_totals.total_credit or 0)
+        }
+        
+        # Datos de registros individuales para la tabla
+        records_data = []
+        for record in todays_records:
+            net_profit = float(record.total_sales) - float(record.total_expenses)
+            records_data.append({
+                'id': record.id,
+                'sucursal': record.branch_name,
+                'ventas': float(record.total_sales),
+                'gastos': float(record.total_expenses),
+                'ganancia': net_profit,
+                'verificado': record.is_verified,
+                'creator': record.creator.username if record.creator else 'N/A'
+            })
+        
+        return jsonify({
+            'status': 'success',
+            'data': {
+                'payment_methods': payment_methods,
+                'totals': {
+                    'ventas': float(daily_totals.total_sales or 0),
+                    'gastos': float(daily_totals.total_expenses or 0),
+                    'ganancia': float(daily_totals.total_sales or 0) - float(daily_totals.total_expenses or 0),
+                    'records_count': daily_totals.records_count or 0
+                },
+                'records': records_data,
+                'branches_reported': branches_reported,
+                'pending_verification': pending_verification,
+                'date': today.isoformat()
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+
+@main_bp.route('/api/branch-status')
+@login_required 
+@admin_required
+def api_branch_status():
+    """
+    API endpoint para obtener el estado de todas las sucursales.
+    """
+    try:
+        from datetime import date
+        
+        today = date.today()
+        all_branches = ['Uruguay', 'Villa Cabello', 'Tacuari', 'Candelaria', 'Itaembe Mini']
+        
+        # Obtener sucursales que han reportado hoy
+        reported_today = db.session.query(DailyRecord.branch_name).filter(
+            DailyRecord.record_date == today
+        ).distinct().all()
+        
+        reported_branches = [branch[0] for branch in reported_today]
+        
+        branch_status = {}
+        for branch in all_branches:
+            branch_status[branch] = {
+                'name': branch,
+                'has_reported': branch in reported_branches,
+                'status': 'reported' if branch in reported_branches else 'pending'
+            }
+        
+        return jsonify({
+            'status': 'success',
+            'data': {
+                'branches': branch_status,
+                'total_reported': len(reported_branches),
+                'total_branches': len(all_branches),
+                'date': today.isoformat()
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
