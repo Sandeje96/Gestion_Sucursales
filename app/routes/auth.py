@@ -50,12 +50,6 @@ def login():
             # Iniciar sesión del usuario
             login_user(user, remember=form.remember_me.data)
             
-            # Mostrar mensaje de bienvenida
-            if user.role == 'admin':
-                flash(f'¡Bienvenido de vuelta, {user.username}! (Administrador)', 'success')
-            else:
-                flash(f'¡Bienvenido de vuelta, {user.username}! - {user.branch_name}', 'success')
-            
             # Manejar redirección después del login
             next_page = request.args.get('next')
             

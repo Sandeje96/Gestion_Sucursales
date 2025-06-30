@@ -156,10 +156,10 @@
                     <div class="d-flex justify-content-between">
                         <div>
                             <h6 class="card-title opacity-75">Ventas Totales</h6>
-                            <h3 class="mb-0">${{ "%.0f"|format(general_stats.total_sales) }}</h3>
+                            <h3 class="mb-0">${{ "{:,.0f}".format(general_stats.total_sales).replace(",", "X").replace(".", ",").replace("X", ".") }}</h3>
                             <div class="trend-indicator">
                                 <i class="fas fa-arrow-up me-1"></i>
-                                <span>+12.5% vs período anterior</span>
+                                <span>+12,5% vs período anterior</span>
                             </div>
                         </div>
                         <div class="align-self-center">
@@ -176,10 +176,10 @@
                     <div class="d-flex justify-content-between">
                         <div>
                             <h6 class="card-title opacity-75">Ganancia Neta</h6>
-                            <h3 class="mb-0">${{ "%.0f"|format(general_stats.net_profit) }}</h3>
+                            <h3 class="mb-0">${{ "{:,.0f}".format(general_stats.net_profit).replace(",", "X").replace(".", ",").replace("X", ".") }}</h3>
                             <div class="trend-indicator">
                                 <i class="fas fa-arrow-up me-1"></i>
-                                <span>+8.3% vs período anterior</span>
+                                <span>+8,3% vs período anterior</span>
                             </div>
                         </div>
                         <div class="align-self-center">
@@ -215,7 +215,7 @@
                     <div class="d-flex justify-content-between">
                         <div>
                             <h6 class="card-title opacity-75">Promedio Diario</h6>
-                            <h3 class="mb-0">${{ "%.0f"|format(general_stats.avg_daily_sales) }}</h3>
+                            <h3 class="mb-0">${{ "{:,.0f}".format(general_stats.avg_daily_sales).replace(",", "X").replace(".", ",").replace("X", ".") }}</h3>
                             <div class="trend-indicator">
                                 <span>por sucursal</span>
                             </div>
@@ -326,9 +326,9 @@
                                     </div>
                                 </div>
                                 <div class="text-end">
-                                    <div class="fw-bold text-success">${{ "%.0f"|format(stats.total_sales) }}</div>
+                                    <div class="fw-bold text-success">${{ "{:,.0f}".format(stats.total_sales).replace(",", "X").replace(".", ",").replace("X", ".") }}</div>
                                     <small class="text-muted">
-                                        Ganancia: ${{ "%.0f"|format(stats.net_profit) }}
+                                        Ganancia: ${{ "{:,.0f}".format(stats.net_profit).replace(",", "X").replace(".", ",").replace("X", ".") }}
                                     </small>
                                 </div>
                             </div>
@@ -495,6 +495,37 @@
 // Variables globales para los gráficos
 let salesTrendChart, paymentMethodsChart, branchPerformanceChart;
 
+// Funciones de formato argentino
+function formatCurrencyArgentino(amount) {
+    const num = parseFloat(amount) || 0;
+    
+    // Usar Intl.NumberFormat para formato argentino
+    const formatted = new Intl.NumberFormat('es-AR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(num);
+    
+    return `$${formatted}`;
+}
+
+function formatNumberArgentino(amount, decimals = 2) {
+    const num = parseFloat(amount) || 0;
+    
+    return new Intl.NumberFormat('es-AR', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+    }).format(num);
+}
+
+function formatPercentageArgentino(value, decimals = 1) {
+    const num = parseFloat(value) || 0;
+    
+    return new Intl.NumberFormat('es-AR', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+    }).format(num) + '%';
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // Inicializar gráficos
     initializeSalesTrendChart();
@@ -553,7 +584,7 @@ function initializeSalesTrendChart() {
                     intersect: false,
                     callbacks: {
                         label: function(context) {
-                            return context.dataset.label + ': $' + context.parsed.y.toFixed(2);
+                            return context.dataset.label + ': ' + formatCurrencyArgentino(context.parsed.y);
                         }
                     }
                 }
@@ -563,7 +594,7 @@ function initializeSalesTrendChart() {
                     beginAtZero: true,
                     ticks: {
                         callback: function(value) {
-                            return '$' + value.toFixed(0);
+                            return formatCurrencyArgentino(value);
                         }
                     }
                 }
@@ -607,8 +638,8 @@ function initializePaymentMethodsChart() {
                         label: function(context) {
                             const value = context.parsed;
                             const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-                            return `${context.label}: $${value.toFixed(2)} (${percentage}%)`;
+                            const percentage = total > 0 ? ((value / total) * 100).toFixed(1).replace('.', ',') : 0;
+                            return `${context.label}: ${formatCurrencyArgentino(value)} (${percentage}%)`;
                         }
                     }
                 }
@@ -650,7 +681,7 @@ function initializeBranchPerformanceChart() {
                 tooltip: {
                     callbacks: {
                         label: function(context) {
-                            return context.dataset.label + ': $' + context.parsed.y.toFixed(2);
+                            return context.dataset.label + ': ' + formatCurrencyArgentino(context.parsed.y);
                         }
                     }
                 }
@@ -660,7 +691,7 @@ function initializeBranchPerformanceChart() {
                     beginAtZero: true,
                     ticks: {
                         callback: function(value) {
-                            return '$' + value.toFixed(0);
+                            return formatCurrencyArgentino(value);
                         }
                     }
                 }
@@ -730,7 +761,8 @@ async function loadPaymentMethodsData() {
             
             if (maxValue > 0) {
                 document.getElementById('topPaymentMethod').textContent = chartData.labels[maxIndex];
-                document.getElementById('topPaymentPercentage').textContent = percentages[Object.keys(percentages)[maxIndex]] + '%';
+                const percentage = percentages[Object.keys(percentages)[maxIndex]];
+                document.getElementById('topPaymentPercentage').textContent = formatPercentageArgentino(percentage, 1);
             }
         }
     } catch (error) {

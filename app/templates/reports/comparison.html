@@ -239,14 +239,14 @@
                     <div class="row g-2 text-center">
                         <div class="col-6">
                             <div class="fw-bold text-success fs-5">
-                                ${{ "%.0f"|format(data.total_sales) }}
+                                ${{ "{:,.0f}".format(data.total_sales).replace(",", "X").replace(".", ",").replace("X", ".") }}
                             </div>
                             <small class="text-muted">Ventas</small>
                         </div>
                         <div class="col-6">
                             {% set net_profit = data.total_sales - data.total_expenses %}
                             <div class="fw-bold {{ 'text-success' if net_profit >= 0 else 'text-danger' }} fs-5">
-                                ${{ "%.0f"|format(net_profit) }}
+                                ${{ "{:,.0f}".format(net_profit).replace(",", "X").replace(".", ",").replace("X", ".") }}
                             </div>
                             <small class="text-muted">Ganancia</small>
                         </div>
@@ -256,7 +256,7 @@
                         <div class="row g-2 small">
                             <div class="col-4">
                                 <div class="text-muted">Gastos</div>
-                                <div class="fw-semibold">${{ "%.0f"|format(data.total_expenses) }}</div>
+                                <div class="fw-semibold">${{ "{:,.0f}".format(data.total_expenses).replace(",", "X").replace(".", ",").replace("X", ".") }}</div>
                             </div>
                             <div class="col-4">
                                 <div class="text-muted">Registros</div>
@@ -264,7 +264,7 @@
                             </div>
                             <div class="col-4">
                                 <div class="text-muted">Promedio</div>
-                                <div class="fw-semibold">${{ "%.0f"|format(data.avg_sales) }}</div>
+                                <div class="fw-semibold">${{ "{:,.0f}".format(data.avg_sales).replace(",", "X").replace(".", ",").replace("X", ".") }}</div>
                             </div>
                         </div>
                     </div>
@@ -273,7 +273,7 @@
                         {% set trend = 'up' %}  {# Aquí calcularías la tendencia real #}
                         <span class="trend-{{ trend }}">
                             <i class="fas fa-arrow-{{ 'up' if trend == 'up' else 'down' if trend == 'down' else 'right' }} me-1"></i>
-                            {{ '+' if trend == 'up' else '-' if trend == 'down' else '' }}{{ "%.1f"|format(loop.index * 2.5) }}%
+                            {{ '+' if trend == 'up' else '-' if trend == 'down' else '' }}{{ "{:,.1f}".format(loop.index * 2.5).replace(".", ",") }}%
                         </span>
                         <small class="ms-1 text-muted">vs período anterior</small>
                     </div>
@@ -324,7 +324,7 @@
                         {% set percentage = (data.total_sales / total_all_sales * 100) if total_all_sales > 0 else 0 %}
                         <div class="d-flex justify-content-between align-items-center mb-1">
                             <small>{{ branch_name }}</small>
-                            <small class="fw-bold">{{ "%.1f"|format(percentage) }}%</small>
+                            <small class="fw-bold">{{ "{:,.1f}".format(percentage).replace(".", ",") }}%</small>
                         </div>
                         {% endfor %}
                     </div>
@@ -374,30 +374,30 @@
                                         <strong>{{ branch_name }}</strong>
                                     </td>
                                     <td>
-                                        <span class="text-success fw-bold">${{ "%.2f"|format(data.total_sales) }}</span>
+                                        <span class="text-success fw-bold">${{ "{:,.2f}".format(data.total_sales).replace(",", "X").replace(".", ",").replace("X", ".") }}</span>
                                     </td>
                                     <td>
-                                        <span class="text-danger">${{ "%.2f"|format(data.total_expenses) }}</span>
+                                        <span class="text-danger">${{ "{:,.2f}".format(data.total_expenses).replace(",", "X").replace(".", ",").replace("X", ".") }}</span>
                                     </td>
                                     <td>
                                         <span class="fw-bold {{ 'text-success' if net_profit >= 0 else 'text-danger' }}">
-                                            ${{ "%.2f"|format(net_profit) }}
+                                            ${{ "{:,.2f}".format(net_profit).replace(",", "X").replace(".", ",").replace("X", ".") }}
                                         </span>
                                     </td>
                                     <td>
                                         <span class="fw-bold {{ 'text-success' if margin > 15 else 'text-warning' if margin > 5 else 'text-danger' }}">
-                                            {{ "%.1f"|format(margin) }}%
+                                            {{ "{:,.1f}".format(margin).replace(".", ",") }}%
                                         </span>
                                     </td>
                                     <td>
                                         <span class="badge bg-info">{{ data.records_count }}</span>
                                     </td>
                                     <td>
-                                        ${{ "%.2f"|format(data.avg_sales) }}
+                                        ${{ "{:,.2f}".format(data.avg_sales).replace(",", "X").replace(".", ",").replace("X", ".") }}
                                     </td>
                                     <td>
                                         <span class="fw-bold {{ 'text-success' if efficiency > 2 else 'text-warning' if efficiency > 1.5 else 'text-danger' }}">
-                                            {{ "%.1f"|format(efficiency) }}x
+                                            {{ "{:,.1f}".format(efficiency).replace(".", ",") }}x
                                         </span>
                                     </td>
                                 </tr>
@@ -440,6 +440,28 @@
 <script>
 // Variables globales para los gráficos
 let comparisonChart, distributionChart;
+
+// Funciones de formato argentino
+function formatCurrencyArgentino(amount) {
+    const num = parseFloat(amount) || 0;
+    
+    // Usar Intl.NumberFormat para formato argentino
+    const formatted = new Intl.NumberFormat('es-AR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(num);
+    
+    return `$${formatted}`;
+}
+
+function formatNumberArgentino(amount, decimals = 2) {
+    const num = parseFloat(amount) || 0;
+    
+    return new Intl.NumberFormat('es-AR', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+    }).format(num);
+}
 
 document.addEventListener('DOMContentLoaded', function() {
     // Inicializar gráficos si hay datos
@@ -488,6 +510,13 @@ function initializeCharts() {
             plugins: {
                 legend: {
                     position: 'top'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + formatCurrencyArgentino(context.parsed.y);
+                        }
+                    }
                 }
             },
             scales: {
@@ -495,7 +524,7 @@ function initializeCharts() {
                     beginAtZero: true,
                     ticks: {
                         callback: function(value) {
-                            return '$' + value.toLocaleString();
+                            return formatCurrencyArgentino(value);
                         }
                     }
                 }
@@ -534,8 +563,8 @@ function initializeCharts() {
                         label: function(context) {
                             const value = context.parsed;
                             const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                            const percentage = ((value / total) * 100).toFixed(1);
-                            return `${context.label}: $${value.toLocaleString()} (${percentage}%)`;
+                            const percentage = ((value / total) * 100).toFixed(1).replace('.', ',');
+                            return `${context.label}: ${formatCurrencyArgentino(value)} (${percentage}%)`;
                         }
                     }
                 }
@@ -602,6 +631,24 @@ function switchChart(type) {
             ];
             break;
     }
+    
+    // Actualizar opciones de tooltip para todos los casos
+    comparisonChart.options.plugins.tooltip.callbacks.label = function(context) {
+        if (type === 'efficiency') {
+            return context.dataset.label + ': ' + formatNumberArgentino(context.parsed.y, 1) + 'x';
+        } else {
+            return context.dataset.label + ': ' + formatCurrencyArgentino(context.parsed.y);
+        }
+    };
+    
+    // Actualizar ticks del eje Y
+    comparisonChart.options.scales.y.ticks.callback = function(value) {
+        if (type === 'efficiency') {
+            return formatNumberArgentino(value, 1) + 'x';
+        } else {
+            return formatCurrencyArgentino(value);
+        }
+    };
     
     comparisonChart.update();
 }
@@ -722,10 +769,7 @@ const ComparisonUtils = {
     
     // Formatear moneda
     formatCurrency: function(amount) {
-        return new Intl.NumberFormat('es-AR', {
-            style: 'currency',
-            currency: 'ARS'
-        }).format(amount);
+        return formatCurrencyArgentino(amount);
     }
 };
 
