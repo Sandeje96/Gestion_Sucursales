@@ -98,16 +98,21 @@ def create():
     form = DailyRecordForm()
     
     if form.validate_on_submit():
+        # Convertir record_date a date si es string
+        record_date = form.record_date.data
+        if isinstance(record_date, str):
+            record_date = datetime.strptime(record_date, "%Y-%m-%d").date()
+        
         # Verificar que no exista un registro para esta fecha y sucursal
         existing_record = DailyRecord.get_by_branch_and_date(
             current_user.branch_name,
-            form.record_date.data
+            record_date
         )
         
         if existing_record:
             flash(
                 f'Ya existe un registro para {current_user.branch_name} '
-                f'en la fecha {form.record_date.data.strftime("%d/%m/%Y")}. '
+                f'en la fecha {record_date.strftime("%d/%m/%Y")}. '
                 'Puedes editarlo desde la lista de registros.',
                 'warning'
             )
@@ -118,7 +123,7 @@ def create():
             record = DailyRecord(
                 user_id=current_user.id,
                 branch_name=current_user.branch_name,
-                record_date=form.record_date.data,
+                record_date=record_date,
                 cash_sales=form.cash_sales.data,
                 mercadopago_sales=form.mercadopago_sales.data,
                 debit_sales=form.debit_sales.data,
