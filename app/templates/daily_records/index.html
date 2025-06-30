@@ -5,6 +5,15 @@
     Registros Diarios - {{ current_user.branch_name if not current_user.is_admin_user() else 'Sistema' }}
 {% endblock %}
 
+{% block extra_css %}
+<style>
+    .h3.mb-1 {
+        margin-bottom: .25rem !important;
+        color: #000;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid my-4">
     <div class="row">
@@ -57,14 +66,14 @@
                             <div class="d-flex justify-content-between">
                                 <div>
                                     <h6 class="card-title mb-1">Ventas Hoy</h6>
-                                    <h4 class="mb-0">${{ "%.2f"|format(stats.today.total_sales) }}</h4>
+                                    <h4 class="mb-0">${{ "{:,.2f}".format(stats.today.total_sales).replace(",", "X").replace(".", ",").replace("X", ".") }}</h4>
                                 </div>
                                 <div class="align-self-center">
                                     <i class="fas fa-cash-register fa-2x opacity-75"></i>
                                 </div>
                             </div>
                             <small class="opacity-75">
-                                {{ stats.today.records_count }} registro(s)
+                                {{ stats.today.records_count }} registro{{ 's' if stats.today.records_count != 1 else '' }}
                             </small>
                         </div>
                     </div>
@@ -76,14 +85,14 @@
                             <div class="d-flex justify-content-between">
                                 <div>
                                     <h6 class="card-title mb-1">Ganancia Hoy</h6>
-                                    <h4 class="mb-0">${{ "%.2f"|format(stats.today.net_amount) }}</h4>
+                                    <h4 class="mb-0">${{ "{:,.2f}".format(stats.today.net_amount).replace(",", "X").replace(".", ",").replace("X", ".") }}</h4>
                                 </div>
                                 <div class="align-self-center">
                                     <i class="fas fa-chart-line fa-2x opacity-75"></i>
                                 </div>
                             </div>
                             <small class="opacity-75">
-                                Gastos: ${{ "%.2f"|format(stats.today.total_expenses) }}
+                                Gastos: ${{ "{:,.2f}".format(stats.today.total_expenses).replace(",", "X").replace(".", ",").replace("X", ".") }}
                             </small>
                         </div>
                     </div>
@@ -95,14 +104,14 @@
                             <div class="d-flex justify-content-between">
                                 <div>
                                     <h6 class="card-title mb-1">Ventas del Mes</h6>
-                                    <h4 class="mb-0">${{ "%.2f"|format(stats.month.total_sales) }}</h4>
+                                    <h4 class="mb-0">${{ "{:,.2f}".format(stats.month.total_sales).replace(",", "X").replace(".", ",").replace("X", ".") }}</h4>
                                 </div>
                                 <div class="align-self-center">
                                     <i class="fas fa-calendar-month fa-2x opacity-75"></i>
                                 </div>
                             </div>
                             <small class="opacity-75">
-                                {{ stats.month.records_count }} registro(s)
+                                {{ stats.month.records_count }} registro{{ 's' if stats.month.records_count != 1 else '' }}
                             </small>
                         </div>
                     </div>
@@ -114,14 +123,14 @@
                             <div class="d-flex justify-content-between">
                                 <div>
                                     <h6 class="card-title mb-1">Ganancia del Mes</h6>
-                                    <h4 class="mb-0">${{ "%.2f"|format(stats.month.net_amount) }}</h4>
+                                    <h4 class="mb-0">${{ "{:,.2f}".format(stats.month.net_amount).replace(",", "X").replace(".", ",").replace("X", ".") }}</h4>
                                 </div>
                                 <div class="align-self-center">
                                     <i class="fas fa-trophy fa-2x opacity-75"></i>
                                 </div>
                             </div>
                             <small class="opacity-75">
-                                Gastos: ${{ "%.2f"|format(stats.month.total_expenses) }}
+                                Gastos: ${{ "{:,.2f}".format(stats.month.total_expenses).replace(",", "X").replace(".", ",").replace("X", ".") }}
                             </small>
                         </div>
                     </div>
@@ -238,19 +247,19 @@
                                     </td>
                                     {% endif %}
                                     <td>
-                                        <strong class="text-success">${{ "%.2f"|format(record.total_sales) }}</strong>
+                                        <strong class="text-success">${{ "{:,.2f}".format(record.total_sales).replace(",", "X").replace(".", ",").replace("X", ".") }}</strong>
                                     </td>
-                                    <td>${{ "%.2f"|format(record.cash_sales) }}</td>
-                                    <td>${{ "%.2f"|format(record.mercadopago_sales) }}</td>
-                                    <td>${{ "%.2f"|format(record.debit_sales) }}</td>
-                                    <td>${{ "%.2f"|format(record.credit_sales) }}</td>
+                                    <td>${{ "{:,.2f}".format(record.cash_sales).replace(",", "X").replace(".", ",").replace("X", ".") }}</td>
+                                    <td>${{ "{:,.2f}".format(record.mercadopago_sales).replace(",", "X").replace(".", ",").replace("X", ".") }}</td>
+                                    <td>${{ "{:,.2f}".format(record.debit_sales).replace(",", "X").replace(".", ",").replace("X", ".") }}</td>
+                                    <td>${{ "{:,.2f}".format(record.credit_sales).replace(",", "X").replace(".", ",").replace("X", ".") }}</td>
                                     <td>
-                                        <span class="text-danger">${{ "%.2f"|format(record.total_expenses) }}</span>
+                                        <span class="text-danger">${{ "{:,.2f}".format(record.total_expenses).replace(",", "X").replace(".", ",").replace("X", ".") }}</span>
                                     </td>
                                     <td>
                                         {% set net = record.get_net_amount() %}
                                         <strong class="{{ 'text-success' if net >= 0 else 'text-danger' }}">
-                                            ${{ "%.2f"|format(net) }}
+                                            ${{ "{:,.2f}".format(net).replace(",", "X").replace(".", ",").replace("X", ".") }}
                                         </strong>
                                     </td>
                                     <td>
@@ -419,11 +428,11 @@
                 <div class="row">
                     <div class="col-6">
                         <small class="text-muted">Ventas totales:</small>
-                        <div><strong>${{ "%.2f"|format(record.total_sales) }}</strong></div>
+                        <div><strong>${{ "{:,.2f}".format(record.total_sales).replace(",", "X").replace(".", ",").replace("X", ".") }}</strong></div>
                     </div>
                     <div class="col-6">
                         <small class="text-muted">Gastos:</small>
-                        <div><strong>${{ "%.2f"|format(record.total_expenses) }}</strong></div>
+                        <div><strong>${{ "{:,.2f}".format(record.total_expenses).replace(",", "X").replace(".", ",").replace("X", ".") }}</strong></div>
                     </div>
                 </div>
             </div>
@@ -474,4 +483,3 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% endblock %}
-                                    

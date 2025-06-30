@@ -18,6 +18,16 @@
         transform: translateY(-5px);
         box-shadow: 0 10px 25px rgba(0,0,0,0.15);
     }
+
+    .card-body.add {
+        background: white;
+    }
+
+    .mb-3 {
+        margin-bottom: 1rem !important;
+        color: black;
+    }
+
     
     .metric-icon {
         width: 60px;
@@ -159,7 +169,7 @@
                     <i class="fas fa-money-bill-wave"></i>
                 </div>
                 <h6>Efectivo</h6>
-                <h2 id="totalEfectivo">$<span data-target="0">0.00</span></h2>
+                <h2 id="totalEfectivo"><span data-target="0">0.00</span></h2>
                 <small>Total de todas las sucursales</small>
             </div>
         </div>
@@ -170,7 +180,7 @@
                     <i class="fas fa-mobile-alt"></i>
                 </div>
                 <h6>MercadoPago</h6>
-                <h2 id="totalMercadoPago">$<span data-target="0">0.00</span></h2>
+                <h2 id="totalMercadoPago"><span data-target="0">0.00</span></h2>
                 <small>Total de todas las sucursales</small>
             </div>
         </div>
@@ -181,7 +191,7 @@
                     <i class="fas fa-credit-card"></i>
                 </div>
                 <h6>Débito</h6>
-                <h2 id="totalDebito">$<span data-target="0">0.00</span></h2>
+                <h2 id="totalDebito"><span data-target="0">0.00</span></h2>
                 <small>Total de todas las sucursales</small>
             </div>
         </div>
@@ -192,7 +202,7 @@
                     <i class="fas fa-credit-card"></i>
                 </div>
                 <h6>Crédito</h6>
-                <h2 id="totalCredito">$<span data-target="0">0.00</span></h2>
+                <h2 id="totalCredito"><span data-target="0">0.00</span></h2>
                 <small>Total de todas las sucursales</small>
             </div>
         </div>
@@ -210,7 +220,7 @@
                         <i class="fas fa-sync-alt me-1"></i>Actualizar
                     </button>
                 </div>
-                <div class="card-body">
+                <div class="card-body add">
                     <div class="row text-center">
                         <div class="col-md-4">
                             <div class="border-end">
@@ -379,6 +389,8 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Inicializando Dashboard Admin');
+    
     // Actualizar reloj cada minuto
     updateClock();
     setInterval(updateClock, 60000);
@@ -415,10 +427,9 @@ function updateClock() {
 }
 
 async function loadDailyData() {
+    console.log('📊 Cargando datos del día...');
+    
     try {
-        // Simular carga de datos (aquí deberías hacer llamadas AJAX reales)
-        const today = new Date().toISOString().split('T')[0];
-        
         // Cargar datos de métodos de pago del día
         await loadPaymentMethodsData();
         
@@ -428,70 +439,81 @@ async function loadDailyData() {
         // Actualizar estado de sucursales
         updateBranchStatus();
         
+        console.log('✅ Datos cargados exitosamente');
+        
     } catch (error) {
-        console.error('Error cargando datos:', error);
-        showToast('Error cargando datos del día', 'error');
+        console.error('❌ Error cargando datos:', error);
+        showErrorMessage('Error cargando datos del día: ' + error.message);
     }
 }
 
 async function loadPaymentMethodsData() {
+    console.log('💳 Cargando datos de métodos de pago...');
+    
     try {
-        // Llamada real a la API
-        const response = await fetch('{{ url_for('main.api_daily_stats') }}');
+        const response = await fetch('/api/daily-stats');
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const data = await response.json();
+        console.log('📦 Datos recibidos:', data);
         
         if (data.status === 'success') {
             const paymentMethods = data.data.payment_methods;
             const totals = data.data.totals;
             
-            // Actualizar las métricas con animación
-            animateValue('totalEfectivo span', paymentMethods.efectivo);
-            animateValue('totalMercadoPago span', paymentMethods.mercadopago);
-            animateValue('totalDebito span', paymentMethods.debito);
-            animateValue('totalCredito span', paymentMethods.credito);
+            // Actualizar las métricas de métodos de pago
+            updatePaymentMethodDisplay('totalEfectivo', paymentMethods.efectivo);
+            updatePaymentMethodDisplay('totalMercadoPago', paymentMethods.mercadopago);
+            updatePaymentMethodDisplay('totalDebito', paymentMethods.debito);
+            updatePaymentMethodDisplay('totalCredito', paymentMethods.credito);
             
             // Actualizar totales generales
-            document.getElementById('totalVentasDia').textContent = `${totals.ventas.toLocaleString('es-AR', {minimumFractionDigits: 2})}`;
-            document.getElementById('totalGastosDia').textContent = `${totals.gastos.toLocaleString('es-AR', {minimumFractionDigits: 2})}`;
+            updateElementText('totalVentasDia', formatCurrency(totals.ventas));
+            updateElementText('totalGastosDia', formatCurrency(totals.gastos));
             
-            const gananciaNeta = totals.ganancia;
             const gananciaElement = document.getElementById('gananciaNeta');
-            gananciaElement.textContent = `${gananciaNeta.toLocaleString('es-AR', {minimumFractionDigits: 2})}`;
-            gananciaElement.className = gananciaNeta >= 0 ? 'mb-1 text-success' : 'mb-1 text-danger';
-            
-            // Actualizar sucursales que reportaron
-            const sucursalesElement = document.getElementById('sucursalesReportaron');
-            if (data.data.branches_reported.length > 0) {
-                sucursalesElement.innerHTML = data.data.branches_reported.map(branch => 
-                    `<span class="badge bg-success me-1">${branch}</span>`
-                ).join('');
-            } else {
-                sucursalesElement.innerHTML = '<span class="badge bg-secondary">Ninguna sucursal ha reportado hoy</span>';
+            if (gananciaElement) {
+                gananciaElement.textContent = formatCurrency(totals.ganancia);
+                gananciaElement.className = totals.ganancia >= 0 ? 'mb-1 text-success' : 'mb-1 text-danger';
             }
             
+            // Actualizar sucursales que reportaron
+            updateBranchesReported(data.data.branches_reported);
+            
             // Actualizar contador de pendientes
-            document.getElementById('pendientesVerificacion').textContent = data.data.pending_verification;
+            updateElementText('pendientesVerificacion', data.data.pending_verification);
             
         } else {
-            console.error('Error en la respuesta de la API:', data.message);
+            console.error('❌ Error en la respuesta:', data.message);
             showErrorState();
         }
         
     } catch (error) {
-        console.error('Error cargando datos de métodos de pago:', error);
+        console.error('❌ Error en loadPaymentMethodsData:', error);
         showErrorState();
+        throw error;
     }
 }
 
 async function loadTodayRecords() {
+    console.log('📋 Cargando registros del día...');
+    
     try {
-        // Usar la misma API que ya carga los datos de métodos de pago
-        const response = await fetch('{{ url_for('main.api_daily_stats') }}');
+        const response = await fetch('/api/daily-stats');
         const data = await response.json();
         
         if (data.status === 'success') {
             const records = data.data.records;
             const tbody = document.getElementById('registrosHoyBody');
+            
+            if (!tbody) {
+                console.warn('⚠️ Elemento registrosHoyBody no encontrado');
+                return;
+            }
+            
             tbody.innerHTML = '';
             
             if (records.length === 0) {
@@ -507,74 +529,66 @@ async function loadTodayRecords() {
             }
             
             records.forEach(record => {
-                const row = `
-                    <tr>
-                        <td>
-                            <span class="badge bg-secondary">${record.sucursal}</span>
-                        </td>
-                        <td>
-                            <strong class="text-success">${record.ventas.toLocaleString('es-AR', {minimumFractionDigits: 2})}</strong>
-                        </td>
-                        <td>
-                            <span class="text-danger">${record.gastos.toLocaleString('es-AR', {minimumFractionDigits: 2})}</span>
-                        </td>
-                        <td>
-                            <strong class="${record.ganancia >= 0 ? 'text-success' : 'text-danger'}">
-                                ${record.ganancia.toLocaleString('es-AR', {minimumFractionDigits: 2})}
-                            </strong>
-                        </td>
-                        <td>
-                            ${record.verificado ? 
-                                '<span class="badge bg-success"><i class="fas fa-check me-1"></i>Verificado</span>' : 
-                                '<span class="badge bg-warning"><i class="fas fa-clock me-1"></i>Pendiente</span>'
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>
+                        <span class="badge bg-secondary">${record.sucursal}</span>
+                    </td>
+                    <td>
+                        <strong class="text-success">${formatCurrency(record.ventas)}</strong>
+                    </td>
+                    <td>
+                        <span class="text-danger">${formatCurrency(record.gastos)}</span>
+                    </td>
+                    <td>
+                        <strong class="${record.ganancia >= 0 ? 'text-success' : 'text-danger'}">
+                            ${formatCurrency(record.ganancia)}
+                        </strong>
+                    </td>
+                    <td>
+                        ${record.verificado ? 
+                            '<span class="badge bg-success"><i class="fas fa-check me-1"></i>Verificado</span>' : 
+                            '<span class="badge bg-warning"><i class="fas fa-clock me-1"></i>Pendiente</span>'
+                        }
+                    </td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-primary" onclick="viewRecord(${record.id})" title="Ver">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            ${!record.verificado ? 
+                                `<button class="btn btn-outline-success" onclick="verifyRecord(${record.id})" title="Verificar">
+                                    <i class="fas fa-check"></i>
+                                </button>` : ''
                             }
-                        </td>
-                        <td>
-                            <div class="btn-group btn-group-sm">
-                                <button class="btn btn-outline-primary" onclick="viewRecord(${record.id})" title="Ver">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                                ${!record.verificado ? 
-                                    `<button class="btn btn-outline-success" onclick="verifyRecord(${record.id})" title="Verificar">
-                                        <i class="fas fa-check"></i>
-                                    </button>` : ''
-                                }
-                            </div>
-                        </td>
-                    </tr>
+                        </div>
+                    </td>
                 `;
-                tbody.innerHTML += row;
+                tbody.appendChild(row);
             });
             
         } else {
-            console.error('Error en la respuesta de la API:', data.message);
-            const tbody = document.getElementById('registrosHoyBody');
+            console.error('❌ Error cargando registros:', data.message);
+        }
+        
+    } catch (error) {
+        console.error('❌ Error en loadTodayRecords:', error);
+        const tbody = document.getElementById('registrosHoyBody');
+        if (tbody) {
             tbody.innerHTML = `
                 <tr>
                     <td colspan="6" class="text-center py-3 text-danger">
                         <i class="fas fa-exclamation-triangle me-2"></i>
-                        Error cargando registros del día
+                        Error cargando registros: ${error.message}
                     </td>
                 </tr>
             `;
         }
-        
-    } catch (error) {
-        console.error('Error cargando registros del día:', error);
-        const tbody = document.getElementById('registrosHoyBody');
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="6" class="text-center py-3 text-danger">
-                    <i class="fas fa-exclamation-triangle me-2"></i>
-                    Error de conexión
-                </td>
-            </tr>
-        `;
     }
 }
 
 function updateBranchStatus() {
-    fetch('{{ url_for('main.api_branch_status') }}')
+    fetch('/api/branch-status')
         .then(response => response.json())
         .then(data => {
             if (data.status === 'success') {
@@ -594,51 +608,88 @@ function updateBranchStatus() {
                     }
                 });
                 
-                document.getElementById('totalSucursalesActivas').textContent = data.data.total_reported;
+                updateElementText('totalSucursalesActivas', data.data.total_reported);
             }
         })
         .catch(error => {
-            console.error('Error actualizando estado de sucursales:', error);
+            console.error('❌ Error actualizando estado de sucursales:', error);
         });
+}
+
+// Funciones auxiliares
+function updatePaymentMethodDisplay(elementId, value) {
+    const element = document.querySelector(`#${elementId} span`);
+    if (element) {
+        element.textContent = formatCurrency(value);
+        element.style.color = ''; // Resetear color de error
+    }
+}
+
+function updateElementText(elementId, text) {
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.textContent = text;
+        element.style.color = ''; // Resetear color de error
+    }
+}
+
+function updateBranchesReported(branches) {
+    const element = document.getElementById('sucursalesReportaron');
+    if (element) {
+        if (branches.length > 0) {
+            element.innerHTML = branches.map(branch => 
+                `<span class="badge bg-success me-1">${branch}</span>`
+            ).join('');
+        } else {
+            element.innerHTML = '<span class="badge bg-secondary">Ninguna sucursal ha reportado hoy</span>';
+        }
+    }
+}
+
+function formatCurrency(amount) {
+    return '$' + new Intl.NumberFormat('es-AR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(amount);
 }
 
 function showErrorState() {
-    // Mostrar estado de error para métricas de pago
-    document.querySelector('#totalEfectivo span').textContent = 'Error';
-    document.querySelector('#totalMercadoPago span').textContent = 'Error';
-    document.querySelector('#totalDebito span').textContent = 'Error';
-    document.querySelector('#totalCredito span').textContent = 'Error';
+    console.log('🚨 Activando estado de error');
     
-    showToast('Error cargando datos del día. Verifique la conexión.', 'error');
+    // Mostrar error en métricas de pago
+    const paymentElements = [
+        'totalEfectivo',
+        'totalMercadoPago', 
+        'totalDebito',
+        'totalCredito'
+    ];
+    
+    paymentElements.forEach(id => {
+        const element = document.querySelector(`#${id} span`);
+        if (element) {
+            element.textContent = 'Error';
+            element.style.color = '#ef4444';
+        }
+    });
+    
+    // Mostrar error en totales
+    const totalElements = ['totalVentasDia', 'totalGastosDia', 'gananciaNeta'];
+    totalElements.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.textContent = 'Error cargando';
+            element.style.color = '#ef4444';
+        }
+    });
 }
 
-function animateValue(selector, targetValue) {
-    const element = document.querySelector(selector);
-    if (!element) return;
-    
-    const startValue = 0;
-    const duration = 1000;
-    const startTime = performance.now();
-    
-    function updateValue(currentTime) {
-        const elapsedTime = currentTime - startTime;
-        const progress = Math.min(elapsedTime / duration, 1);
-        const currentValue = startValue + (targetValue - startValue) * progress;
-        
-        element.textContent = currentValue.toLocaleString('es-AR', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-        });
-        
-        if (progress < 1) {
-            requestAnimationFrame(updateValue);
-        }
-    }
-    
-    requestAnimationFrame(updateValue);
+function showErrorMessage(message) {
+    console.error('🚨 Error:', message);
+    // Puedes implementar aquí un sistema de notificaciones más sofisticado
 }
 
 function refreshData() {
+    console.log('🔄 Refrescando datos...');
     const modal = new bootstrap.Modal(document.getElementById('loadingModal'));
     modal.show();
     
@@ -662,15 +713,21 @@ function viewRecord(id) {
 
 function verifyRecord(id) {
     if (confirm('¿Verificar este registro?')) {
-        // Aquí harías la llamada AJAX para verificar
+        // Implementar verificación
+        console.log('Verificando registro', id);
         showToast('Registro verificado correctamente', 'success');
         setTimeout(() => loadTodayRecords(), 1000);
     }
 }
 
 function showToast(message, type = 'info') {
-    // Implementar sistema de notificaciones toast
+    // Sistema básico de notificaciones
     console.log(`${type.toUpperCase()}: ${message}`);
+    
+    // Si tienes un sistema de toast implementado en main.js, puedes usarlo:
+    if (typeof window.showToast === 'function') {
+        window.showToast(message, type);
+    }
 }
 
 // Auto-actualización en tiempo real

@@ -429,81 +429,124 @@ def api_daily_stats():
     Solo para administradores.
     """
     try:
-        from sqlalchemy import func, and_
         from datetime import date
         
         today = date.today()
+        print(f"🔍 Buscando registros para {today}")  # Debug
         
-        # Obtener totales por método de pago del día
-        daily_totals = db.session.query(
-            func.sum(DailyRecord.cash_sales).label('total_cash'),
-            func.sum(DailyRecord.mercadopago_sales).label('total_mercadopago'),
-            func.sum(DailyRecord.debit_sales).label('total_debit'),
-            func.sum(DailyRecord.credit_sales).label('total_credit'),
-            func.sum(DailyRecord.total_sales).label('total_sales'),
-            func.sum(DailyRecord.total_expenses).label('total_expenses'),
-            func.count(DailyRecord.id).label('records_count')
-        ).filter(
-            DailyRecord.record_date == today
-        ).first()
-        
-        # Obtener registros del día con información de sucursales
+        # Obtener registros del día actual
         todays_records = DailyRecord.query.filter(
             DailyRecord.record_date == today
         ).all()
         
-        # Obtener sucursales que reportaron hoy
-        branches_reported = list(set([record.branch_name for record in todays_records]))
+        print(f"📊 Encontrados {len(todays_records)} registros")  # Debug
         
-        # Contar registros pendientes de verificación
-        pending_verification = DailyRecord.query.filter(
-            DailyRecord.record_date == today,
-            DailyRecord.is_verified == False
-        ).count()
-        
-        # Formatear datos para el frontend
-        payment_methods = {
-            'efectivo': float(daily_totals.total_cash or 0),
-            'mercadopago': float(daily_totals.total_mercadopago or 0),
-            'debito': float(daily_totals.total_debit or 0),
-            'credito': float(daily_totals.total_credit or 0)
-        }
-        
-        # Datos de registros individuales para la tabla
+        # Inicializar totales
+        total_cash = 0.0
+        total_mercadopago = 0.0
+        total_debit = 0.0
+        total_credit = 0.0
+        total_sales = 0.0
+        total_expenses = 0.0
+        branches_reported = []
+        pending_verification = 0
         records_data = []
+        
+        # Procesar cada registro
         for record in todays_records:
-            net_profit = float(record.total_sales) - float(record.total_expenses)
+            print(f"  📋 {record.branch_name}: ${record.total_sales}")  # Debug
+            
+            # Sumar totales
+            total_cash += float(record.cash_sales or 0)
+            total_mercadopago += float(record.mercadopago_sales or 0)
+            total_debit += float(record.debit_sales or 0)
+            total_credit += float(record.credit_sales or 0)
+            total_sales += float(record.total_sales or 0)
+            total_expenses += float(record.total_expenses or 0)
+            
+            # Agregar sucursal si no está
+            if record.branch_name not in branches_reported:
+                branches_reported.append(record.branch_name)
+            
+            # Contar pendientes de verificación
+            if not record.is_verified:
+                pending_verification += 1
+            
+            # Datos para la tabla
+            net_profit = float(record.total_sales or 0) - float(record.total_expenses or 0)
             records_data.append({
                 'id': record.id,
                 'sucursal': record.branch_name,
-                'ventas': float(record.total_sales),
-                'gastos': float(record.total_expenses),
+                'ventas': float(record.total_sales or 0),
+                'gastos': float(record.total_expenses or 0),
                 'ganancia': net_profit,
                 'verificado': record.is_verified,
                 'creator': record.creator.username if record.creator else 'N/A'
             })
         
-        return jsonify({
+        # Calcular ganancia total
+        total_profit = total_sales - total_expenses
+        
+        print(f"💰 Totales calculados:")  # Debug
+        print(f"   Efectivo: ${total_cash}")
+        print(f"   MercadoPago: ${total_mercadopago}")
+        print(f"   Débito: ${total_debit}")
+        print(f"   Crédito: ${total_credit}")
+        print(f"   Total Ventas: ${total_sales}")
+        print(f"   Total Gastos: ${total_expenses}")
+        print(f"   Ganancia: ${total_profit}")
+        
+        response_data = {
             'status': 'success',
             'data': {
-                'payment_methods': payment_methods,
+                'payment_methods': {
+                    'efectivo': round(total_cash, 2),
+                    'mercadopago': round(total_mercadopago, 2),
+                    'debito': round(total_debit, 2),
+                    'credito': round(total_credit, 2)
+                },
                 'totals': {
-                    'ventas': float(daily_totals.total_sales or 0),
-                    'gastos': float(daily_totals.total_expenses or 0),
-                    'ganancia': float(daily_totals.total_sales or 0) - float(daily_totals.total_expenses or 0),
-                    'records_count': daily_totals.records_count or 0
+                    'ventas': round(total_sales, 2),
+                    'gastos': round(total_expenses, 2),
+                    'ganancia': round(total_profit, 2),
+                    'records_count': len(todays_records)
                 },
                 'records': records_data,
                 'branches_reported': branches_reported,
                 'pending_verification': pending_verification,
                 'date': today.isoformat()
             }
-        })
+        }
+        
+        print(f"✅ Enviando respuesta con {len(todays_records)} registros")  # Debug
+        return jsonify(response_data)
         
     except Exception as e:
+        print(f"❌ Error en api_daily_stats: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
         return jsonify({
             'status': 'error',
-            'message': str(e)
+            'message': str(e),
+            'data': {
+                'payment_methods': {
+                    'efectivo': 0,
+                    'mercadopago': 0,
+                    'debito': 0,
+                    'credito': 0
+                },
+                'totals': {
+                    'ventas': 0,
+                    'gastos': 0,
+                    'ganancia': 0,
+                    'records_count': 0
+                },
+                'records': [],
+                'branches_reported': [],
+                'pending_verification': 0,
+                'date': date.today().isoformat()
+            }
         }), 500
 
 
@@ -521,11 +564,11 @@ def api_branch_status():
         all_branches = ['Uruguay', 'Villa Cabello', 'Tacuari', 'Candelaria', 'Itaembe Mini']
         
         # Obtener sucursales que han reportado hoy
-        reported_today = db.session.query(DailyRecord.branch_name).filter(
+        todays_records = DailyRecord.query.filter(
             DailyRecord.record_date == today
-        ).distinct().all()
+        ).all()
         
-        reported_branches = [branch[0] for branch in reported_today]
+        reported_branches = list(set([record.branch_name for record in todays_records]))
         
         branch_status = {}
         for branch in all_branches:
@@ -546,7 +589,8 @@ def api_branch_status():
         })
         
     except Exception as e:
+        print(f"Error en api_branch_status: {str(e)}")  # Para debugging
         return jsonify({
             'status': 'error',
-            'message': str(e)
+            'message': f'Error interno del servidor: {str(e)}'
         }), 500

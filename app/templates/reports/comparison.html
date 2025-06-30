@@ -7,6 +7,33 @@
 
 {% block extra_css %}
 <style>
+
+    .mb-3 {
+        margin-bottom: 1rem !important;
+        color: #000;
+    }
+
+    .mb-1 {
+        margin-bottom: .25rem !important;
+        color: #000;
+    }
+
+    .btn-group.btn-group-sm {
+        background: #b5b5b5;
+    }
+
+    .table th {
+        background: #a4a8ac;
+        font-weight: 600;
+        border: none;
+        padding: 1rem;
+    }
+
+
+    .card-body {
+        padding: 2rem;
+        background: white;
+    }
     .comparison-card {
         transition: transform 0.2s ease, box-shadow 0.2s ease;
         border: none;
@@ -318,7 +345,7 @@
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-hover mb-0">
-                            <thead class="table-light">
+                            <thead class="light2">
                                 <tr>
                                     <th>Ranking</th>
                                     <th>Sucursal</th>
@@ -377,121 +404,6 @@
                                 {% endfor %}
                             </tbody>
                         </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Insights y recomendaciones -->
-    <div class="row">
-        <div class="col-lg-8">
-            <div class="card comparison-card">
-                <div class="card-header bg-transparent">
-                    <h6 class="mb-0">
-                        <i class="fas fa-lightbulb me-2"></i>Insights Automáticos
-                    </h6>
-                </div>
-                <div class="card-body">
-                    <div class="row g-3">
-                        {% set best_branch = ranked_branches[0] %}
-                        {% set worst_branch = ranked_branches[-1] %}
-                        
-                        <div class="col-md-6">
-                            <div class="alert alert-success">
-                                <h6 class="alert-heading">
-                                    <i class="fas fa-trophy me-2"></i>Mejor Rendimiento
-                                </h6>
-                                <p class="mb-1">
-                                    <strong>{{ best_branch[0] }}</strong> lidera con 
-                                    <strong>${{ "%.0f"|format(best_branch[1].total_sales) }}</strong> en ventas.
-                                </p>
-                                <small>
-                                    Margen de ganancia: {{ "%.1f"|format((best_branch[1].total_sales - best_branch[1].total_expenses) / best_branch[1].total_sales * 100) if best_branch[1].total_sales > 0 else 0 }}%
-                                </small>
-                            </div>
-                        </div>
-                        
-                        <div class="col-md-6">
-                            <div class="alert alert-warning">
-                                <h6 class="alert-heading">
-                                    <i class="fas fa-exclamation-triangle me-2"></i>Área de Mejora
-                                </h6>
-                                <p class="mb-1">
-                                    <strong>{{ worst_branch[0] }}</strong> necesita atención con 
-                                    <strong>${{ "%.0f"|format(worst_branch[1].total_sales) }}</strong> en ventas.
-                                </p>
-                                <small>
-                                    Diferencia con el líder: {{ "%.0f"|format(best_branch[1].total_sales - worst_branch[1].total_sales) }}
-                                </small>
-                            </div>
-                        </div>
-                        
-                        <div class="col-12">
-                            <div class="alert alert-info">
-                                <h6 class="alert-heading">
-                                    <i class="fas fa-chart-line me-2"></i>Análisis General
-                                </h6>
-                                <p class="mb-0">
-                                    Promedio de ventas por sucursal: <strong>${{ "%.0f"|format(total_all_sales / comparison_data|length) }}</strong>. 
-                                    {{ (comparison_data.values() | selectattr('total_sales', '>', total_all_sales / comparison_data|length) | list | length) }} 
-                                    sucursales están por encima del promedio.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-lg-4">
-            <div class="card comparison-card h-100">
-                <div class="card-header bg-transparent">
-                    <h6 class="mb-0">
-                        <i class="fas fa-tasks me-2"></i>Acciones Recomendadas
-                    </h6>
-                </div>
-                <div class="card-body">
-                    <div class="list-group list-group-flush">
-                        <div class="list-group-item border-0 px-0">
-                            <div class="d-flex align-items-center">
-                                <i class="fas fa-eye text-primary me-3"></i>
-                                <div>
-                                    <h6 class="mb-1">Monitorear de cerca</h6>
-                                    <small class="text-muted">{{ worst_branch[0] }} - Bajo rendimiento</small>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="list-group-item border-0 px-0">
-                            <div class="d-flex align-items-center">
-                                <i class="fas fa-copy text-success me-3"></i>
-                                <div>
-                                    <h6 class="mb-1">Replicar estrategias</h6>
-                                    <small class="text-muted">De {{ best_branch[0] }} a otras sucursales</small>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="list-group-item border-0 px-0">
-                            <div class="d-flex align-items-center">
-                                <i class="fas fa-chart-bar text-info me-3"></i>
-                                <div>
-                                    <h6 class="mb-1">Analizar tendencias</h6>
-                                    <small class="text-muted">Revisar reportes semanales</small>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="list-group-item border-0 px-0">
-                            <div class="d-flex align-items-center">
-                                <i class="fas fa-users text-warning me-3"></i>
-                                <div>
-                                    <h6 class="mb-1">Capacitar equipos</h6>
-                                    <small class="text-muted">En sucursales de bajo rendimiento</small>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
