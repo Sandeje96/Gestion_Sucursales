@@ -169,7 +169,7 @@
                     <i class="fas fa-money-bill-wave"></i>
                 </div>
                 <h6>Efectivo</h6>
-                <h2 id="totalEfectivo"><span data-target="0">0.00</span></h2>
+                <h2 id="totalEfectivo"><span data-target="0">$0,00</span></h2>
                 <small>Total de todas las sucursales</small>
             </div>
         </div>
@@ -180,7 +180,7 @@
                     <i class="fas fa-mobile-alt"></i>
                 </div>
                 <h6>MercadoPago</h6>
-                <h2 id="totalMercadoPago"><span data-target="0">0.00</span></h2>
+                <h2 id="totalMercadoPago"><span data-target="0">$0,00</span></h2>
                 <small>Total de todas las sucursales</small>
             </div>
         </div>
@@ -191,7 +191,7 @@
                     <i class="fas fa-credit-card"></i>
                 </div>
                 <h6>Débito</h6>
-                <h2 id="totalDebito"><span data-target="0">0.00</span></h2>
+                <h2 id="totalDebito"><span data-target="0">$0,00</span></h2>
                 <small>Total de todas las sucursales</small>
             </div>
         </div>
@@ -202,7 +202,7 @@
                     <i class="fas fa-credit-card"></i>
                 </div>
                 <h6>Crédito</h6>
-                <h2 id="totalCredito"><span data-target="0">0.00</span></h2>
+                <h2 id="totalCredito"><span data-target="0">$0,00</span></h2>
                 <small>Total de todas las sucursales</small>
             </div>
         </div>
@@ -224,18 +224,18 @@
                     <div class="row text-center">
                         <div class="col-md-4">
                             <div class="border-end">
-                                <h5 class="text-success mb-1" id="totalVentasDia">$0.00</h5>
+                                <h5 class="text-success mb-1" id="totalVentasDia">$0,00</h5>
                                 <small class="text-muted">Ventas Totales del Día</small>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="border-end">
-                                <h5 class="text-danger mb-1" id="totalGastosDia">$0.00</h5>
+                                <h5 class="text-danger mb-1" id="totalGastosDia">$0,00</h5>
                                 <small class="text-muted">Gastos Totales del Día</small>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <h5 class="mb-1" id="gananciaNeta">$0.00</h5>
+                            <h5 class="mb-1" id="gananciaNeta">$0,00</h5>
                             <small class="text-muted">Ganancia Neta del Día</small>
                         </div>
                     </div>
@@ -464,19 +464,19 @@ async function loadPaymentMethodsData() {
             const paymentMethods = data.data.payment_methods;
             const totals = data.data.totals;
             
-            // Actualizar las métricas de métodos de pago
+            // Actualizar las métricas de métodos de pago con formato argentino
             updatePaymentMethodDisplay('totalEfectivo', paymentMethods.efectivo);
             updatePaymentMethodDisplay('totalMercadoPago', paymentMethods.mercadopago);
             updatePaymentMethodDisplay('totalDebito', paymentMethods.debito);
             updatePaymentMethodDisplay('totalCredito', paymentMethods.credito);
             
-            // Actualizar totales generales
-            updateElementText('totalVentasDia', formatCurrency(totals.ventas));
-            updateElementText('totalGastosDia', formatCurrency(totals.gastos));
+            // Actualizar totales generales con formato argentino
+            updateElementText('totalVentasDia', formatCurrencyArgentino(totals.ventas));
+            updateElementText('totalGastosDia', formatCurrencyArgentino(totals.gastos));
             
             const gananciaElement = document.getElementById('gananciaNeta');
             if (gananciaElement) {
-                gananciaElement.textContent = formatCurrency(totals.ganancia);
+                gananciaElement.textContent = formatCurrencyArgentino(totals.ganancia);
                 gananciaElement.className = totals.ganancia >= 0 ? 'mb-1 text-success' : 'mb-1 text-danger';
             }
             
@@ -535,14 +535,14 @@ async function loadTodayRecords() {
                         <span class="badge bg-secondary">${record.sucursal}</span>
                     </td>
                     <td>
-                        <strong class="text-success">${formatCurrency(record.ventas)}</strong>
+                        <strong class="text-success">${formatCurrencyArgentino(record.ventas)}</strong>
                     </td>
                     <td>
-                        <span class="text-danger">${formatCurrency(record.gastos)}</span>
+                        <span class="text-danger">${formatCurrencyArgentino(record.gastos)}</span>
                     </td>
                     <td>
                         <strong class="${record.ganancia >= 0 ? 'text-success' : 'text-danger'}">
-                            ${formatCurrency(record.ganancia)}
+                            ${formatCurrencyArgentino(record.ganancia)}
                         </strong>
                     </td>
                     <td>
@@ -616,11 +616,11 @@ function updateBranchStatus() {
         });
 }
 
-// Funciones auxiliares
+// Funciones auxiliares con formato argentino
 function updatePaymentMethodDisplay(elementId, value) {
     const element = document.querySelector(`#${elementId} span`);
     if (element) {
-        element.textContent = formatCurrency(value);
+        element.textContent = formatCurrencyArgentino(value);
         element.style.color = ''; // Resetear color de error
     }
 }
@@ -646,11 +646,22 @@ function updateBranchesReported(branches) {
     }
 }
 
-function formatCurrency(amount) {
-    return '$' + new Intl.NumberFormat('es-AR', {
+// Función de formato argentino actualizada
+function formatCurrencyArgentino(amount) {
+    const num = parseFloat(amount) || 0;
+    
+    // Usar Intl.NumberFormat para formato argentino
+    const formatted = new Intl.NumberFormat('es-AR', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
-    }).format(amount);
+    }).format(num);
+    
+    return `$${formatted}`;
+}
+
+// Función alternativa más explícita
+function formatCurrency(amount) {
+    return formatCurrencyArgentino(amount);
 }
 
 function showErrorState() {
@@ -685,7 +696,10 @@ function showErrorState() {
 
 function showErrorMessage(message) {
     console.error('🚨 Error:', message);
-    // Puedes implementar aquí un sistema de notificaciones más sofisticado
+    // Usar el sistema de toast del main.js si está disponible
+    if (typeof window.showToast === 'function') {
+        window.showToast(message, 'error');
+    }
 }
 
 function refreshData() {
@@ -696,7 +710,9 @@ function refreshData() {
     setTimeout(() => {
         loadDailyData();
         modal.hide();
-        showToast('Datos actualizados correctamente', 'success');
+        if (typeof window.showToast === 'function') {
+            window.showToast('Datos actualizados correctamente', 'success');
+        }
     }, 1500);
 }
 
@@ -704,7 +720,9 @@ function exportDailyData() {
     const today = new Date().toISOString().split('T')[0];
     const url = `{{ url_for('reports.export_csv') }}?start_date=${today}&end_date=${today}`;
     window.open(url, '_blank');
-    showToast('Descargando datos del día...', 'info');
+    if (typeof window.showToast === 'function') {
+        window.showToast('Descargando datos del día...', 'info');
+    }
 }
 
 function viewRecord(id) {
@@ -715,18 +733,20 @@ function verifyRecord(id) {
     if (confirm('¿Verificar este registro?')) {
         // Implementar verificación
         console.log('Verificando registro', id);
-        showToast('Registro verificado correctamente', 'success');
+        if (typeof window.showToast === 'function') {
+            window.showToast('Registro verificado correctamente', 'success');
+        }
         setTimeout(() => loadTodayRecords(), 1000);
     }
 }
 
 function showToast(message, type = 'info') {
-    // Sistema básico de notificaciones
-    console.log(`${type.toUpperCase()}: ${message}`);
-    
-    // Si tienes un sistema de toast implementado en main.js, puedes usarlo:
+    // Usar el sistema de toast global si está disponible
     if (typeof window.showToast === 'function') {
         window.showToast(message, type);
+    } else {
+        // Fallback a console.log
+        console.log(`${type.toUpperCase()}: ${message}`);
     }
 }
 

@@ -89,6 +89,9 @@ def create_app(config_name=None):
     from app.routes.reports import reports_bp
     app.register_blueprint(reports_bp, url_prefix='/reports')
     
+    # Registrar filtros personalizados para formato argentino
+    register_template_filters(app)
+    
     # Manejadores de errores globales
     @app.errorhandler(404)
     def not_found_error(error):
@@ -108,3 +111,130 @@ def create_app(config_name=None):
         return dict(current_user=current_user)
     
     return app
+
+
+def register_template_filters(app):
+    """
+    Registrar filtros personalizados para formato argentino en las plantillas.
+    
+    Args:
+        app: Instancia de la aplicación Flask
+    """
+    
+    @app.template_filter('currency_ar')
+    def currency_ar_filter(amount):
+        """
+        Filtro para formatear moneda en formato argentino.
+        Ejemplo: 1234567.89 -> $1.234.567,89
+        """
+        try:
+            # Convertir a float si es necesario
+            if isinstance(amount, str):
+                amount = float(amount)
+            
+            # Formatear el número
+            # Separar parte entera y decimal
+            formatted = "{:,.2f}".format(amount)
+            
+            # Cambiar separadores: . por , y , por .
+            # Primero cambiar , por un marcador temporal
+            formatted = formatted.replace(',', 'TEMP')
+            # Cambiar . por ,
+            formatted = formatted.replace('.', ',')
+            # Cambiar marcador temporal por .
+            formatted = formatted.replace('TEMP', '.')
+            
+            return f"${formatted}"
+        except (ValueError, TypeError):
+            return "$0,00"
+    
+    @app.template_filter('number_ar')
+    def number_ar_filter(amount, decimals=2):
+        """
+        Filtro para formatear número con separadores argentinos sin símbolo de moneda.
+        Ejemplo: 1234567.89 -> 1.234.567,89
+        """
+        try:
+            if isinstance(amount, str):
+                amount = float(amount)
+            
+            format_str = f"{{:,.{decimals}f}}"
+            formatted = format_str.format(amount)
+            
+            # Cambiar separadores
+            formatted = formatted.replace(',', 'TEMP')
+            formatted = formatted.replace('.', ',')
+            formatted = formatted.replace('TEMP', '.')
+            
+            return formatted
+        except (ValueError, TypeError):
+            return "0,00"
+    
+    @app.template_filter('percentage_ar')
+    def percentage_ar_filter(value, decimals=1):
+        """
+        Filtro para formatear porcentaje en formato argentino.
+        Ejemplo: 15.5 -> 15,5%
+        """
+        try:
+            if isinstance(value, str):
+                value = float(value)
+            
+            format_str = f"{{:.{decimals}f}}"
+            formatted = format_str.format(value)
+            
+            # Cambiar punto por coma
+            formatted = formatted.replace('.', ',')
+            
+            return f"{formatted}%"
+        except (ValueError, TypeError):
+            return "0,0%"
+    
+    @app.template_filter('format_ar')
+    def format_ar_filter(amount, format_type='currency', decimals=2):
+        """
+        Filtro universal para formateo argentino.
+        
+        Args:
+            amount: Cantidad a formatear
+            format_type: Tipo de formato ('currency', 'number', 'percentage')
+            decimals: Número de decimales
+        
+        Returns:
+            str: Cantidad formateada
+        """
+        if format_type == 'currency':
+            return currency_ar_filter(amount)
+        elif format_type == 'number':
+            return number_ar_filter(amount, decimals)
+        elif format_type == 'percentage':
+            return percentage_ar_filter(amount, decimals)
+        else:
+            return str(amount)
+    
+    # Función auxiliar disponible en todas las plantillas
+    @app.template_global()
+    def format_currency_jinja(amount):
+        """
+        Función global disponible en plantillas para formatear moneda.
+        """
+        return currency_ar_filter(amount)
+    
+    @app.template_global()
+    def format_number_jinja(amount, decimals=2):
+        """
+        Función global disponible en plantillas para formatear números.
+        """
+        return number_ar_filter(amount, decimals)
+    
+    # Contexto processor adicional para datos de formato
+    @app.context_processor
+    def inject_format_helpers():
+        """
+        Inyectar funciones de formato en el contexto de todas las plantillas.
+        """
+        return {
+            'format_currency_ar': currency_ar_filter,
+            'format_number_ar': number_ar_filter,
+            'format_percentage_ar': percentage_ar_filter
+        }

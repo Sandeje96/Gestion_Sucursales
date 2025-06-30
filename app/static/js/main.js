@@ -557,7 +557,7 @@ function showToast(message, type = 'info', duration = null) {
 }
 
 /**
- * Funciones utilitarias globales
+ * Funciones utilitarias globales con formato argentino
  */
 window.SucursalesUtils = {
     // Formatear fecha
@@ -565,12 +565,53 @@ window.SucursalesUtils = {
         return new Intl.DateTimeFormat(locale).format(new Date(date));
     },
     
-    // Formatear moneda
-    formatCurrency: function(amount, currency = 'ARS') {
+    // Formatear moneda en formato argentino
+    formatCurrency: function(amount, includeSymbol = true) {
+        const num = parseFloat(amount) || 0;
+        
+        // Usar Intl.NumberFormat para formato argentino
+        const formatted = new Intl.NumberFormat('es-AR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(num);
+        
+        return includeSymbol ? `$${formatted}` : formatted;
+    },
+
+    // Formatear número sin símbolo de moneda
+    formatNumber: function(amount, decimals = 2) {
+        const num = parseFloat(amount) || 0;
+        
         return new Intl.NumberFormat('es-AR', {
-            style: 'currency',
-            currency: currency
-        }).format(amount);
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals
+        }).format(num);
+    },
+
+    // Formatear porcentaje
+    formatPercentage: function(value, decimals = 1) {
+        const num = parseFloat(value) || 0;
+        return new Intl.NumberFormat('es-AR', {
+            style: 'percent',
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals
+        }).format(num / 100);
+    },
+
+    // Función alternativa más explícita para casos especiales
+    formatCurrencyExplicit: function(amount) {
+        const num = parseFloat(amount) || 0;
+        
+        // Separar parte entera y decimal
+        const parts = num.toFixed(2).split('.');
+        const integerPart = parts[0];
+        const decimalPart = parts[1];
+        
+        // Agregar puntos como separadores de miles
+        const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        
+        // Unir con coma como separador decimal
+        return `$${formattedInteger},${decimalPart}`;
     },
     
     // Debounce function
@@ -608,6 +649,11 @@ window.SucursalesUtils = {
 // Exponer funciones globales necesarias
 window.showToast = showToast;
 window.SucursalesApp = SucursalesApp;
+
+// Funciones globales de compatibilidad para formato argentino
+window.formatCurrencyArgentino = SucursalesUtils.formatCurrency;
+window.formatNumberArgentino = SucursalesUtils.formatNumber;
+window.formatPercentageArgentino = SucursalesUtils.formatPercentage;
 
 // Manejar errores globales
 window.addEventListener('error', function(e) {
