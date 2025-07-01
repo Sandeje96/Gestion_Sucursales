@@ -203,24 +203,39 @@ def branch_dashboard():
             DailyRecord.record_date <= today
         ).order_by(DailyRecord.record_date.asc()).all()
         
-        # AQUÍ ESTÁ LA CORRECCIÓN: Convertir objetos a diccionarios
         stats = {
             'branch_name': current_user.branch_name,
-            'recent_records': [record.to_dict() for record in user_records],  # Convertir a dict
-            'today_record': today_record.to_dict() if today_record else None,  # Convertir a dict
+            'recent_records': [record.to_dict() for record in user_records],
+            'today_record': today_record.to_dict() if today_record else None,
             'monthly': {
                 'records_count': len(monthly_records),
                 'total_sales': monthly_sales,
                 'total_expenses': monthly_expenses,
                 'net_amount': monthly_net
             },
-            'weekly_records': [record.to_dict() for record in weekly_records]  # Convertir a dict
+            'weekly_records': [record.to_dict() for record in weekly_records]
         }
-        
+
+        # ==== AGREGADO PARA LA PLANTILLA ====
+        from datetime import date, timedelta
+        today_date = date.today().isoformat()
+        yesterday_date = (date.today() - timedelta(days=1)).isoformat()
+        # =====================================
+
         return render_template(
             'main/branch_dashboard.html',
             title=f'Panel de {current_user.branch_name}',
-            stats=stats
+            stats=stats,
+            today_date=today_date,
+            yesterday_date=yesterday_date
+        )
+        
+    except Exception as e:
+        flash(f'Error al cargar el dashboard: {str(e)}', 'error')
+        return render_template(
+            'main/branch_dashboard.html',
+            title=f'Panel de {current_user.branch_name}',
+            stats=None
         )
         
     except Exception as e:

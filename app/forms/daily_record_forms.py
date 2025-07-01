@@ -1,4 +1,3 @@
-# app/forms/daily_record_forms.py
 """
 Formularios WTForms para el manejo de registros diarios de ventas y gastos.
 
@@ -8,12 +7,24 @@ Este módulo contiene:
 """
 
 from flask_wtf import FlaskForm
-from wtforms import DecimalField, DateField, TextAreaField, SubmitField, SelectField, HiddenField
-from wtforms.validators import DataRequired, NumberRange, Optional, Length
+from wtforms import StringField, DateField, TextAreaField, SubmitField, SelectField, HiddenField
+from wtforms.validators import DataRequired, NumberRange, Optional, Length, ValidationError
 from wtforms.widgets import TextArea
 from datetime import date, datetime
-from decimal import Decimal
 
+def currency_to_decimal(value):
+    """
+    Convierte un string de moneda en formato argentino a float.
+    Ej: "1.234,56" -> 1234.56
+    """
+    if value is None or value == "":
+        return 0.0
+    try:
+        value = str(value)
+        value = value.replace('.', '').replace(',', '.')
+        return float(value)
+    except Exception:
+        raise ValidationError("Formato de moneda inválido.")
 
 class DailyRecordForm(FlaskForm):
     """
@@ -41,84 +52,74 @@ class DailyRecordForm(FlaskForm):
         }
     )
     
-    # Ventas por método de pago
-    cash_sales = DecimalField(
+    # Ventas por método de pago (CAMBIADO a StringField para permitir texto con formato argentino)
+    cash_sales = StringField(
         'Ventas en Efectivo ($)',
         validators=[
-            DataRequired(message='Las ventas en efectivo son obligatorias.'),
-            NumberRange(min=0, message='Las ventas no pueden ser negativas.')
+            DataRequired(message='Las ventas en efectivo son obligatorias.')
         ],
-        default=Decimal('0.00'),
-        places=2,
+        default="0,00",
         render_kw={
             'class': 'form-control',
-            'placeholder': '0.00',
-            'step': '0.01',
+            'placeholder': '0,00',
+            'inputmode': 'decimal',
             'min': '0'
         }
     )
     
-    mercadopago_sales = DecimalField(
+    mercadopago_sales = StringField(
         'Ventas MercadoPago ($)',
         validators=[
-            DataRequired(message='Las ventas por MercadoPago son obligatorias.'),
-            NumberRange(min=0, message='Las ventas no pueden ser negativas.')
+            DataRequired(message='Las ventas por MercadoPago son obligatorias.')
         ],
-        default=Decimal('0.00'),
-        places=2,
+        default="0,00",
         render_kw={
             'class': 'form-control',
-            'placeholder': '0.00',
-            'step': '0.01',
+            'placeholder': '0,00',
+            'inputmode': 'decimal',
             'min': '0'
         }
     )
     
-    debit_sales = DecimalField(
+    debit_sales = StringField(
         'Ventas con Débito ($)',
         validators=[
-            DataRequired(message='Las ventas con débito son obligatorias.'),
-            NumberRange(min=0, message='Las ventas no pueden ser negativas.')
+            DataRequired(message='Las ventas con débito son obligatorias.')
         ],
-        default=Decimal('0.00'),
-        places=2,
+        default="0,00",
         render_kw={
             'class': 'form-control',
-            'placeholder': '0.00',
-            'step': '0.01',
+            'placeholder': '0,00',
+            'inputmode': 'decimal',
             'min': '0'
         }
     )
     
-    credit_sales = DecimalField(
+    credit_sales = StringField(
         'Ventas con Crédito ($)',
         validators=[
-            DataRequired(message='Las ventas con crédito son obligatorias.'),
-            NumberRange(min=0, message='Las ventas no pueden ser negativas.')
+            DataRequired(message='Las ventas con crédito son obligatorias.')
         ],
-        default=Decimal('0.00'),
-        places=2,
+        default="0,00",
         render_kw={
             'class': 'form-control',
-            'placeholder': '0.00',
-            'step': '0.01',
+            'placeholder': '0,00',
+            'inputmode': 'decimal',
             'min': '0'
         }
     )
     
     # Gastos del día
-    total_expenses = DecimalField(
+    total_expenses = StringField(
         'Gastos Totales del Día ($)',
         validators=[
-            DataRequired(message='Los gastos totales son obligatorios.'),
-            NumberRange(min=0, message='Los gastos no pueden ser negativos.')
+            DataRequired(message='Los gastos totales son obligatorios.')
         ],
-        default=Decimal('0.00'),
-        places=2,
+        default="0,00",
         render_kw={
             'class': 'form-control',
-            'placeholder': '0.00',
-            'step': '0.01',
+            'placeholder': '0,00',
+            'inputmode': 'decimal',
             'min': '0'
         }
     )
@@ -153,32 +154,61 @@ class DailyRecordForm(FlaskForm):
         """
         if not super().validate(extra_validators):
             return False
-        
-        # Calcular y validar el total de ventas
+
+        # Parsear los valores de los campos monetarios
+        try:
+            self.cash_sales_float = currency_to_decimal(self.cash_sales.data)
+            self.mercadopago_sales_float = currency_to_decimal(self.mercadopago_sales.data)
+            self.debit_sales_float = currency_to_decimal(self.debit_sales.data)
+            self.credit_sales_float = currency_to_decimal(self.credit_sales.data)
+            self.total_expenses_float = currency_to_decimal(self.total_expenses.data)
+        except ValidationError as e:
+            msg = str(e)
+            if not self.cash_sales.data.replace('.', '').replace(',', '').isdigit():
+                self.cash_sales.errors.append(msg)
+            if not self.mercadopago_sales.data.replace('.', '').replace(',', '').isdigit():
+                self.mercadopago_sales.errors.append(msg)
+            if not self.debit_sales.data.replace('.', '').replace(',', '').isdigit():
+                self.debit_sales.errors.append(msg)
+            if not self.credit_sales.data.replace('.', '').replace(',', '').isdigit():
+                self.credit_sales.errors.append(msg)
+            if not self.total_expenses.data.replace('.', '').replace(',', '').isdigit():
+                self.total_expenses.errors.append(msg)
+            return False
+
+        # Validar que los valores no sean negativos
+        for field_name in [
+            'cash_sales_float', 'mercadopago_sales_float',
+            'debit_sales_float', 'credit_sales_float', 'total_expenses_float'
+        ]:
+            value = getattr(self, field_name)
+            if value < 0:
+                getattr(self, field_name.replace('_float', '')).errors.append(
+                    'El valor no puede ser negativo.'
+                )
+                return False
+
         total_sales = (
-            (self.cash_sales.data or 0) +
-            (self.mercadopago_sales.data or 0) +
-            (self.debit_sales.data or 0) +
-            (self.credit_sales.data or 0)
+            self.cash_sales_float +
+            self.mercadopago_sales_float +
+            self.debit_sales_float +
+            self.credit_sales_float
         )
-        
-        self.total_sales.data = total_sales
-        
+        self.total_sales.data = str(total_sales)
+
         # Validar que al menos haya alguna venta o gasto
-        if total_sales == 0 and (self.total_expenses.data or 0) == 0:
+        if total_sales == 0 and self.total_expenses_float == 0:
             self.cash_sales.errors.append(
                 'Debe registrar al menos alguna venta o gasto.'
             )
             return False
-        
-        return True
 
+        return True
 
 class FilterForm(FlaskForm):
     """
     Formulario para filtrar registros por diferentes criterios.
     """
-    
     start_date = DateField(
         'Fecha Desde',
         validators=[Optional()],
@@ -186,7 +216,6 @@ class FilterForm(FlaskForm):
             'class': 'form-control'
         }
     )
-    
     end_date = DateField(
         'Fecha Hasta',
         validators=[Optional()],
@@ -194,7 +223,6 @@ class FilterForm(FlaskForm):
             'class': 'form-control'
         }
     )
-    
     branch_filter = SelectField(
         'Sucursal',
         choices=[
@@ -210,36 +238,30 @@ class FilterForm(FlaskForm):
             'class': 'form-select'
         }
     )
-    
     submit = SubmitField(
         'Filtrar',
         render_kw={
             'class': 'btn btn-outline-primary'
         }
     )
-    
     def validate(self, extra_validators=None):
         """
         Validación personalizada para el rango de fechas.
         """
         if not super().validate(extra_validators):
             return False
-        
         if self.start_date.data and self.end_date.data:
             if self.start_date.data > self.end_date.data:
                 self.end_date.errors.append(
                     'La fecha final debe ser posterior a la fecha inicial.'
                 )
                 return False
-        
         return True
-
 
 class QuickStatsForm(FlaskForm):
     """
     Formulario rápido para obtener estadísticas por período.
     """
-    
     period = SelectField(
         'Período',
         choices=[
@@ -258,7 +280,6 @@ class QuickStatsForm(FlaskForm):
             'class': 'form-select'
         }
     )
-    
     custom_start = DateField(
         'Fecha Inicio (Personalizado)',
         validators=[Optional()],
@@ -266,7 +287,6 @@ class QuickStatsForm(FlaskForm):
             'class': 'form-control'
         }
     )
-    
     custom_end = DateField(
         'Fecha Fin (Personalizado)',
         validators=[Optional()],
@@ -274,7 +294,6 @@ class QuickStatsForm(FlaskForm):
             'class': 'form-control'
         }
     )
-    
     submit = SubmitField(
         'Ver Estadísticas',
         render_kw={
@@ -282,12 +301,10 @@ class QuickStatsForm(FlaskForm):
         }
     )
 
-
 class BulkActionForm(FlaskForm):
     """
     Formulario para acciones en lote (solo para administradores).
     """
-    
     action = SelectField(
         'Acción',
         choices=[
@@ -300,9 +317,7 @@ class BulkActionForm(FlaskForm):
             'class': 'form-select'
         }
     )
-    
     selected_records = HiddenField('Registros Seleccionados')
-    
     submit = SubmitField(
         'Ejecutar Acción',
         render_kw={

@@ -72,22 +72,20 @@ def login():
 
 
 @auth_bp.route('/register', methods=['GET', 'POST'])
+@login_required
 def register():
     """
     Ruta para el registro de nuevos usuarios de sucursal.
     
-    GET: Muestra el formulario de registro
-    POST: Procesa el registro y crea el nuevo usuario
+    Solo el administrador autenticado puede registrar nuevas sucursales.
     """
-    
-    # Si el usuario ya está autenticado, redirigir a la página principal
-    if current_user.is_authenticated:
+    # Solo permite admins
+    if current_user.role != 'admin':
+        flash('No tienes permiso para crear nuevas sucursales.', 'danger')
         return redirect(url_for('main.index'))
-    
-    # Instanciar el formulario de registro
+
     form = RegistrationForm()
-    
-    # Procesar el formulario si se envió via POST y es válido
+
     if form.validate_on_submit():
         try:
             # Crear nueva instancia de Usuario
@@ -96,41 +94,27 @@ def register():
                 email=form.email.data.strip().lower(),
                 branch_name=form.branch_name.data.strip(),
                 role='branch_user',  # Por defecto, usuarios de sucursal
-                is_active=True,      # Los nuevos usuarios están activos por defecto
-                is_admin=False       # No son administradores por defecto
+                is_active=True,
+                is_admin=False
             )
-            
-            # Establecer la contraseña (será hasheada automáticamente)
             user.set_password(form.password.data)
-            
-            # Añadir el usuario a la sesión de la base de datos
             db.session.add(user)
-            
-            # Confirmar los cambios en la base de datos
             db.session.commit()
-            
-            # Mostrar mensaje de éxito
+
             flash(
                 f'¡Registro exitoso! Usuario "{user.username}" creado para la sucursal "{user.branch_name}". '
                 'Ya puedes iniciar sesión.',
                 'success'
             )
-            
-            # Redirigir al formulario de login
             return redirect(url_for('auth.login'))
-            
         except Exception as e:
-            # En caso de error, hacer rollback y mostrar mensaje
             db.session.rollback()
             flash(
                 'Ocurrió un error al crear el usuario. Por favor, inténtalo de nuevo.',
                 'error'
             )
-            
-            # Log del error para debugging (en producción usar logging apropiado)
             print(f"Error en registro de usuario: {str(e)}")
-    
-    # Renderizar el formulario de registro (GET o si hay errores)
+
     return render_template('auth/register.html', title='Registrar Usuario', form=form)
 
 

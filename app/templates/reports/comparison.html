@@ -294,7 +294,6 @@
                     <div class="btn-group btn-group-sm" role="group">
                         <button type="button" class="btn btn-outline-primary active" onclick="switchChart('sales')">Ventas</button>
                         <button type="button" class="btn btn-outline-primary" onclick="switchChart('profit')">Ganancia</button>
-                        <button type="button" class="btn btn-outline-primary" onclick="switchChart('efficiency')">Eficiencia</button>
                     </div>
                 </div>
                 <div class="card-body">
@@ -614,18 +613,6 @@ function switchChart(type) {
                     data: profitData,
                     backgroundColor: profitData.map(p => p >= 0 ? '#10b981' : '#ef4444'),
                     borderColor: profitData.map(p => p >= 0 ? '#059669' : '#dc2626'),
-                    borderWidth: 1
-                }
-            ];
-            break;
-            
-        case 'efficiency':
-            comparisonChart.data.datasets = [
-                {
-                    label: 'Eficiencia (Ventas/Gastos)',
-                    data: efficiencyData,
-                    backgroundColor: '#3b82f6',
-                    borderColor: '#2563eb',
                     borderWidth: 1
                 }
             ];

@@ -113,11 +113,6 @@
                                     <i class="fas fa-sign-in-alt me-1"></i>Iniciar Sesión
                                 </a>
                             </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('auth.register') }}">
-                                    <i class="fas fa-user-plus me-1"></i>Registrarse
-                                </a>
-                            </li>
                         {% else %}
                             <!-- Menú desplegable para usuarios autenticados -->
                             <li class="nav-item dropdown position-relative">
@@ -141,18 +136,14 @@
                                             </span>
                                         </li>
                                     {% endif %}
-                                    <li><hr class="dropdown-divider"></li>
-                                    <li>
-                                        <a class="dropdown-item" href="{{ url_for('auth.profile') }}">
-                                            <i class="fas fa-user-edit me-2"></i>Mi Perfil
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a class="dropdown-item" href="{{ url_for('auth.change_password') }}">
-                                            <i class="fas fa-key me-2"></i>Cambiar Contraseña
-                                        </a>
-                                    </li>
-                                    <li><hr class="dropdown-divider"></li>
+                                    {% if current_user.role == 'admin' %}
+                                        <li>
+                                            <a class="dropdown-item" href="{{ url_for('auth.register') }}">
+                                                <i class="fas fa-plus-circle me-2"></i>Crear Sucursal
+                                            </a>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                    {% endif %}
                                     <li>
                                         <a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}">
                                             <i class="fas fa-sign-out-alt me-2"></i>Cerrar Sesión
@@ -290,7 +281,10 @@
             document.querySelectorAll('a[href^="#"]').forEach(anchor => {
                 anchor.addEventListener('click', function (e) {
                     e.preventDefault();
-                    const target = document.querySelector(this.getAttribute('href'));
+                    const href = this.getAttribute('href');
+                    // Ignorar si es solo "#"
+                    if (!href || href === '#') return;
+                    const target = document.querySelector(href);
                     if (target) {
                         target.scrollIntoView({
                             behavior: 'smooth'

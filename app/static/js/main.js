@@ -314,24 +314,21 @@ SucursalesApp.setupSmoothScrolling = function() {
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
         anchor.addEventListener('click', function(e) {
             const href = this.getAttribute('href');
-            
             // Ignorar enlaces vacíos o solo #
-            if (href === '#' || href === '') return;
-            
+            if (!href || href === '#') {
+                e.preventDefault();
+                return;
+            }
             const target = document.querySelector(href);
             if (target) {
                 e.preventDefault();
-                
-                const headerOffset = 70; // Espacio para navbar fija
+                const headerOffset = 70;
                 const elementPosition = target.getBoundingClientRect().top;
                 const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
-                
                 window.scrollTo({
                     top: offsetPosition,
                     behavior: 'smooth'
                 });
-                
-                // Enfocar elemento para accesibilidad
                 setTimeout(() => {
                     target.tabIndex = -1;
                     target.focus();

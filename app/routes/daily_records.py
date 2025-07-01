@@ -144,7 +144,7 @@ def create():
                 'success'
             )
             
-            return redirect(url_for('daily_records.index'))
+            return redirect(url_for('main.branch_dashboard'))
             
         except Exception as e:
             db.session.rollback()
