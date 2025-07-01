@@ -113,19 +113,19 @@
                             <select name="period" class="form-select" onchange="updatePeriod()">
                                 <option value="today" {{ 'selected' if request.args.get('period') == 'today' else '' }}>Hoy</option>
                                 <option value="week" {{ 'selected' if request.args.get('period') == 'week' else '' }}>Esta Semana</option>
-                                <option value="month" {{ 'selected' if request.args.get('period') == 'month' else '' }}>Este Mes</option>
+                                <option value="month" {{ 'selected' if request.args.get('period') == 'month' or not request.args.get('period') else '' }}>Este Mes</option>
                                 <option value="quarter" {{ 'selected' if request.args.get('period') == 'quarter' else '' }}>Este Trimestre</option>
                                 <option value="year" {{ 'selected' if request.args.get('period') == 'year' else '' }}>Este Año</option>
-                                <option value="custom">Personalizado</option>
+                                <option value="custom" {{ 'selected' if request.args.get('period') == 'custom' else '' }}>Personalizado</option>
                             </select>
                         </div>
                         
-                        <div class="col-md-3" id="customDates" style="display: none;">
+                        <div class="col-md-3" id="customDates" style="display: {{ 'block' if request.args.get('period') == 'custom' else 'none' }};">
                             <label class="form-label fw-semibold">Desde:</label>
                             <input type="date" name="start_date" class="form-control" value="{{ request.args.get('start_date', '') }}">
                         </div>
                         
-                        <div class="col-md-3" id="customDatesEnd" style="display: none;">
+                        <div class="col-md-3" id="customDatesEnd" style="display: {{ 'block' if request.args.get('period') == 'custom' else 'none' }};">
                             <label class="form-label fw-semibold">Hasta:</label>
                             <input type="date" name="end_date" class="form-control" value="{{ request.args.get('end_date', '') }}">
                         </div>
@@ -142,6 +142,19 @@
                             </button>
                         </div>
                     </form>
+                    
+                    {% if current_period %}
+                    <div class="mt-2">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Período actual: 
+                            <strong>{{ current_period.start.strftime('%d/%m/%Y') }} - {{ current_period.end.strftime('%d/%m/%Y') }}</strong>
+                            {% if general_stats %}
+                                ({{ general_stats.total_records }} registro{{ 's' if general_stats.total_records != 1 else '' }})
+                            {% endif %}
+                        </small>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -699,7 +712,20 @@ async function loadDashboardData() {
 
 async function updateSalesChart(days, targetElement = null) {
     try {
-        const response = await fetch(`{{ url_for('reports.api_daily_sales_chart') }}?days=${days}`);
+        // Obtener los parámetros de filtro actuales de la URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentPeriod = urlParams.get('period') || 'month';
+        const startDate = urlParams.get('start_date');
+        const endDate = urlParams.get('end_date');
+        
+        // Construir URL de la API con los filtros
+        let apiUrl = `{{ url_for('reports.api_daily_sales_chart') }}?days=${days}`;
+        
+        if (startDate && endDate) {
+            apiUrl += `&start_date=${startDate}&end_date=${endDate}`;
+        }
+        
+        const response = await fetch(apiUrl);
         const data = await response.json();
         
         if (data.status === 'success') {
@@ -714,12 +740,24 @@ async function updateSalesChart(days, targetElement = null) {
         }
     } catch (error) {
         console.error('Error actualizando gráfico de ventas:', error);
+        showToast('Error actualizando gráfico de ventas', 'error');
     }
 }
 
 async function loadPaymentMethodsData() {
     try {
-        const response = await fetch('{{ url_for('reports.api_payment_distribution') }}?days=30');
+        // Obtener parámetros de filtro actuales
+        const urlParams = new URLSearchParams(window.location.search);
+        const startDate = urlParams.get('start_date');
+        const endDate = urlParams.get('end_date');
+        
+        let apiUrl = '{{ url_for('reports.api_payment_distribution') }}?days=30';
+        
+        if (startDate && endDate) {
+            apiUrl += `&start_date=${startDate}&end_date=${endDate}`;
+        }
+        
+        const response = await fetch(apiUrl);
         const data = await response.json();
         
         if (data.status === 'success') {
@@ -754,7 +792,10 @@ async function loadPaymentMethodsData() {
 
 async function loadBranchPerformanceData() {
     try {
-        const response = await fetch('{{ url_for('reports.api_branch_performance') }}?period=month');
+        const urlParams = new URLSearchParams(window.location.search);
+        const period = urlParams.get('period') || 'month';
+        
+        const response = await fetch(`{{ url_for('reports.api_branch_performance') }}?period=${period}`);
         const data = await response.json();
         
         if (data.status === 'success') {
@@ -780,14 +821,26 @@ function updatePeriod() {
         customDates.style.display = 'none';
         customDatesEnd.style.display = 'none';
         // Auto-submit para períodos predefinidos
-        document.getElementById('periodForm').submit();
+        showLoadingAndSubmitReports();
     }
 }
 
 function resetFilters() {
-    const form = document.getElementById('periodForm');
-    form.reset();
+    // Ir a la página sin filtros (período por defecto: mes)
     window.location.href = '{{ url_for('reports.index') }}';
+}
+
+function showLoadingAndSubmitReports() {
+    const form = document.getElementById('periodForm');
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Cargando...';
+    submitBtn.disabled = true;
+    
+    setTimeout(() => {
+        form.submit();
+    }, 100);
 }
 
 async function refreshDashboard() {
@@ -857,6 +910,31 @@ function scheduleReport() {
 function exportPDF() {
     showToast('Exportación a PDF próximamente disponible', 'info');
 }
+
+// Validación de fechas personalizadas
+document.addEventListener('DOMContentLoaded', function() {
+    const startInput = document.querySelector('input[name="start_date"]');
+    const endInput = document.querySelector('input[name="end_date"]');
+    
+    if (startInput && endInput) {
+        startInput.addEventListener('change', function() {
+            endInput.min = this.value;
+            if (endInput.value && endInput.value < this.value) {
+                endInput.value = this.value;
+            }
+        });
+        
+        endInput.addEventListener('change', function() {
+            startInput.max = this.value;
+            if (startInput.value && startInput.value > this.value) {
+                startInput.value = this.value;
+            }
+        });
+    }
+    
+    // Cargar datos iniciales con filtros aplicados
+    loadDashboardData();
+});
 
 // Event listeners
 document.addEventListener('DOMContentLoaded', function() {

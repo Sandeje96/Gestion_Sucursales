@@ -16,6 +16,9 @@ from sqlalchemy import func, desc, extract, and_
 from datetime import date, datetime, timedelta
 import calendar
 import json
+import datetime
+import calendar
+from datetime import timedelta
 
 from app import db
 from app.models.user import User
@@ -37,19 +40,27 @@ def index():
     if not current_user.is_admin_user():
         abort(403)
     
-    # Obtener fechas para el período actual (este mes)
-    today = date.today()
-    start_of_month = today.replace(day=1)
+    # Obtener parámetros del filtro
+    period = request.args.get('period', 'month')
+    custom_start = request.args.get('start_date')
+    custom_end = request.args.get('end_date')
     
-    # Estadísticas generales
-    general_stats = get_general_statistics(start_of_month, today)
+    # Calcular fechas según el período
+    start_date, end_date = get_period_dates(period, custom_start, custom_end)
     
-    # Estadísticas por sucursal
-    branch_stats = get_branch_statistics(start_of_month, today)
+    print(f"🔍 Filtro aplicado en reports index: {period}")
+    print(f"📅 Rango de fechas: {start_date} - {end_date}")
+    
+    # Estadísticas generales para el período
+    general_stats = get_general_statistics(start_date, end_date)
+    
+    # Estadísticas por sucursal para el período
+    branch_stats = get_branch_statistics(start_date, end_date)
     
     # Datos para gráficos
-    daily_trends = get_daily_trends(30)  # Últimos 30 días
-    payment_distribution = get_payment_distribution(start_of_month, today)
+    days_in_period = (end_date - start_date).days + 1
+    daily_trends = get_daily_trends(days_in_period, start_date, end_date)
+    payment_distribution = get_payment_distribution(start_date, end_date)
     
     return render_template(
         'reports/index.html',
@@ -58,7 +69,7 @@ def index():
         branch_stats=branch_stats,
         daily_trends=daily_trends,
         payment_distribution=payment_distribution,
-        current_period={'start': start_of_month, 'end': today}
+        current_period={'start': start_date, 'end': end_date, 'type': period}
     )
 
 
@@ -123,25 +134,18 @@ def comparison():
     if not current_user.is_admin_user():
         abort(403)
     
-    # Período por defecto (este mes)
-    today = date.today()
-    start_date = today.replace(day=1)
-    end_date = today
+    # Obtener parámetros del filtro
+    period = request.args.get('period', 'month')
+    custom_start = request.args.get('start_date')
+    custom_end = request.args.get('end_date')
     
-    # Aplicar filtros si existen
-    if request.args.get('start_date'):
-        try:
-            start_date = datetime.strptime(request.args.get('start_date'), '%Y-%m-%d').date()
-        except ValueError:
-            pass
+    # Calcular fechas según el período
+    start_date, end_date = get_period_dates(period, custom_start, custom_end)
     
-    if request.args.get('end_date'):
-        try:
-            end_date = datetime.strptime(request.args.get('end_date'), '%Y-%m-%d').date()
-        except ValueError:
-            pass
+    print(f"🔍 Filtro aplicado: {period}")
+    print(f"📅 Rango de fechas: {start_date} - {end_date}")
     
-    # Obtener datos comparativos
+    # Obtener datos comparativos para el período seleccionado
     comparison_data = get_comprehensive_comparison(start_date, end_date)
     
     return render_template(
@@ -149,7 +153,8 @@ def comparison():
         title='Comparativa de Sucursales',
         comparison_data=comparison_data,
         start_date=start_date,
-        end_date=end_date
+        end_date=end_date,
+        current_period=period
     )
 
 
@@ -162,11 +167,18 @@ def api_daily_sales_chart():
     if not current_user.is_admin_user():
         abort(403)
     
+    # Obtener parámetros
     days = request.args.get('days', 30, type=int)
-    branch = request.args.get('branch', '')
+    start_date_param = request.args.get('start_date')
+    end_date_param = request.args.get('end_date')
     
-    end_date = date.today()
-    start_date = end_date - timedelta(days=days-1)
+    # Calcular fechas
+    if start_date_param and end_date_param:
+        start_date = datetime.datetime.strptime(start_date_param, '%Y-%m-%d').date()
+        end_date = datetime.datetime.strptime(end_date_param, '%Y-%m-%d').date()
+    else:
+        end_date = datetime.date.today()
+        start_date = end_date - timedelta(days=days-1)
     
     # Query base
     query = db.session.query(
@@ -179,6 +191,7 @@ def api_daily_sales_chart():
     )
     
     # Filtrar por sucursal si se especifica
+    branch = request.args.get('branch', '')
     if branch:
         query = query.filter(DailyRecord.branch_name == branch)
     
@@ -228,80 +241,26 @@ def api_daily_sales_chart():
     })
 
 
-@reports_bp.route('/api/branch-performance')
-@login_required
-def api_branch_performance():
-    """
-    API para datos de rendimiento por sucursal.
-    """
-    if not current_user.is_admin_user():
-        abort(403)
-    
-    period = request.args.get('period', 'month')
-    
-    # Calcular fechas según el período
-    today = date.today()
-    if period == 'week':
-        start_date = today - timedelta(days=6)
-    elif period == 'month':
-        start_date = today.replace(day=1)
-    elif period == 'quarter':
-        quarter_start_month = ((today.month - 1) // 3) * 3 + 1
-        start_date = date(today.year, quarter_start_month, 1)
-    else:
-        start_date = today.replace(day=1)
-    
-    # Obtener datos por sucursal
-    branch_data = db.session.query(
-        DailyRecord.branch_name,
-        func.sum(DailyRecord.total_sales).label('total_sales'),
-        func.sum(DailyRecord.total_expenses).label('total_expenses'),
-        func.count(DailyRecord.id).label('records_count'),
-        func.avg(DailyRecord.total_sales).label('avg_sales')
-    ).filter(
-        DailyRecord.record_date.between(start_date, today)
-    ).group_by(DailyRecord.branch_name).all()
-    
-    # Formatear datos
-    branches = []
-    sales = []
-    expenses = []
-    net_profits = []
-    avg_sales = []
-    
-    for data in branch_data:
-        branches.append(data.branch_name)
-        sales.append(float(data.total_sales or 0))
-        expenses.append(float(data.total_expenses or 0))
-        net_profits.append(float(data.total_sales or 0) - float(data.total_expenses or 0))
-        avg_sales.append(float(data.avg_sales or 0))
-    
-    return jsonify({
-        'status': 'success',
-        'data': {
-            'branches': branches,
-            'sales': sales,
-            'expenses': expenses,
-            'net_profits': net_profits,
-            'avg_sales': avg_sales,
-            'period': period,
-            'start_date': start_date.isoformat(),
-            'end_date': today.isoformat()
-        }
-    })
-
 
 @reports_bp.route('/api/payment-methods-distribution')
 @login_required
 def api_payment_distribution():
     """
-    API para distribución de métodos de pago.
+    API para distribución de métodos de pago con filtros de fecha.
     """
+    # Obtener parámetros
     days = request.args.get('days', 30, type=int)
+    start_date_param = request.args.get('start_date')
+    end_date_param = request.args.get('end_date')
     branch = request.args.get('branch', '')
     
-    end_date = date.today()
-    start_date = end_date - timedelta(days=days-1)
+    # Calcular fechas
+    if start_date_param and end_date_param:
+        start_date = datetime.datetime.strptime(start_date_param, '%Y-%m-%d').date()
+        end_date = datetime.datetime.strptime(end_date_param, '%Y-%m-%d').date()
+    else:
+        end_date = datetime.date.today()
+        start_date = end_date - timedelta(days=days-1)
     
     # Query base
     query = db.session.query(
@@ -442,6 +401,49 @@ def export_csv():
 
 # Funciones auxiliares para cálculos estadísticos
 
+def get_period_dates(period, custom_start=None, custom_end=None):
+    """
+    Calcular fechas de inicio y fin basadas en el período seleccionado.
+    """
+    today = datetime.date.today()
+    
+    if period == 'today':
+        return today, today
+    
+    elif period == 'week':
+        # Esta semana (lunes a domingo)
+        start = today - timedelta(days=today.weekday())
+        return start, today
+    
+    elif period == 'month':
+        # Este mes
+        start = today.replace(day=1)
+        return start, today
+    
+    elif period == 'quarter':
+        # Este trimestre
+        quarter_start_month = ((today.month - 1) // 3) * 3 + 1
+        start = datetime.date(today.year, quarter_start_month, 1)
+        return start, today
+    
+    elif period == 'year':
+        # Este año
+        start = datetime.date(today.year, 1, 1)
+        return start, today
+    
+    elif period == 'custom' and custom_start and custom_end:
+        # Período personalizado
+        if isinstance(custom_start, str):
+            custom_start = datetime.datetime.strptime(custom_start, '%Y-%m-%d').date()
+        if isinstance(custom_end, str):
+            custom_end = datetime.datetime.strptime(custom_end, '%Y-%m-%d').date()
+        return custom_start, custom_end
+    
+    else:
+        # Por defecto: este mes
+        start = today.replace(day=1)
+        return start, today
+
 def get_general_statistics(start_date, end_date):
     """
     Obtener estadísticas generales del sistema.
@@ -505,12 +507,13 @@ def get_branch_statistics(start_date, end_date):
     return result
 
 
-def get_daily_trends(days):
+def get_daily_trends(days, start_date=None, end_date=None):
     """
-    Obtener tendencias diarias para gráficos.
+    Obtener tendencias diarias para gráficos con fechas específicas.
     """
-    end_date = date.today()
-    start_date = end_date - timedelta(days=days-1)
+    if start_date is None or end_date is None:
+        end_date = datetime.date.today()
+        start_date = end_date - timedelta(days=days-1)
     
     daily_data = db.session.query(
         DailyRecord.record_date,
@@ -632,3 +635,98 @@ def get_comprehensive_comparison(start_date, end_date):
     Obtener comparativa completa entre todas las sucursales.
     """
     return get_branch_statistics(start_date, end_date)
+
+@reports_bp.route('/api/branch-performance')
+@login_required
+def api_branch_performance():
+    """
+    API para datos de rendimiento por sucursal con soporte para períodos.
+    """
+    if not current_user.is_admin_user():
+        abort(403)
+    
+    # Obtener parámetros
+    period = request.args.get('period', 'month')
+    custom_start = request.args.get('start_date')
+    custom_end = request.args.get('end_date')
+    
+    # Calcular fechas según el período
+    start_date, end_date = get_period_dates(period, custom_start, custom_end)
+    
+    # Obtener datos por sucursal
+    branch_data = db.session.query(
+        DailyRecord.branch_name,
+        func.sum(DailyRecord.total_sales).label('total_sales'),
+        func.sum(DailyRecord.total_expenses).label('total_expenses'),
+        func.count(DailyRecord.id).label('records_count'),
+        func.avg(DailyRecord.total_sales).label('avg_sales')
+    ).filter(
+        DailyRecord.record_date.between(start_date, end_date)
+    ).group_by(DailyRecord.branch_name).all()
+    
+    # Formatear datos
+    branches = []
+    sales = []
+    expenses = []
+    net_profits = []
+    avg_sales = []
+    
+    for data in branch_data:
+        branches.append(data.branch_name)
+        sales.append(float(data.total_sales or 0))
+        expenses.append(float(data.total_expenses or 0))
+        net_profits.append(float(data.total_sales or 0) - float(data.total_expenses or 0))
+        avg_sales.append(float(data.avg_sales or 0))
+    
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'branches': branches,
+            'sales': sales,
+            'expenses': expenses,
+            'net_profits': net_profits,
+            'avg_sales': avg_sales,
+            'period': period,
+            'start_date': start_date.isoformat(),
+            'end_date': end_date.isoformat()
+        }
+    })
+
+# También agregar esta función auxiliar mejorada al final del archivo:
+
+def get_comprehensive_comparison(start_date, end_date):
+    """
+    Obtener comparativa completa entre todas las sucursales para un período específico.
+    """
+    # Obtener datos agrupados por sucursal
+    branch_stats = db.session.query(
+        DailyRecord.branch_name,
+        func.count(DailyRecord.id).label('records_count'),
+        func.sum(DailyRecord.total_sales).label('total_sales'),
+        func.sum(DailyRecord.total_expenses).label('total_expenses'),
+        func.avg(DailyRecord.total_sales).label('avg_sales'),
+        func.sum(DailyRecord.cash_sales).label('cash_sales'),
+        func.sum(DailyRecord.mercadopago_sales).label('mercadopago_sales'),
+        func.sum(DailyRecord.debit_sales).label('debit_sales'),
+        func.sum(DailyRecord.credit_sales).label('credit_sales')
+    ).filter(
+        DailyRecord.record_date.between(start_date, end_date)
+    ).group_by(DailyRecord.branch_name).all()
+    
+    result = {}
+    for stat in branch_stats:
+        result[stat.branch_name] = {
+            'records_count': stat.records_count,
+            'total_sales': float(stat.total_sales or 0),
+            'total_expenses': float(stat.total_expenses or 0),
+            'net_profit': float(stat.total_sales or 0) - float(stat.total_expenses or 0),
+            'avg_sales': float(stat.avg_sales or 0),
+            'payment_breakdown': {
+                'cash': float(stat.cash_sales or 0),
+                'mercadopago': float(stat.mercadopago_sales or 0),
+                'debit': float(stat.debit_sales or 0),
+                'credit': float(stat.credit_sales or 0)
+            }
+        }
+    
+    return result
