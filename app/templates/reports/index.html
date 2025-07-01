@@ -520,197 +520,263 @@ function formatPercentageArgentino(value, decimals = 1) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Inicializar gráficos
-    initializeSalesTrendChart();
-    initializePaymentMethodsChart();
-    initializeBranchPerformanceChart();
+    console.log('📊 Inicializando Dashboard de Reportes...');
     
-    // Cargar datos iniciales
-    loadDashboardData();
-    
-    // Configurar actualizaciones automáticas cada 5 minutos
-    setInterval(refreshDashboard, 300000);
+    // Solo inicializar gráficos si hay datos y elementos existen
+    {% if general_stats %}
+        // Verificar que los elementos canvas existan antes de inicializar
+        if (document.getElementById('salesTrendChart')) {
+            initializeSalesTrendChart();
+        } else {
+            console.warn('⚠️ Canvas salesTrendChart no encontrado');
+        }
+        
+        if (document.getElementById('paymentMethodsChart')) {
+            initializePaymentMethodsChart();
+        } else {
+            console.warn('⚠️ Canvas paymentMethodsChart no encontrado');
+        }
+        
+        if (document.getElementById('branchPerformanceChart')) {
+            initializeBranchPerformanceChart();
+        } else {
+            console.warn('⚠️ Canvas branchPerformanceChart no encontrado');
+        }
+        
+        // Cargar datos solo si los gráficos se inicializaron
+        setTimeout(() => {
+            loadDashboardData();
+        }, 100);
+        
+        // Configurar actualizaciones automáticas cada 5 minutos
+        setInterval(refreshDashboard, 300000);
+    {% else %}
+        console.log('📭 No hay datos disponibles - omitiendo inicialización de gráficos');
+    {% endif %}
 });
 
 function initializeSalesTrendChart() {
-    const ctx = document.getElementById('salesTrendChart').getContext('2d');
-    salesTrendChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [
-                {
-                    label: 'Ventas',
-                    data: [],
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    tension: 0.1,
-                    fill: true
-                },
-                {
-                    label: 'Gastos',
-                    data: [],
-                    borderColor: '#ef4444',
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                    tension: 0.1,
-                    fill: true
-                },
-                {
-                    label: 'Ganancia Neta',
-                    data: [],
-                    borderColor: '#3b82f6',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                    tension: 0.1,
-                    fill: false
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'top'
-                },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false,
-                    callbacks: {
-                        label: function(context) {
-                            return context.dataset.label + ': ' + formatCurrencyArgentino(context.parsed.y);
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return formatCurrencyArgentino(value);
-                        }
-                    }
-                }
-            },
-            interaction: {
-                mode: 'nearest',
-                axis: 'x',
-                intersect: false
-            }
+    try {
+        const canvas = document.getElementById('salesTrendChart');
+        if (!canvas) {
+            console.error('❌ Canvas salesTrendChart no encontrado');
+            return;
         }
-    });
+        
+        const ctx = canvas.getContext('2d');
+        salesTrendChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Ventas',
+                        data: [],
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        tension: 0.1,
+                        fill: true
+                    },
+                    {
+                        label: 'Gastos',
+                        data: [],
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        tension: 0.1,
+                        fill: true
+                    },
+                    {
+                        label: 'Ganancia Neta',
+                        data: [],
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.1,
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top'
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': ' + formatCurrencyArgentino(context.parsed.y);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return formatCurrencyArgentino(value);
+                            }
+                        }
+                    }
+                },
+                interaction: {
+                    mode: 'nearest',
+                    axis: 'x',
+                    intersect: false
+                }
+            }
+        });
+        
+        console.log('✅ Gráfico de tendencia de ventas inicializado');
+    } catch (error) {
+        console.error('❌ Error inicializando gráfico de ventas:', error);
+    }
 }
 
 function initializePaymentMethodsChart() {
-    const ctx = document.getElementById('paymentMethodsChart').getContext('2d');
-    paymentMethodsChart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: ['Efectivo', 'MercadoPago', 'Débito', 'Crédito'],
-            datasets: [{
-                data: [0, 0, 0, 0],
-                backgroundColor: [
-                    '#10b981', // Verde para efectivo
-                    '#3b82f6', // Azul para MercadoPago
-                    '#f59e0b', // Amarillo para débito
-                    '#ef4444'  // Rojo para crédito
-                ],
-                borderWidth: 2,
-                borderColor: '#fff'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom'
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            const value = context.parsed;
-                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                            const percentage = total > 0 ? ((value / total) * 100).toFixed(1).replace('.', ',') : 0;
-                            return `${context.label}: ${formatCurrencyArgentino(value)} (${percentage}%)`;
+    try {
+        const canvas = document.getElementById('paymentMethodsChart');
+        if (!canvas) {
+            console.error('❌ Canvas paymentMethodsChart no encontrado');
+            return;
+        }
+        
+        const ctx = canvas.getContext('2d');
+        paymentMethodsChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Efectivo', 'MercadoPago', 'Débito', 'Crédito'],
+                datasets: [{
+                    data: [0, 0, 0, 0],
+                    backgroundColor: [
+                        '#10b981', // Verde para efectivo
+                        '#3b82f6', // Azul para MercadoPago
+                        '#f59e0b', // Amarillo para débito
+                        '#ef4444'  // Rojo para crédito
+                    ],
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.parsed;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = total > 0 ? ((value / total) * 100).toFixed(1).replace('.', ',') : 0;
+                                return `${context.label}: ${formatCurrencyArgentino(value)} (${percentage}%)`;
+                            }
                         }
                     }
                 }
             }
-        }
-    });
+        });
+        
+        console.log('✅ Gráfico de métodos de pago inicializado');
+    } catch (error) {
+        console.error('❌ Error inicializando gráfico de métodos de pago:', error);
+    }
 }
 
 function initializeBranchPerformanceChart() {
-    const ctx = document.getElementById('branchPerformanceChart').getContext('2d');
-    branchPerformanceChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: [],
-            datasets: [
-                {
-                    label: 'Ventas',
-                    data: [],
-                    backgroundColor: '#10b981',
-                    borderColor: '#059669',
-                    borderWidth: 1
-                },
-                {
-                    label: 'Gastos',
-                    data: [],
-                    backgroundColor: '#ef4444',
-                    borderColor: '#dc2626',
-                    borderWidth: 1
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'top'
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return context.dataset.label + ': ' + formatCurrencyArgentino(context.parsed.y);
+    try {
+        const canvas = document.getElementById('branchPerformanceChart');
+        if (!canvas) {
+            console.error('❌ Canvas branchPerformanceChart no encontrado');
+            return;
+        }
+        
+        const ctx = canvas.getContext('2d');
+        branchPerformanceChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Ventas',
+                        data: [],
+                        backgroundColor: '#10b981',
+                        borderColor: '#059669',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Gastos',
+                        data: [],
+                        backgroundColor: '#ef4444',
+                        borderColor: '#dc2626',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': ' + formatCurrencyArgentino(context.parsed.y);
+                            }
                         }
                     }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return formatCurrencyArgentino(value);
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return formatCurrencyArgentino(value);
+                            }
                         }
                     }
                 }
             }
-        }
-    });
+        });
+        
+        console.log('✅ Gráfico de rendimiento por sucursal inicializado');
+    } catch (error) {
+        console.error('❌ Error inicializando gráfico de rendimiento:', error);
+    }
 }
-
 
 async function loadDashboardData() {
     console.log('📊 Cargando datos del dashboard...');
     
     try {
-        // Cargar datos de tendencia de ventas
-        await updateSalesChart(30);
-        console.log('✅ Gráfico de ventas actualizado');
+        // Solo cargar datos si hay gráficos inicializados
+        const promises = [];
         
-        // Cargar datos de métodos de pago
-        await loadPaymentMethodsData();
-        console.log('✅ Datos de métodos de pago actualizados');
+        if (salesTrendChart) {
+            promises.push(updateSalesChart(30));
+        }
         
-        // Cargar datos de rendimiento por sucursal
-        await loadBranchPerformanceData();
-        console.log('✅ Datos de rendimiento actualizados');
+        if (paymentMethodsChart) {
+            promises.push(loadPaymentMethodsData());
+        }
         
-        console.log('🎉 Dashboard cargado completamente');
+        if (branchPerformanceChart) {
+            promises.push(loadBranchPerformanceData());
+        }
+        
+        if (promises.length > 0) {
+            await Promise.all(promises);
+            console.log('🎉 Dashboard cargado completamente');
+        } else {
+            console.log('📭 No hay gráficos para cargar datos');
+        }
         
     } catch (error) {
         console.error('❌ Error cargando datos del dashboard:', error);
@@ -722,6 +788,11 @@ async function loadDashboardData() {
 }
 
 async function updateSalesChart(days, targetElement = null) {
+    if (!salesTrendChart) {
+        console.warn('⚠️ salesTrendChart no está inicializado');
+        return;
+    }
+    
     try {
         // Obtener los parámetros de filtro actuales de la URL
         const urlParams = new URLSearchParams(window.location.search);
@@ -748,14 +819,23 @@ async function updateSalesChart(days, targetElement = null) {
                 document.querySelectorAll('.btn-group .btn').forEach(btn => btn.classList.remove('active'));
                 targetElement.classList.add('active');
             }
+            
+            console.log('✅ Gráfico de ventas actualizado');
         }
     } catch (error) {
-        console.error('Error actualizando gráfico de ventas:', error);
-        showToast('Error actualizando gráfico de ventas', 'error');
+        console.error('❌ Error actualizando gráfico de ventas:', error);
+        if (typeof showToast === 'function') {
+            showToast('Error actualizando gráfico de ventas', 'error');
+        }
     }
 }
 
 async function loadPaymentMethodsData() {
+    if (!paymentMethodsChart) {
+        console.warn('⚠️ paymentMethodsChart no está inicializado');
+        return;
+    }
+    
     try {
         // Obtener parámetros de filtro actuales
         const urlParams = new URLSearchParams(window.location.search);
@@ -790,18 +870,28 @@ async function loadPaymentMethodsData() {
                 }
             });
             
-            if (maxValue > 0) {
-                document.getElementById('topPaymentMethod').textContent = chartData.labels[maxIndex];
+            const topMethodElement = document.getElementById('topPaymentMethod');
+            const topPercentageElement = document.getElementById('topPaymentPercentage');
+            
+            if (maxValue > 0 && topMethodElement && topPercentageElement) {
+                topMethodElement.textContent = chartData.labels[maxIndex];
                 const percentage = percentages[Object.keys(percentages)[maxIndex]];
-                document.getElementById('topPaymentPercentage').textContent = formatPercentageArgentino(percentage, 1);
+                topPercentageElement.textContent = formatPercentageArgentino(percentage, 1);
             }
+            
+            console.log('✅ Datos de métodos de pago actualizados');
         }
     } catch (error) {
-        console.error('Error cargando datos de métodos de pago:', error);
+        console.error('❌ Error cargando datos de métodos de pago:', error);
     }
 }
 
 async function loadBranchPerformanceData() {
+    if (!branchPerformanceChart) {
+        console.warn('⚠️ branchPerformanceChart no está inicializado');
+        return;
+    }
+    
     try {
         console.log('🔄 Cargando datos de rendimiento por sucursal...');
         
@@ -834,12 +924,6 @@ async function loadBranchPerformanceData() {
         }
         
         if (data.status === 'success' && data.data) {
-            // Verificar que branchPerformanceChart existe
-            if (!branchPerformanceChart) {
-                console.warn('⚠️ branchPerformanceChart no está inicializado');
-                return;
-            }
-            
             branchPerformanceChart.data.labels = data.data.branches || [];
             branchPerformanceChart.data.datasets[0].data = data.data.sales || [];
             branchPerformanceChart.data.datasets[1].data = data.data.expenses || [];
@@ -852,26 +936,24 @@ async function loadBranchPerformanceData() {
             console.warn('⚠️ Error del servidor:', errorMsg);
             
             // Mostrar datos vacíos en lugar de error
-            if (branchPerformanceChart) {
-                branchPerformanceChart.data.labels = [];
-                branchPerformanceChart.data.datasets[0].data = [];
-                branchPerformanceChart.data.datasets[1].data = [];
-                branchPerformanceChart.update();
-            }
+            branchPerformanceChart.data.labels = [];
+            branchPerformanceChart.data.datasets[0].data = [];
+            branchPerformanceChart.data.datasets[1].data = [];
+            branchPerformanceChart.update();
             
-            showToast(`Sin datos de rendimiento: ${errorMsg}`, 'warning');
+            if (typeof showToast === 'function') {
+                showToast(`Sin datos de rendimiento: ${errorMsg}`, 'warning');
+            }
         }
         
     } catch (error) {
         console.error('❌ Error en loadBranchPerformanceData:', error);
         
         // Mostrar datos vacíos en caso de error
-        if (branchPerformanceChart) {
-            branchPerformanceChart.data.labels = [];
-            branchPerformanceChart.data.datasets[0].data = [];
-            branchPerformanceChart.data.datasets[1].data = [];
-            branchPerformanceChart.update();
-        }
+        branchPerformanceChart.data.labels = [];
+        branchPerformanceChart.data.datasets[0].data = [];
+        branchPerformanceChart.data.datasets[1].data = [];
+        branchPerformanceChart.update();
         
         // Mostrar toast solo si showToast está disponible
         if (typeof showToast === 'function') {
@@ -882,17 +964,18 @@ async function loadBranchPerformanceData() {
     }
 }
 
+// Resto de funciones (updatePeriod, resetFilters, etc.)
 function updatePeriod() {
     const periodSelect = document.querySelector('select[name="period"]');
     const customDates = document.getElementById('customDates');
     const customDatesEnd = document.getElementById('customDatesEnd');
     
-    if (periodSelect.value === 'custom') {
-        customDates.style.display = 'block';
-        customDatesEnd.style.display = 'block';
+    if (periodSelect && periodSelect.value === 'custom') {
+        if (customDates) customDates.style.display = 'block';
+        if (customDatesEnd) customDatesEnd.style.display = 'block';
     } else {
-        customDates.style.display = 'none';
-        customDatesEnd.style.display = 'none';
+        if (customDates) customDates.style.display = 'none';
+        if (customDatesEnd) customDatesEnd.style.display = 'none';
         // Auto-submit para períodos predefinidos
         showLoadingAndSubmitReports();
     }
@@ -905,7 +988,11 @@ function resetFilters() {
 
 function showLoadingAndSubmitReports() {
     const form = document.getElementById('periodForm');
+    if (!form) return;
+    
     const submitBtn = form.querySelector('button[type="submit"]');
+    if (!submitBtn) return;
+    
     const originalText = submitBtn.innerHTML;
     
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Cargando...';
@@ -918,6 +1005,8 @@ function showLoadingAndSubmitReports() {
 
 async function refreshDashboard() {
     const refreshBtn = document.querySelector('button[onclick="refreshDashboard()"]');
+    if (!refreshBtn) return;
+    
     const originalText = refreshBtn.innerHTML;
     
     refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Actualizando...';
@@ -925,28 +1014,41 @@ async function refreshDashboard() {
     
     try {
         await loadDashboardData();
-        showToast('Dashboard actualizado correctamente', 'success');
+        if (typeof showToast === 'function') {
+            showToast('Dashboard actualizado correctamente', 'success');
+        }
     } catch (error) {
-        showToast('Error actualizando el dashboard', 'error');
+        if (typeof showToast === 'function') {
+            showToast('Error actualizando el dashboard', 'error');
+        }
     } finally {
         refreshBtn.innerHTML = originalText;
         refreshBtn.disabled = false;
     }
 }
 
+// Funciones auxiliares
 function generateReport() {
     // Configurar fechas por defecto
     const today = new Date();
     const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     
-    document.querySelector('input[name="report_start"]').value = firstDayOfMonth.toISOString().split('T')[0];
-    document.querySelector('input[name="report_end"]').value = today.toISOString().split('T')[0];
+    const startInput = document.querySelector('input[name="report_start"]');
+    const endInput = document.querySelector('input[name="report_end"]');
     
-    new bootstrap.Modal(document.getElementById('generateReportModal')).show();
+    if (startInput) startInput.value = firstDayOfMonth.toISOString().split('T')[0];
+    if (endInput) endInput.value = today.toISOString().split('T')[0];
+    
+    const modal = document.getElementById('generateReportModal');
+    if (modal) {
+        new bootstrap.Modal(modal).show();
+    }
 }
 
 function submitCustomReport() {
     const form = document.getElementById('customReportForm');
+    if (!form) return;
+    
     const formData = new FormData(form);
     
     if (!form.checkValidity()) {
@@ -961,7 +1063,8 @@ function submitCustomReport() {
     params.append('format', formData.get('format'));
     
     // Agregar sucursales seleccionadas
-    if (!document.getElementById('allBranches').checked) {
+    const allBranchesCheck = document.getElementById('allBranches');
+    if (!allBranchesCheck || !allBranchesCheck.checked) {
         const selectedBranches = formData.getAll('branches');
         selectedBranches.forEach(branch => params.append('branches', branch));
     }
@@ -971,17 +1074,32 @@ function submitCustomReport() {
     window.open(downloadUrl, '_blank');
     
     // Cerrar modal
-    bootstrap.Modal.getInstance(document.getElementById('generateReportModal')).hide();
+    const modal = document.getElementById('generateReportModal');
+    if (modal) {
+        bootstrap.Modal.getInstance(modal).hide();
+    }
     
-    showToast('Descargando reporte personalizado...', 'info');
-}
-
-function scheduleReport() {
-    showToast('Función de programación de reportes próximamente disponible', 'info');
+    if (typeof showToast === 'function') {
+        showToast('Descargando reporte personalizado...', 'info');
+    }
 }
 
 function exportPDF() {
-    showToast('Exportación a PDF próximamente disponible', 'info');
+    if (typeof showToast === 'function') {
+        showToast('Exportación a PDF próximamente disponible', 'info');
+    } else {
+        alert('Exportación a PDF próximamente disponible');
+    }
+}
+
+// Función auxiliar para mostrar notificaciones
+function showToast(message, type = 'info') {
+    // Esta función debe estar definida en main.js
+    if (typeof window.showToast === 'function') {
+        window.showToast(message, type);
+    } else {
+        console.log(`${type.toUpperCase()}: ${message}`);
+    }
 }
 
 // Validación de fechas personalizadas
@@ -1005,17 +1123,11 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Cargar datos iniciales con filtros aplicados
-    loadDashboardData();
-});
-
-// Event listeners
-document.addEventListener('DOMContentLoaded', function() {
-    // Toggle de selección de sucursales
+    // Toggle de selección de sucursales en modal
     const allBranchesCheck = document.getElementById('allBranches');
     const branchSelection = document.getElementById('branchSelection');
     
-    if (allBranchesCheck) {
+    if (allBranchesCheck && branchSelection) {
         allBranchesCheck.addEventListener('change', function() {
             branchSelection.style.display = this.checked ? 'none' : 'block';
             
@@ -1025,36 +1137,14 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
-    // Validación de fechas en el modal
-    const startDateInput = document.querySelector('input[name="report_start"]');
-    const endDateInput = document.querySelector('input[name="report_end"]');
-    
-    if (startDateInput && endDateInput) {
-        startDateInput.addEventListener('change', function() {
-            endDateInput.min = this.value;
-        });
-        
-        endDateInput.addEventListener('change', function() {
-            startDateInput.max = this.value;
-        });
-    }
 });
 
-// Función auxiliar para mostrar notificaciones
-function showToast(message, type = 'info') {
-    // Esta función debe estar definida en main.js
-    if (typeof window.showToast === 'function') {
-        window.showToast(message, type);
-    } else {
-        alert(message);
-    }
-}
-
-// Auto-refresh de gráficos cada 5 minutos
+// Auto-refresh de gráficos cada 5 minutos (solo si hay datos)
+{% if general_stats %}
 setInterval(() => {
     loadDashboardData();
 }, 300000);
+{% endif %}
 
 // Responsive charts - redimensionar cuando cambie el tamaño de ventana
 window.addEventListener('resize', function() {
@@ -1062,5 +1152,7 @@ window.addEventListener('resize', function() {
     if (paymentMethodsChart) paymentMethodsChart.resize();
     if (branchPerformanceChart) branchPerformanceChart.resize();
 });
+
+console.log('📊 Scripts de reportes cargados correctamente');
 </script>
 {% endblock %}
