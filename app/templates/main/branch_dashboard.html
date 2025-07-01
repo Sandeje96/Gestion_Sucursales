@@ -78,14 +78,14 @@
                             <h4 class="mb-2 opacity-90">Sucursal: {{ current_user.branch_name }}</h4>
                             <p class="mb-0 opacity-75">
                                 <i class="fas fa-calendar me-2"></i>
-                                {{ moment().format('dddd, DD [de] MMMM [de] YYYY') if moment else "Hoy" }}
+                                {{ now.strftime('%A, %d de %B de %Y') }}
                             </p>
                         </div>
                         <div class="col-md-4 text-end">
                             <div class="d-flex justify-content-end align-items-center">
                                 <div class="me-3">
                                     <div class="text-center">
-                                        <div class="h1 mb-0">{{ moment().format('HH:mm') if moment else "" }}</div>
+                                        <div class="h1 mb-0">{{ now.strftime('%H:%M') }}</div>
                                         <small class="opacity-75">Hora actual</small>
                                     </div>
                                 </div>

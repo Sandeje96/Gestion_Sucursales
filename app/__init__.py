@@ -104,11 +104,34 @@ def create_app(config_name=None):
         db.session.rollback()
         return render_template('errors/500.html'), 500
     
-    # Función de utilidad para el contexto de plantillas
+    # Context processors para inyectar datos en todas las plantillas
     @app.context_processor
     def inject_user():
         from flask_login import current_user
         return dict(current_user=current_user)
+    
+    @app.context_processor
+    def inject_datetime():
+        """
+        Inyectar funciones de fecha y hora en todas las plantillas.
+        """
+        import datetime
+        import pytz
+        
+        # Zona horaria argentina
+        tz_arg = pytz.timezone('America/Argentina/Buenos_Aires')
+        now_arg = datetime.datetime.now(tz_arg)
+        
+        return {
+            'now': now_arg,
+            'current_year': now_arg.year,
+            'current_date': now_arg.date(),
+            'current_time': now_arg.time(),
+            'datetime': datetime,
+            'format_date': lambda d: d.strftime('%d/%m/%Y') if d else '',
+            'format_datetime': lambda dt: dt.strftime('%d/%m/%Y %H:%M') if dt else '',
+            'format_time': lambda t: t.strftime('%H:%M') if t else ''
+        }
     
     return app
 

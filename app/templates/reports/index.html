@@ -239,9 +239,9 @@
                         <i class="fas fa-chart-area me-2"></i>Tendencia de Ventas (Últimos 30 días)
                     </h6>
                     <div class="btn-group btn-group-sm" role="group">
-                        <button type="button" class="btn btn-outline-primary active" onclick="updateSalesChart(7)">7D</button>
-                        <button type="button" class="btn btn-outline-primary" onclick="updateSalesChart(15)">15D</button>
-                        <button type="button" class="btn btn-outline-primary" onclick="updateSalesChart(30)">30D</button>
+                        <button type="button" class="btn btn-outline-primary active" onclick="updateSalesChart(7, this)">7D</button>
+                        <button type="button" class="btn btn-outline-primary" onclick="updateSalesChart(15, this)">15D</button>
+                        <button type="button" class="btn btn-outline-primary" onclick="updateSalesChart(30, this)">30D</button>
                     </div>
                 </div>
                 <div class="card-body">
@@ -697,7 +697,7 @@ async function loadDashboardData() {
     }
 }
 
-async function updateSalesChart(days) {
+async function updateSalesChart(days, targetElement = null) {
     try {
         const response = await fetch(`{{ url_for('reports.api_daily_sales_chart') }}?days=${days}`);
         const data = await response.json();
@@ -706,9 +706,11 @@ async function updateSalesChart(days) {
             salesTrendChart.data = data.data;
             salesTrendChart.update();
             
-            // Actualizar botones activos
-            document.querySelectorAll('.btn-group .btn').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
+            // Actualizar botones activos SOLO si se proporciona targetElement
+            if (targetElement) {
+                document.querySelectorAll('.btn-group .btn').forEach(btn => btn.classList.remove('active'));
+                targetElement.classList.add('active');
+            }
         }
     } catch (error) {
         console.error('Error actualizando gráfico de ventas:', error);
