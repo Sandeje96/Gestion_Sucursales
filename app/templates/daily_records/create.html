@@ -1,4 +1,3 @@
-{# app/templates/daily_records/create.html #}
 {% extends "layout/base.html" %}
 
 {% block title %}
@@ -172,7 +171,11 @@
                     <div class="row">
                         <div class="col-md-6">
                             {{ form.record_date.label(class="form-label") }}
-                            {{ form.record_date(class="form-control" + (' is-invalid' if form.record_date.errors else '')) }}
+                            {# Solo muestra la fecha, no editable #}
+                            {{ form.record_date(type="hidden") }}
+                            <span class="form-control-plaintext">
+                                {{ form.record_date.data.strftime('%d/%m/%Y') if form.record_date.data else '' }}
+                            </span>
                             {% if form.record_date.errors %}
                                 <div class="invalid-feedback">
                                     {% for error in form.record_date.errors %}
@@ -182,7 +185,7 @@
                             {% endif %}
                             <div class="form-text">
                                 <i class="fas fa-info-circle me-1"></i>
-                                Fecha correspondiente al registro
+                                Fecha correspondiente al registro (no editable)
                             </div>
                         </div>
                     </div>
@@ -402,21 +405,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }, 10000);
     });
-    const dateInput = document.querySelector('input[name="record_date"]');
-    if (dateInput) {
-        const today = new Date().toISOString().split('T')[0];
-        dateInput.setAttribute('max', today);
-        dateInput.addEventListener('change', function() {
-            const selectedDate = new Date(this.value);
-            const thirtyDaysAgo = new Date();
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-            if (selectedDate < thirtyDaysAgo) {
-                if (!confirm('La fecha seleccionada es de hace más de 30 días. ¿Está seguro de continuar?')) {
-                    this.value = today;
-                }
-            }
-        });
-    }
+    // No permitir fecha editable, así que no buscamos ni manipulamos el dateInput aquí
     const firstInput = form.querySelector('input:not([type="hidden"]):not([readonly])');
     if (firstInput) {
         setTimeout(() => {

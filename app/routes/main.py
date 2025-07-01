@@ -1,4 +1,3 @@
-# app/routes/main.py
 """
 Blueprint principal para el sistema de control de sucursales.
 
@@ -13,6 +12,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_required, current_user
 from functools import wraps
 import datetime
+import pytz
 from app import db
 from app.models.user import User
 from app.models.daily_record import DailyRecord
@@ -24,12 +24,6 @@ main_bp = Blueprint('main', __name__)
 def admin_required(f):
     """
     Decorador para requerir permisos de administrador.
-    
-    Args:
-        f: Función a decorar
-        
-    Returns:
-        function: Función decorada con verificación de admin
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -48,12 +42,6 @@ def admin_required(f):
 def branch_user_required(f):
     """
     Decorador para requerir que el usuario sea de sucursal.
-    
-    Args:
-        f: Función a decorar
-        
-    Returns:
-        function: Función decorada con verificación de usuario de sucursal
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -147,10 +135,16 @@ def admin_dashboard():
             }
         }
         
+        # === AGREGADO PARA FECHA Y HORA ARGENTINA EN DASHBOARD ADMIN ===
+        tz = pytz.timezone('America/Argentina/Buenos_Aires')
+        now_arg = datetime.datetime.now(tz)
+        # ==============================================================
+        
         return render_template(
             'main/admin_dashboard.html',
             title='Panel de Administración',
-            stats=stats
+            stats=stats,
+            moment=now_arg  # <- para template
         )
         
     except Exception as e:
@@ -216,26 +210,20 @@ def branch_dashboard():
             'weekly_records': [record.to_dict() for record in weekly_records]
         }
 
-        # ==== AGREGADO PARA LA PLANTILLA ====
-        from datetime import date, timedelta
-        today_date = date.today().isoformat()
-        yesterday_date = (date.today() - timedelta(days=1)).isoformat()
-        # =====================================
+        # ==== AGREGADO PARA LA PLANTILLA: FECHA Y HORA EN ARGENTINA ====
+        tz = pytz.timezone('America/Argentina/Buenos_Aires')
+        now_arg = datetime.datetime.now(tz)
+        today_date = now_arg.date().isoformat()
+        yesterday_date = (now_arg.date() - datetime.timedelta(days=1)).isoformat()
+        # ===============================================================
 
         return render_template(
             'main/branch_dashboard.html',
             title=f'Panel de {current_user.branch_name}',
             stats=stats,
             today_date=today_date,
-            yesterday_date=yesterday_date
-        )
-        
-    except Exception as e:
-        flash(f'Error al cargar el dashboard: {str(e)}', 'error')
-        return render_template(
-            'main/branch_dashboard.html',
-            title=f'Panel de {current_user.branch_name}',
-            stats=None
+            yesterday_date=yesterday_date,
+            moment=now_arg     # <- para template
         )
         
     except Exception as e:
@@ -444,9 +432,7 @@ def api_daily_stats():
     Solo para administradores.
     """
     try:
-        from datetime import date
-        
-        today = date.today()
+        today = datetime.date.today()
         print(f"🔍 Buscando registros para {today}")  # Debug
         
         # Obtener registros del día actual
@@ -560,7 +546,7 @@ def api_daily_stats():
                 'records': [],
                 'branches_reported': [],
                 'pending_verification': 0,
-                'date': date.today().isoformat()
+                'date': datetime.date.today().isoformat()
             }
         }), 500
 
@@ -573,9 +559,7 @@ def api_branch_status():
     API endpoint para obtener el estado de todas las sucursales.
     """
     try:
-        from datetime import date
-        
-        today = date.today()
+        today = datetime.date.today()
         all_branches = ['Uruguay', 'Villa Cabello', 'Tacuari', 'Candelaria', 'Itaembe Mini']
         
         # Obtener sucursales que han reportado hoy

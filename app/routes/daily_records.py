@@ -1,7 +1,5 @@
-# app/routes/daily_records.py
 """
 Blueprint para el manejo de registros diarios de ventas y gastos.
-
 Este módulo contiene las rutas para:
 - Listar registros diarios
 - Crear nuevos registros
@@ -13,9 +11,10 @@ Este módulo contiene las rutas para:
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, abort
 from flask_login import login_required, current_user
 from sqlalchemy import and_, or_, desc, extract, func
-from datetime import date, datetime, timedelta
-from decimal import Decimal
+import datetime
 import calendar
+import pytz
+from decimal import Decimal
 
 from app import db
 from app.models.user import User
@@ -25,6 +24,12 @@ from app.forms.daily_record_forms import DailyRecordForm, FilterForm, QuickStats
 # Crear el Blueprint
 daily_records_bp = Blueprint('daily_records', __name__)
 
+# Zona horaria fija para toda la app (puedes obtenerla de config si prefieres)
+TZ_ARG = pytz.timezone('America/Argentina/Buenos_Aires')
+
+def get_today_arg():
+    """Devuelve la fecha de hoy en Argentina (zona horaria correcta)"""
+    return datetime.datetime.now(TZ_ARG).date()
 
 @daily_records_bp.route('/')
 @daily_records_bp.route('/index')
@@ -50,18 +55,18 @@ def index():
     # Aplicar filtros si se enviaron
     if request.args.get('start_date'):
         try:
-            start_date = datetime.strptime(request.args.get('start_date'), '%Y-%m-%d').date()
+            start_date = datetime.datetime.strptime(request.args.get('start_date'), '%Y-%m-%d').date()
             query = query.filter(DailyRecord.record_date >= start_date)
         except ValueError:
             pass
-    
+
     if request.args.get('end_date'):
         try:
-            end_date = datetime.strptime(request.args.get('end_date'), '%Y-%m-%d').date()
+            end_date = datetime.datetime.strptime(request.args.get('end_date'), '%Y-%m-%d').date()
             query = query.filter(DailyRecord.record_date <= end_date)
         except ValueError:
             pass
-    
+
     if request.args.get('branch_filter') and current_user.is_admin_user():
         branch_name = request.args.get('branch_filter')
         query = query.filter(DailyRecord.branch_name == branch_name)
@@ -77,7 +82,7 @@ def index():
     )
     
     # Estadísticas rápidas
-    today = date.today()
+    today = get_today_arg()
     stats = get_quick_stats(current_user, today)
     
     return render_template(
@@ -96,12 +101,16 @@ def create():
     Crear un nuevo registro diario.
     """
     form = DailyRecordForm()
+
+    # Siempre fijar la fecha de Argentina para nuevos registros en GET
+    if request.method == 'GET':
+        form.record_date.data = get_today_arg()
     
     if form.validate_on_submit():
         # Convertir record_date a date si es string
         record_date = form.record_date.data
         if isinstance(record_date, str):
-            record_date = datetime.strptime(record_date, "%Y-%m-%d").date()
+            record_date = datetime.datetime.strptime(record_date, "%Y-%m-%d").date()
         
         # Verificar que no exista un registro para esta fecha y sucursal
         existing_record = DailyRecord.get_by_branch_and_date(
@@ -307,7 +316,7 @@ def stats():
     form = QuickStatsForm()
     
     # Período por defecto: este mes
-    today = date.today()
+    today = get_today_arg()
     start_date = today.replace(day=1)
     end_date = today
     
@@ -336,8 +345,8 @@ def api_daily_totals():
     API endpoint para obtener totales diarios (para gráficos).
     """
     days = request.args.get('days', 30, type=int)
-    end_date = date.today()
-    start_date = end_date - timedelta(days=days-1)
+    end_date = get_today_arg()
+    start_date = end_date - datetime.timedelta(days=days-1)
     
     # Construir query según permisos
     if current_user.is_admin_user():
@@ -381,8 +390,8 @@ def api_payment_breakdown():
     API endpoint para obtener desglose de métodos de pago.
     """
     days = request.args.get('days', 30, type=int)
-    end_date = date.today()
-    start_date = end_date - timedelta(days=days-1)
+    end_date = get_today_arg()
+    start_date = end_date - datetime.timedelta(days=days-1)
     
     # Construir query según permisos
     if current_user.is_admin_user():
@@ -511,7 +520,7 @@ def get_detailed_stats(user, start_date, end_date):
             'total_sales': total_sales,
             'total_expenses': total_expenses,
             'net_amount': total_sales - total_expenses,
-            'avg_daily_sales': total_sales / len(set(r.record_date for r in records))
+            'avg_daily_sales': total_sales / len(set(r.record_date for r in records)) if records else 0
         },
         'payment_breakdown': payment_breakdown,
         'branch_stats': branch_stats
@@ -522,38 +531,38 @@ def get_period_dates(period, args):
     """
     Convertir un período seleccionado a fechas de inicio y fin.
     """
-    today = date.today()
+    today = get_today_arg()
     
     if period == 'today':
         return today, today
     elif period == 'yesterday':
-        yesterday = today - timedelta(days=1)
+        yesterday = today - datetime.timedelta(days=1)
         return yesterday, yesterday
     elif period == 'this_week':
-        start = today - timedelta(days=today.weekday())
+        start = today - datetime.timedelta(days=today.weekday())
         return start, today
     elif period == 'last_week':
-        start = today - timedelta(days=today.weekday() + 7)
-        end = start + timedelta(days=6)
+        start = today - datetime.timedelta(days=today.weekday() + 7)
+        end = start + datetime.timedelta(days=6)
         return start, end
     elif period == 'this_month':
         start = today.replace(day=1)
         return start, today
     elif period == 'last_month':
         if today.month == 1:
-            start = date(today.year - 1, 12, 1)
-            end = date(today.year - 1, 12, 31)
+            start = datetime.date(today.year - 1, 12, 1)
+            end = datetime.date(today.year - 1, 12, 31)
         else:
-            start = date(today.year, today.month - 1, 1)
+            start = datetime.date(today.year, today.month - 1, 1)
             _, last_day = calendar.monthrange(today.year, today.month - 1)
-            end = date(today.year, today.month - 1, last_day)
+            end = datetime.date(today.year, today.month - 1, last_day)
         return start, end
     elif period == 'this_year':
-        start = date(today.year, 1, 1)
+        start = datetime.date(today.year, 1, 1)
         return start, today
     elif period == 'custom':
-        start = datetime.strptime(args.get('custom_start'), '%Y-%m-%d').date()
-        end = datetime.strptime(args.get('custom_end'), '%Y-%m-%d').date()
+        start = datetime.datetime.strptime(args.get('custom_start'), '%Y-%m-%d').date()
+        end = datetime.datetime.strptime(args.get('custom_end'), '%Y-%m-%d').date()
         return start, end
     else:
         return today, today
