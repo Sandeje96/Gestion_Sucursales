@@ -693,20 +693,31 @@ function initializeBranchPerformanceChart() {
     });
 }
 
+
 async function loadDashboardData() {
+    console.log('📊 Cargando datos del dashboard...');
+    
     try {
         // Cargar datos de tendencia de ventas
         await updateSalesChart(30);
+        console.log('✅ Gráfico de ventas actualizado');
         
         // Cargar datos de métodos de pago
         await loadPaymentMethodsData();
+        console.log('✅ Datos de métodos de pago actualizados');
         
         // Cargar datos de rendimiento por sucursal
         await loadBranchPerformanceData();
+        console.log('✅ Datos de rendimiento actualizados');
+        
+        console.log('🎉 Dashboard cargado completamente');
         
     } catch (error) {
-        console.error('Error cargando datos del dashboard:', error);
-        showToast('Error cargando datos del dashboard', 'error');
+        console.error('❌ Error cargando datos del dashboard:', error);
+        
+        if (typeof showToast === 'function') {
+            showToast('Error parcial cargando el dashboard', 'warning');
+        }
     }
 }
 
@@ -792,20 +803,82 @@ async function loadPaymentMethodsData() {
 
 async function loadBranchPerformanceData() {
     try {
+        console.log('🔄 Cargando datos de rendimiento por sucursal...');
+        
         const urlParams = new URLSearchParams(window.location.search);
         const period = urlParams.get('period') || 'month';
+        const startDate = urlParams.get('start_date');
+        const endDate = urlParams.get('end_date');
         
-        const response = await fetch(`{{ url_for('reports.api_branch_performance') }}?period=${period}`);
+        // Construir URL con parámetros
+        let apiUrl = `{{ url_for('reports.api_branch_performance') }}?period=${period}`;
+        if (startDate && endDate && period === 'custom') {
+            apiUrl += `&start_date=${startDate}&end_date=${endDate}`;
+        }
+        
+        console.log('📡 Llamando a:', apiUrl);
+        
+        const response = await fetch(apiUrl);
+        
+        // Verificar que la respuesta sea exitosa
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const data = await response.json();
+        console.log('📦 Respuesta recibida:', data);
         
-        if (data.status === 'success') {
-            branchPerformanceChart.data.labels = data.data.branches;
-            branchPerformanceChart.data.datasets[0].data = data.data.sales;
-            branchPerformanceChart.data.datasets[1].data = data.data.expenses;
+        // Verificar que la respuesta tenga la estructura esperada
+        if (!data || typeof data !== 'object') {
+            throw new Error('Respuesta inválida del servidor');
+        }
+        
+        if (data.status === 'success' && data.data) {
+            // Verificar que branchPerformanceChart existe
+            if (!branchPerformanceChart) {
+                console.warn('⚠️ branchPerformanceChart no está inicializado');
+                return;
+            }
+            
+            branchPerformanceChart.data.labels = data.data.branches || [];
+            branchPerformanceChart.data.datasets[0].data = data.data.sales || [];
+            branchPerformanceChart.data.datasets[1].data = data.data.expenses || [];
+            branchPerformanceChart.update();
+            
+            console.log('✅ Gráfico de rendimiento actualizado');
+        } else {
+            // Manejar respuesta de error del servidor
+            const errorMsg = data.message || 'Error desconocido del servidor';
+            console.warn('⚠️ Error del servidor:', errorMsg);
+            
+            // Mostrar datos vacíos en lugar de error
+            if (branchPerformanceChart) {
+                branchPerformanceChart.data.labels = [];
+                branchPerformanceChart.data.datasets[0].data = [];
+                branchPerformanceChart.data.datasets[1].data = [];
+                branchPerformanceChart.update();
+            }
+            
+            showToast(`Sin datos de rendimiento: ${errorMsg}`, 'warning');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error en loadBranchPerformanceData:', error);
+        
+        // Mostrar datos vacíos en caso de error
+        if (branchPerformanceChart) {
+            branchPerformanceChart.data.labels = [];
+            branchPerformanceChart.data.datasets[0].data = [];
+            branchPerformanceChart.data.datasets[1].data = [];
             branchPerformanceChart.update();
         }
-    } catch (error) {
-        console.error('Error cargando datos de rendimiento por sucursal:', error);
+        
+        // Mostrar toast solo si showToast está disponible
+        if (typeof showToast === 'function') {
+            showToast('Error cargando datos de rendimiento', 'error');
+        } else {
+            console.warn('showToast no está disponible');
+        }
     }
 }
 

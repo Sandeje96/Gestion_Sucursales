@@ -405,6 +405,9 @@ def get_period_dates(period, custom_start=None, custom_end=None):
     """
     Calcular fechas de inicio y fin basadas en el período seleccionado.
     """
+    import datetime
+    from datetime import timedelta
+    
     today = datetime.date.today()
     
     if period == 'today':
@@ -642,55 +645,95 @@ def api_branch_performance():
     """
     API para datos de rendimiento por sucursal con soporte para períodos.
     """
-    if not current_user.is_admin_user():
-        abort(403)
-    
-    # Obtener parámetros
-    period = request.args.get('period', 'month')
-    custom_start = request.args.get('start_date')
-    custom_end = request.args.get('end_date')
-    
-    # Calcular fechas según el período
-    start_date, end_date = get_period_dates(period, custom_start, custom_end)
-    
-    # Obtener datos por sucursal
-    branch_data = db.session.query(
-        DailyRecord.branch_name,
-        func.sum(DailyRecord.total_sales).label('total_sales'),
-        func.sum(DailyRecord.total_expenses).label('total_expenses'),
-        func.count(DailyRecord.id).label('records_count'),
-        func.avg(DailyRecord.total_sales).label('avg_sales')
-    ).filter(
-        DailyRecord.record_date.between(start_date, end_date)
-    ).group_by(DailyRecord.branch_name).all()
-    
-    # Formatear datos
-    branches = []
-    sales = []
-    expenses = []
-    net_profits = []
-    avg_sales = []
-    
-    for data in branch_data:
-        branches.append(data.branch_name)
-        sales.append(float(data.total_sales or 0))
-        expenses.append(float(data.total_expenses or 0))
-        net_profits.append(float(data.total_sales or 0) - float(data.total_expenses or 0))
-        avg_sales.append(float(data.avg_sales or 0))
-    
-    return jsonify({
-        'status': 'success',
-        'data': {
-            'branches': branches,
-            'sales': sales,
-            'expenses': expenses,
-            'net_profits': net_profits,
-            'avg_sales': avg_sales,
-            'period': period,
-            'start_date': start_date.isoformat(),
-            'end_date': end_date.isoformat()
+    try:
+        if not current_user.is_admin_user():
+            return jsonify({
+                'status': 'error',
+                'message': 'Acceso denegado',
+                'data': {
+                    'branches': [],
+                    'sales': [],
+                    'expenses': [],
+                    'net_profits': [],
+                    'avg_sales': []
+                }
+            }), 403
+        
+        # Obtener parámetros
+        period = request.args.get('period', 'month')
+        custom_start = request.args.get('start_date')
+        custom_end = request.args.get('end_date')
+        
+        print(f"🔍 API branch-performance llamada con: period={period}, start={custom_start}, end={custom_end}")
+        
+        # Calcular fechas según el período
+        start_date, end_date = get_period_dates(period, custom_start, custom_end)
+        
+        print(f"📅 Fechas calculadas: {start_date} - {end_date}")
+        
+        # Obtener datos por sucursal
+        branch_data = db.session.query(
+            DailyRecord.branch_name,
+            func.sum(DailyRecord.total_sales).label('total_sales'),
+            func.sum(DailyRecord.total_expenses).label('total_expenses'),
+            func.count(DailyRecord.id).label('records_count'),
+            func.avg(DailyRecord.total_sales).label('avg_sales')
+        ).filter(
+            DailyRecord.record_date.between(start_date, end_date)
+        ).group_by(DailyRecord.branch_name).all()
+        
+        print(f"📊 Encontrados {len(branch_data)} sucursales con datos")
+        
+        # Formatear datos
+        branches = []
+        sales = []
+        expenses = []
+        net_profits = []
+        avg_sales = []
+        
+        for data in branch_data:
+            branches.append(data.branch_name)
+            sales.append(float(data.total_sales or 0))
+            expenses.append(float(data.total_expenses or 0))
+            net_profits.append(float(data.total_sales or 0) - float(data.total_expenses or 0))
+            avg_sales.append(float(data.avg_sales or 0))
+        
+        response_data = {
+            'status': 'success',
+            'data': {
+                'branches': branches,
+                'sales': sales,
+                'expenses': expenses,
+                'net_profits': net_profits,
+                'avg_sales': avg_sales,
+                'period': period,
+                'start_date': start_date.isoformat(),
+                'end_date': end_date.isoformat()
+            }
         }
-    })
+        
+        print(f"✅ Enviando respuesta exitosa con {len(branches)} sucursales")
+        return jsonify(response_data)
+        
+    except Exception as e:
+        print(f"❌ Error en api_branch_performance: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        return jsonify({
+            'status': 'error',
+            'message': f'Error interno: {str(e)}',
+            'data': {
+                'branches': [],
+                'sales': [],
+                'expenses': [],
+                'net_profits': [],
+                'avg_sales': [],
+                'period': request.args.get('period', 'month'),
+                'start_date': '',
+                'end_date': ''
+            }
+        }), 500
 
 # También agregar esta función auxiliar mejorada al final del archivo:
 
