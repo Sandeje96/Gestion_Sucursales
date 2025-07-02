@@ -429,46 +429,69 @@ def inject_main_data():
 def api_daily_stats():
     """
     API endpoint para obtener estadísticas del día actual.
-    Solo para administradores.
+    
+    NUEVA LÓGICA:
+    - Si NO hay registros del día actual, muestra los datos del día anterior
+    - Si YA hay registros del día actual, muestra solo los del día actual
+    - Esto permite que los usuarios vean la información del día anterior hasta que 
+      alguien comience a cargar datos del nuevo día
     """
+    import pytz
+    import datetime
+    from app.models.daily_record import DailyRecord
+    
     try:
-        # Usar zona horaria de Argentina para determinar la fecha actual
-        import pytz
+        # Obtener fecha de Argentina
         tz_arg = pytz.timezone('America/Argentina/Buenos_Aires')
         today = datetime.datetime.now(tz_arg).date()
-        print(f"🔍 Buscando registros para {today} (Argentina)")  # Debug
+        yesterday = today - datetime.timedelta(days=1)
         
-        # Obtener registros del día actual
+        print(f"🗓️ Fecha actual (Argentina): {today}")  # Debug
+        print(f"🗓️ Fecha anterior: {yesterday}")  # Debug
+        
+        # NUEVA LÓGICA: Verificar si hay registros del día actual
         todays_records = DailyRecord.query.filter(
             DailyRecord.record_date == today
         ).all()
         
-        print(f"📊 Encontrados {len(todays_records)} registros")  # Debug
+        # Si NO hay registros de hoy, mostrar los de ayer
+        if not todays_records:
+            print("📊 No hay registros de hoy, mostrando datos de ayer")
+            display_records = DailyRecord.query.filter(
+                DailyRecord.record_date == yesterday
+            ).all()
+            display_date = yesterday
+            is_showing_previous_day = True
+        else:
+            print(f"📊 Hay {len(todays_records)} registros de hoy, mostrando datos actuales")
+            display_records = todays_records
+            display_date = today
+            is_showing_previous_day = False
         
         # Inicializar totales
-        total_cash = 0.0
-        total_mercadopago = 0.0
-        total_debit = 0.0
-        total_credit = 0.0
-        total_sales = 0.0
-        total_expenses = 0.0
-        branches_reported = []
+        total_cash = 0
+        total_mercadopago = 0
+        total_debit = 0
+        total_credit = 0
+        total_sales = 0
+        total_expenses = 0
         pending_verification = 0
+        branches_reported = []
         records_data = []
         
-        # Procesar cada registro
-        for record in todays_records:
-            print(f"  📋 {record.branch_name}: ${record.total_sales}")  # Debug
-            
-            # Sumar totales
+        # Procesar registros
+        for record in display_records:
+            # Acumular totales de métodos de pago
             total_cash += float(record.cash_sales or 0)
             total_mercadopago += float(record.mercadopago_sales or 0)
             total_debit += float(record.debit_sales or 0)
             total_credit += float(record.credit_sales or 0)
+            
+            # Acumular totales generales
             total_sales += float(record.total_sales or 0)
             total_expenses += float(record.total_expenses or 0)
             
-            # Agregar sucursal si no está
+            # Agregar sucursal a la lista si no está ya
             if record.branch_name not in branches_reported:
                 branches_reported.append(record.branch_name)
             
@@ -491,14 +514,16 @@ def api_daily_stats():
         # Calcular ganancia total
         total_profit = total_sales - total_expenses
         
-        print(f"💰 Totales calculados:")  # Debug
-        print(f"   Efectivo: ${total_cash}")
-        print(f"   MercadoPago: ${total_mercadopago}")
-        print(f"   Débito: ${total_debit}")
-        print(f"   Crédito: ${total_credit}")
-        print(f"   Total Ventas: ${total_sales}")
-        print(f"   Total Gastos: ${total_expenses}")
-        print(f"   Ganancia: ${total_profit}")
+        # Log de totales calculados
+        print(f"💰 Totales calculados para {display_date}:")
+        print(f"   Efectivo: ${total_cash:.2f}")
+        print(f"   MercadoPago: ${total_mercadopago:.2f}")
+        print(f"   Débito: ${total_debit:.2f}")
+        print(f"   Crédito: ${total_credit:.2f}")
+        print(f"   Total Ventas: ${total_sales:.2f}")
+        print(f"   Total Gastos: ${total_expenses:.2f}")
+        print(f"   Ganancia: ${total_profit:.2f}")
+        print(f"   Mostrando datos de: {'AYER' if is_showing_previous_day else 'HOY'}")
         
         response_data = {
             'status': 'success',
@@ -513,16 +538,19 @@ def api_daily_stats():
                     'ventas': round(total_sales, 2),
                     'gastos': round(total_expenses, 2),
                     'ganancia': round(total_profit, 2),
-                    'records_count': len(todays_records)
+                    'records_count': len(display_records)
                 },
                 'records': records_data,
                 'branches_reported': branches_reported,
                 'pending_verification': pending_verification,
-                'date': today.isoformat()
+                'date': display_date.isoformat(),
+                # NUEVO CAMPO: Indica si se están mostrando datos del día anterior
+                'is_showing_previous_day': is_showing_previous_day,
+                'display_date_label': 'AYER' if is_showing_previous_day else 'HOY'
             }
         }
         
-        print(f"✅ Enviando respuesta con {len(todays_records)} registros")  # Debug
+        print(f"✅ Enviando respuesta con {len(display_records)} registros de {display_date}")
         return jsonify(response_data)
         
     except Exception as e:
@@ -549,7 +577,9 @@ def api_daily_stats():
                 'records': [],
                 'branches_reported': [],
                 'pending_verification': 0,
-                'date': datetime.date.today().isoformat()
+                'date': datetime.date.today().isoformat(),
+                'is_showing_previous_day': False,
+                'display_date_label': 'HOY'
             }
         }), 500
 

@@ -28,8 +28,50 @@ daily_records_bp = Blueprint('daily_records', __name__)
 TZ_ARG = pytz.timezone('America/Argentina/Buenos_Aires')
 
 def get_today_arg():
-    """Devuelve la fecha de hoy en Argentina (zona horaria correcta)"""
-    return datetime.datetime.now(TZ_ARG).date()
+    """
+    Obtener la fecha actual en zona horaria argentina.
+    
+    Returns:
+        date: Fecha actual en Argentina (UTC-3)
+    """
+    tz_arg = pytz.timezone('America/Argentina/Buenos_Aires')
+    return datetime.datetime.now(tz_arg).date()
+
+def get_yesterday_arg():
+    """
+    Obtener la fecha de ayer en zona horaria argentina.
+    
+    Returns:
+        date: Fecha de ayer en Argentina (UTC-3)
+    """
+    today = get_today_arg()
+    return today - datetime.timedelta(days=1)
+
+def get_display_date_for_dashboard():
+    """
+    Determinar qué fecha mostrar en el dashboard según la nueva lógica:
+    - Si no hay registros de hoy, mostrar los de ayer
+    - Si hay registros de hoy, mostrar los de hoy
+    
+    Returns:
+        tuple: (fecha_a_mostrar, es_dia_anterior, etiqueta_display)
+    """
+    from app.models.daily_record import DailyRecord
+    
+    today = get_today_arg()
+    yesterday = get_yesterday_arg()
+    
+    # Verificar si hay registros del día actual
+    todays_records_count = DailyRecord.query.filter(
+        DailyRecord.record_date == today
+    ).count()
+    
+    if todays_records_count == 0:
+        # No hay registros de hoy, mostrar los de ayer
+        return yesterday, True, 'AYER'
+    else:
+        # Hay registros de hoy, mostrar los actuales
+        return today, False, 'HOY'
 
 @daily_records_bp.route('/')
 @daily_records_bp.route('/index')

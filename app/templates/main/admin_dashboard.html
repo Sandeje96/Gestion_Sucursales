@@ -7,6 +7,44 @@
 
 {% block extra_css %}
 <style>
+
+    #previousDayAlert {
+        border-left: 4px solid #0dcaf0;
+        background-color: #f8f9fa;
+    }
+
+    #previousDayAlert .fas {
+    color: #0dcaf0;
+    }
+
+    /* Animación suave para el badge de "día anterior" */
+    .badge.bg-warning {
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+        0% {
+            box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7);
+        }
+        70% {
+            box-shadow: 0 0 0 10px rgba(255, 193, 7, 0);
+        }
+        100% {
+            box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
+        }
+    }
+
+    /* Mejora visual para cuando se muestran datos del día anterior */
+    .payment-metric-card.showing-previous {
+        border-left: 4px solid #ffc107;
+    }
+
+    .payment-metric-card.showing-previous h6:after {
+        content: " (AYER)";
+        font-size: 0.7em;
+        color: #ffc107;
+        font-weight: normal;
+    }
     .dashboard-card {
         transition: transform 0.2s ease, box-shadow 0.2s ease;
         border: none;
@@ -157,7 +195,7 @@
     <!-- Métricas de métodos de pago del día -->
     <div class="row mb-4">
         <div class="col-12">
-            <h4 class="mb-3">
+            <h4 class="mb-3" id="paymentMethodsTitle">
                 <i class="fas fa-credit-card me-2 text-primary"></i>
                 Resumen de Ventas por Método de Pago - HOY
             </h4>
@@ -213,14 +251,14 @@
         <div class="col-lg-8">
             <div class="card dashboard-card">
                 <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0">
+                    <h6 class="mb-0" id="consolidatedSummaryTitle">
                         <i class="fas fa-chart-pie me-2"></i>Resumen Consolidado del Día
                     </h6>
                     <button class="btn btn-outline-primary btn-sm" onclick="refreshData()">
                         <i class="fas fa-sync-alt me-1"></i>Actualizar
                     </button>
                 </div>
-                <div class="card-body add">
+                <div class="card-body">
                     <div class="row text-center">
                         <div class="col-md-4">
                             <div class="border-end">
@@ -244,7 +282,7 @@
                     
                     <div class="row">
                         <div class="col-md-6">
-                            <small class="text-muted">Sucursales que reportaron hoy:</small>
+                            <small class="text-muted" id="branchesReportedLabel">Sucursales que reportaron:</small>
                             <div class="mt-2" id="sucursalesReportaron">
                                 <span class="badge bg-secondary me-1">Cargando...</span>
                             </div>
@@ -288,9 +326,11 @@
                     </div>
                     
                     <div class="mt-3">
-                        <small class="text-muted">
+                        <small class="text-muted" id="autoUpdateDescription">
                             <i class="fas fa-info-circle me-1"></i>
-                            Los datos se actualizan automáticamente cada 5 minutos.
+                            Los datos se actualizan automáticamente cada 2 minutos. 
+                            Cuando los locales comiencen a cargar datos del día actual, 
+                            la vista cambiará automáticamente.
                         </small>
                     </div>
                 </div>
@@ -299,20 +339,20 @@
     </div>
 
     <!-- Últimos registros y estado de sucursales -->
-    <div class="row mb-4">
-        <div class="col-lg-8">
+    <div class="row">
+        <div class="col-12">
             <div class="card dashboard-card">
                 <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0">
-                        <i class="fas fa-clock me-2"></i>Registros del Día de Hoy
+                    <h6 class="mb-0" id="todayRecordsTitle">
+                        <i class="fas fa-list me-2"></i>Registros de Hoy
                     </h6>
-                    <a href="{{ url_for('daily_records.index') }}" class="btn btn-sm btn-outline-primary">
-                        Ver todos
-                    </a>
+                    <div>
+                        <span class="badge bg-primary" id="recordsCount">0 registros</span>
+                    </div>
                 </div>
-                <div class="card-body p-0">
+                <div class="card-body">
                     <div class="table-responsive">
-                        <table class="table table-hover mb-0" id="registrosHoyTable">
+                        <table class="table table-hover" id="todayRecordsTable">
                             <thead class="table-light">
                                 <tr>
                                     <th>Sucursal</th>
@@ -320,14 +360,14 @@
                                     <th>Gastos</th>
                                     <th>Ganancia</th>
                                     <th>Estado</th>
+                                    <th>Creado por</th>
                                     <th>Acciones</th>
                                 </tr>
                             </thead>
-                            <tbody id="registrosHoyBody">
+                            <tbody>
                                 <tr>
-                                    <td colspan="6" class="text-center py-3">
-                                        <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-                                        Cargando registros del día...
+                                    <td colspan="7" class="text-center text-muted py-4">
+                                        <i class="fas fa-spinner fa-spin me-2"></i>Cargando registros...
                                     </td>
                                 </tr>
                             </tbody>
@@ -337,7 +377,6 @@
             </div>
         </div>
     </div>
-</div>
 
 <!-- Loading Modal -->
 <div class="modal fade" id="loadingModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
@@ -355,28 +394,15 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 Inicializando Dashboard Admin');
-    
-    // Actualizar reloj cada minuto
-    updateClock();
-    setInterval(updateClock, 60000);
+    console.log('🚀 Inicializando dashboard con nueva lógica de persistencia...');
     
     // Cargar datos iniciales
     loadDailyData();
     
-    // Auto-refresh cada 5 minutos
-    setInterval(loadDailyData, 300000);
+    // Configurar descripción de auto-actualización
+    updateAutoRefreshDescription();
     
-    // Arreglar z-index del dropdown al abrirse
-    document.querySelectorAll('.dropdown').forEach(dropdown => {
-        dropdown.addEventListener('show.bs.dropdown', function() {
-            this.style.zIndex = '9999';
-        });
-        
-        dropdown.addEventListener('hide.bs.dropdown', function() {
-            this.style.zIndex = '';
-        });
-    });
+    console.log('✅ Dashboard inicializado correctamente');
 });
 
 function updateClock() {
@@ -430,6 +456,13 @@ async function loadPaymentMethodsData() {
             const paymentMethods = data.data.payment_methods;
             const totals = data.data.totals;
             
+            // NUEVO: Verificar si se están mostrando datos del día anterior
+            const isShowingPreviousDay = data.data.is_showing_previous_day;
+            const displayDateLabel = data.data.display_date_label;
+            
+            // Actualizar el título de la sección con la indicación correspondiente
+            updateSectionTitle(displayDateLabel, isShowingPreviousDay);
+            
             // Actualizar las métricas de métodos de pago con formato argentino
             updatePaymentMethodDisplay('totalEfectivo', paymentMethods.efectivo);
             updatePaymentMethodDisplay('totalMercadoPago', paymentMethods.mercadopago);
@@ -443,24 +476,33 @@ async function loadPaymentMethodsData() {
             const gananciaElement = document.getElementById('gananciaNeta');
             if (gananciaElement) {
                 gananciaElement.textContent = formatCurrencyArgentino(totals.ganancia);
-                gananciaElement.className = totals.ganancia >= 0 ? 'mb-1 text-success' : 'mb-1 text-danger';
+                gananciaElement.className = totals.ganancia >= 0 ? 
+                    'mb-1 text-success' : 'mb-1 text-danger';
             }
             
-            // Actualizar sucursales que reportaron
+            // Actualizar sucursales reportadas
             updateBranchesReported(data.data.branches_reported);
             
-            // Actualizar contador de pendientes
+            // Actualizar pendientes de verificación
             updateElementText('pendientesVerificacion', data.data.pending_verification);
             
+            console.log('✅ Datos de métodos de pago cargados correctamente');
+            
+            // NUEVO: Mostrar notificación si estamos viendo datos del día anterior
+            if (isShowingPreviousDay) {
+                showPreviousDayNotification();
+            } else {
+                hidePreviousDayNotification();
+            }
+            
         } else {
-            console.error('❌ Error en la respuesta:', data.message);
+            console.error('❌ Error en respuesta:', data.message);
             showErrorState();
         }
         
     } catch (error) {
-        console.error('❌ Error en loadPaymentMethodsData:', error);
+        console.error('❌ Error cargando datos de métodos de pago:', error);
         showErrorState();
-        throw error;
     }
 }
 
@@ -469,87 +511,193 @@ async function loadTodayRecords() {
     
     try {
         const response = await fetch('/api/daily-stats');
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const data = await response.json();
         
         if (data.status === 'success') {
-            const records = data.data.records;
-            const tbody = document.getElementById('registrosHoyBody');
+            updateTodayRecordsTable(data.data.records);
             
-            if (!tbody) {
-                console.warn('⚠️ Elemento registrosHoyBody no encontrado');
-                return;
+            // NUEVO: Actualizar el título de la tabla según los datos mostrados
+            const tableTitle = document.getElementById('todayRecordsTitle');
+            if (tableTitle) {
+                const isShowingPreviousDay = data.data.is_showing_previous_day;
+                const iconHtml = '<i class="fas fa-list me-2"></i>';
+                
+                if (isShowingPreviousDay) {
+                    tableTitle.innerHTML = `
+                        ${iconHtml}Registros del Día Anterior
+                        <small class="text-muted ms-2">(Se actualizarán con los datos de hoy)</small>
+                    `;
+                } else {
+                    tableTitle.innerHTML = `${iconHtml}Registros de Hoy`;
+                }
             }
             
-            tbody.innerHTML = '';
-            
-            if (records.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="6" class="text-center py-3 text-muted">
-                            <i class="fas fa-inbox me-2"></i>
-                            No hay registros cargados para el día de hoy
-                        </td>
-                    </tr>
-                `;
-                return;
-            }
-            
-            records.forEach(record => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>
-                        <span class="badge bg-secondary">${record.sucursal}</span>
-                    </td>
-                    <td>
-                        <strong class="text-success">${formatCurrencyArgentino(record.ventas)}</strong>
-                    </td>
-                    <td>
-                        <span class="text-danger">${formatCurrencyArgentino(record.gastos)}</span>
-                    </td>
-                    <td>
-                        <strong class="${record.ganancia >= 0 ? 'text-success' : 'text-danger'}">
-                            ${formatCurrencyArgentino(record.ganancia)}
-                        </strong>
-                    </td>
-                    <td>
-                        ${record.verificado ? 
-                            '<span class="badge bg-success"><i class="fas fa-check me-1"></i>Verificado</span>' : 
-                            '<span class="badge bg-warning"><i class="fas fa-clock me-1"></i>Pendiente</span>'
-                        }
-                    </td>
-                    <td>
-                        <div class="btn-group btn-group-sm">
-                            <button class="btn btn-outline-primary" onclick="viewRecord(${record.id})" title="Ver">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                            ${!record.verificado ? 
-                                `<button class="btn btn-outline-success" onclick="verifyRecord(${record.id})" title="Verificar">
-                                    <i class="fas fa-check"></i>
-                                </button>` : ''
-                            }
-                        </div>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
-            
+            console.log('✅ Registros cargados correctamente');
         } else {
-            console.error('❌ Error cargando registros:', data.message);
+            console.error('❌ Error en respuesta:', data.message);
+            showErrorState();
         }
         
     } catch (error) {
-        console.error('❌ Error en loadTodayRecords:', error);
-        const tbody = document.getElementById('registrosHoyBody');
-        if (tbody) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="6" class="text-center py-3 text-danger">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        Error cargando registros: ${error.message}
-                    </td>
-                </tr>
-            `;
+        console.error('❌ Error cargando registros:', error);
+        showErrorState();
+    }
+}
+
+// NUEVA FUNCIÓN: Mostrar notificación de datos del día anterior
+function showPreviousDayNotification() {
+    // Verificar si ya existe la notificación
+    if (document.getElementById('previousDayAlert')) {
+        return;
+    }
+    
+    const alertHtml = `
+        <div id="previousDayAlert" class="alert alert-info alert-dismissible fade show mb-4" role="alert">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-info-circle me-2"></i>
+                <div>
+                    <strong>Mostrando datos del día anterior</strong><br>
+                    <small>Estos datos se actualizarán automáticamente cuando los locales comiencen a cargar información del día actual.</small>
+                </div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+        </div>
+    `;
+    
+    // Insertar la alerta después del breadcrumb o al inicio del contenido
+    const targetElement = document.querySelector('.container-fluid .row').children[0];
+    if (targetElement) {
+        targetElement.insertAdjacentHTML('afterbegin', alertHtml);
+    }
+}
+
+// NUEVA FUNCIÓN: Actualizar descripción de auto-actualización
+function updateAutoRefreshDescription() {
+    const descriptionElement = document.getElementById('autoUpdateDescription');
+    if (descriptionElement) {
+        descriptionElement.innerHTML = `
+            <i class="fas fa-info-circle me-1"></i>
+            Los datos se actualizan automáticamente cada 2 minutos. 
+            Cuando los locales comiencen a cargar datos del día actual, 
+            la vista cambiará automáticamente.
+        `;
+    }
+}
+
+function updateTodayRecordsTable(records) {
+    const tableBody = document.querySelector('#todayRecordsTable tbody');
+    
+    if (!tableBody) {
+        console.error('❌ No se encontró la tabla de registros');
+        return;
+    }
+    
+    if (!records || records.length === 0) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center text-muted py-4">
+                    <i class="fas fa-inbox fa-2x mb-2"></i><br>
+                    No hay registros para mostrar
+                </td>
+            </tr>
+        `;
+        
+        // Actualizar contador
+        const recordsCount = document.getElementById('recordsCount');
+        if (recordsCount) {
+            recordsCount.textContent = '0 registros';
+            recordsCount.className = 'badge bg-secondary';
         }
+        return;
+    }
+    
+    // Construir HTML de las filas
+    let rowsHtml = '';
+    records.forEach(record => {
+        const verifiedBadge = record.verificado ? 
+            '<span class="badge bg-success">Verificado</span>' : 
+            '<span class="badge bg-warning text-dark">Pendiente</span>';
+            
+        const gananciaClass = record.ganancia >= 0 ? 'text-success' : 'text-danger';
+        
+        rowsHtml += `
+            <tr>
+                <td>
+                    <strong>${record.sucursal}</strong>
+                </td>
+                <td class="text-success">
+                    ${formatCurrencyArgentino(record.ventas)}
+                </td>
+                <td class="text-danger">
+                    ${formatCurrencyArgentino(record.gastos)}
+                </td>
+                <td class="${gananciaClass}">
+                    <strong>${formatCurrencyArgentino(record.ganancia)}</strong>
+                </td>
+                <td>
+                    ${verifiedBadge}
+                </td>
+                <td>
+                    <small class="text-muted">${record.creator}</small>
+                </td>
+                <td>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button class="btn btn-outline-primary" onclick="viewRecord(${record.id})" title="Ver detalles">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        ${!record.verificado ? 
+                            `<button class="btn btn-outline-success" onclick="verifyRecord(${record.id})" title="Verificar">
+                                <i class="fas fa-check"></i>
+                            </button>` : ''
+                        }
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+    
+    tableBody.innerHTML = rowsHtml;
+    
+    // Actualizar contador
+    const recordsCount = document.getElementById('recordsCount');
+    if (recordsCount) {
+        recordsCount.textContent = `${records.length} registro${records.length !== 1 ? 's' : ''}`;
+        recordsCount.className = records.length > 0 ? 'badge bg-primary' : 'badge bg-secondary';
+    }
+}
+
+// NUEVA FUNCIÓN: Actualizar el título de la sección
+function updateSectionTitle(displayDateLabel, isShowingPreviousDay) {
+    const titleElement = document.querySelector('h4:has(+ .row .payment-metric-card)');
+    if (titleElement) {
+        const iconHtml = '<i class="fas fa-credit-card me-2 text-primary"></i>';
+        
+        if (isShowingPreviousDay) {
+            titleElement.innerHTML = `
+                ${iconHtml}Resumen de Ventas por Método de Pago - ${displayDateLabel}
+                <span class="badge bg-warning text-dark ms-2">
+                    <i class="fas fa-clock me-1"></i>Datos del día anterior
+                </span>
+            `;
+        } else {
+            titleElement.innerHTML = `${iconHtml}Resumen de Ventas por Método de Pago - ${displayDateLabel}`;
+        }
+    }
+}
+
+
+// NUEVA FUNCIÓN: Ocultar notificación de datos del día anterior
+function hidePreviousDayNotification() {
+    const alertElement = document.getElementById('previousDayAlert');
+    if (alertElement) {
+        // Usar Bootstrap para cerrar la alerta con animación
+        const bsAlert = new bootstrap.Alert(alertElement);
+        bsAlert.close();
     }
 }
 
@@ -669,17 +817,27 @@ function showErrorMessage(message) {
 }
 
 function refreshData() {
-    console.log('🔄 Refrescando datos...');
+    console.log('🔄 Refrescando datos manualmente...');
+    
     const modal = new bootstrap.Modal(document.getElementById('loadingModal'));
     modal.show();
     
-    setTimeout(() => {
-        loadDailyData();
+    // Usar Promise.all para cargar todo en paralelo
+    Promise.all([
+        loadPaymentMethodsData(),
+        loadTodayRecords()
+    ]).then(() => {
         modal.hide();
         if (typeof window.showToast === 'function') {
             window.showToast('Datos actualizados correctamente', 'success');
         }
-    }, 1500);
+    }).catch(error => {
+        modal.hide();
+        console.error('Error actualizando datos:', error);
+        if (typeof window.showToast === 'function') {
+            window.showToast('Error al actualizar datos', 'error');
+        }
+    });
 }
 
 function exportDailyData() {
@@ -716,9 +874,13 @@ function showToast(message, type = 'info') {
     }
 }
 
-// Auto-actualización en tiempo real
+// Modificar la función de auto-actualización para mostrar mejor feedback
 setInterval(() => {
+    console.log('🔄 Auto-actualización ejecutándose...');
     loadPaymentMethodsData();
+    
+    // Actualizar también la descripción si es necesario
+    updateAutoRefreshDescription();
 }, 120000); // Cada 2 minutos
 </script>
 {% endblock %}
