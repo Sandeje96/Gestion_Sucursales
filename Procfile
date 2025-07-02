@@ -1,1 +1,1 @@
-web: gunicorn run:app
+web: python migrate_add_withdrawn_fields.py && gunicorn run:app
