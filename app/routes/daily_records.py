@@ -433,11 +433,41 @@ def api_cash_trays():
     """
     try:
         from app.models.cash_tray import CashTray
+        import pytz
         
         # Recalcular bandejas en tiempo real basándose en registros NO retirados
         update_trays_from_records()
         
         summary = CashTray.get_all_trays_summary()
+        
+        # Convertir fechas a zona horaria argentina
+        tz_arg = pytz.timezone('America/Argentina/Buenos_Aires')
+        
+        # Actualizar las fechas en cada bandeja
+        for tray in summary['trays']:
+            if tray.get('last_updated'):
+                try:
+                    # Parsear la fecha ISO
+                    from datetime import datetime
+                    dt = datetime.fromisoformat(tray['last_updated'].replace('Z', '+00:00'))
+                    
+                    # Si no tiene zona horaria, asumimos que es UTC
+                    if dt.tzinfo is None:
+                        dt = pytz.utc.localize(dt)
+                    
+                    # Convertir a Argentina
+                    dt_arg = dt.astimezone(tz_arg)
+                    
+                    # Formatear para mostrar
+                    tray['last_updated_formatted'] = dt_arg.strftime('%d/%m/%Y %H:%M')
+                    tray['last_updated_date'] = dt_arg.strftime('%d/%m/%Y')
+                    tray['last_updated_time'] = dt_arg.strftime('%H:%M:%S')
+                    
+                except Exception as e:
+                    print(f"Error convirtiendo fecha: {e}")
+                    tray['last_updated_formatted'] = 'No disponible'
+                    tray['last_updated_date'] = 'No disponible'
+                    tray['last_updated_time'] = 'No disponible'
         
         return jsonify({
             'status': 'success',
