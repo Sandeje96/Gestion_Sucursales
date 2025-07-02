@@ -322,7 +322,7 @@
                     <div class="mt-3">
                         <h6 class="small fw-semibold mb-2">Participación de mercado:</h6>
                         {% set total_all_sales = comparison_data.values() | sum(attribute='total_sales') %}
-                        {% for branch_name, data in ranked_branches[:4] %}
+                        {% for branch_name, data in ranked_branches[:6] %}
                         {% set percentage = (data.total_sales / total_all_sales * 100) if total_all_sales > 0 else 0 %}
                         <div class="d-flex justify-content-between align-items-center mb-1">
                             <small>{{ branch_name }}</small>
