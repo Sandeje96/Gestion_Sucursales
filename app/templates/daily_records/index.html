@@ -429,7 +429,7 @@
                                             <a href="{{ url_for('daily_records.edit', id=record.id) }}" 
                                             class="btn btn-outline-warning"
                                             data-bs-toggle="tooltip" 
-                                            title="Editar">
+                                            title="Editar">python migration.py
                                                 <i class="fas fa-edit"></i>
                                             </a>
                                             {% endif %}
@@ -701,6 +701,44 @@ function updateBranchTraysDisplay(trays) {
         return;
     }
     
+    // Función para convertir UTC a hora argentina
+    function convertToArgentinaTime(isoString) {
+        try {
+            const date = new Date(isoString);
+            
+            // Convertir a hora de Argentina (UTC-3)
+            const argDate = new Date(date.getTime() - (3 * 60 * 60 * 1000));
+            
+            return {
+                formatted: argDate.toLocaleDateString('es-AR', {
+                    day: '2-digit',
+                    month: '2-digit', 
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    timeZone: 'America/Argentina/Buenos_Aires'
+                }),
+                date: argDate.toLocaleDateString('es-AR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                }),
+                time: argDate.toLocaleTimeString('es-AR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                })
+            };
+        } catch (error) {
+            console.error('Error convirtiendo fecha:', error);
+            return {
+                formatted: 'No disponible',
+                date: 'No disponible', 
+                time: 'No disponible'
+            };
+        }
+    }
+    
     // Ordenar por total descendente
     trays.sort((a, b) => b.total_accumulated - a.total_accumulated);
     
@@ -710,13 +748,16 @@ function updateBranchTraysDisplay(trays) {
         const canEmpty = {{ 'true' if current_user.is_admin_user() else 'false' }} || 
                         '{{ current_user.branch_name }}' === tray.branch_name;
         
+        // Convertir fecha a hora argentina
+        const argTime = convertToArgentinaTime(tray.last_updated);
+        
         html += `
             <div class="col-lg-6 col-xl-4 mb-3">
                 <div class="branch-tray-card">
                     <div class="d-flex justify-content-between align-items-start mb-3">
                         <div>
                             <h6 class="mb-1 fw-bold">${tray.branch_name}</h6>
-                            <small class="text-muted">Última actualización: ${new Date(tray.last_updated).toLocaleString('es-AR')}</small>
+                            <small class="text-muted">Última actualización: ${argTime.formatted}</small>
                         </div>
                         <div class="text-end">
                             <div class="h5 mb-0 fw-bold text-success">$${formatCurrencyArgentino(tray.total_accumulated)}</div>
