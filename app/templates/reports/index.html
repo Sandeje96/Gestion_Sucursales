@@ -311,46 +311,6 @@
                 </div>
             </div>
         </div>
-        
-        <div class="col-lg-4">
-            <div class="card">
-                <div class="card-header">
-                    <h6 class="mb-0">
-                        <i class="fas fa-trophy me-2"></i>Ranking de Sucursales
-                    </h6>
-                </div>
-                <div class="card-body p-0">
-                    <div class="list-group list-group-flush">
-                        {% for branch, stats in branch_stats.items() %}
-                        {% set rank = loop.index %}
-                        <div class="list-group-item">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <div class="d-flex align-items-center">
-                                        <span class="badge {{ 'bg-warning' if rank == 1 else 'bg-primary' if rank == 2 else 'bg-success' if rank == 3 else 'bg-secondary' }} me-2">
-                                            {{ rank }}
-                                        </span>
-                                        <div>
-                                            <h6 class="mb-0">{{ branch }}</h6>
-                                            <small class="text-muted">
-                                                {{ stats.records_count }} registro{{ 's' if stats.records_count != 1 else '' }}
-                                            </small>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="text-end">
-                                    <div class="fw-bold text-success">${{ "{:,.0f}".format(stats.total_sales).replace(",", "X").replace(".", ",").replace("X", ".") }}</div>
-                                    <small class="text-muted">
-                                        Ganancia: ${{ "{:,.0f}".format(stats.net_profit).replace(",", "X").replace(".", ",").replace("X", ".") }}
-                                    </small>
-                                </div>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
     {% endif %}
 
