@@ -408,7 +408,9 @@ def get_period_dates(period, custom_start=None, custom_end=None):
     import datetime
     from datetime import timedelta
     
-    today = datetime.date.today()
+    import pytz
+    tz_arg = pytz.timezone('America/Argentina/Buenos_Aires')
+    today = datetime.datetime.now(tz_arg).date()
     
     if period == 'today':
         return today, today

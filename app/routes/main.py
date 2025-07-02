@@ -432,8 +432,11 @@ def api_daily_stats():
     Solo para administradores.
     """
     try:
-        today = datetime.date.today()
-        print(f"🔍 Buscando registros para {today}")  # Debug
+        # Usar zona horaria de Argentina para determinar la fecha actual
+        import pytz
+        tz_arg = pytz.timezone('America/Argentina/Buenos_Aires')
+        today = datetime.datetime.now(tz_arg).date()
+        print(f"🔍 Buscando registros para {today} (Argentina)")  # Debug
         
         # Obtener registros del día actual
         todays_records = DailyRecord.query.filter(

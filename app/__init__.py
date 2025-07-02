@@ -3,7 +3,8 @@ import os
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
-
+import datetime
+import pytz
 # Inicialización de objetos globales
 db = SQLAlchemy()
 login_manager = LoginManager()
@@ -112,15 +113,15 @@ def create_app(config_name=None):
     
     @app.context_processor
     def inject_datetime():
-        """
-        Inyectar funciones de fecha y hora en todas las plantillas.
-        """
         import datetime
         import pytz
         
         # Zona horaria argentina
         tz_arg = pytz.timezone('America/Argentina/Buenos_Aires')
         now_arg = datetime.datetime.now(tz_arg)
+        
+        # Debug: mostrar la hora actual de Argentina
+        print(f"🇦🇷 Context processor - Hora Argentina: {now_arg.strftime('%Y-%m-%d %H:%M:%S %Z')}")
         
         return {
             'now': now_arg,
@@ -132,6 +133,25 @@ def create_app(config_name=None):
             'format_datetime': lambda dt: dt.strftime('%d/%m/%Y %H:%M') if dt else '',
             'format_time': lambda t: t.strftime('%H:%M') if t else ''
         }
+    
+    def get_argentina_now():
+        """
+        Función helper para obtener la fecha y hora actual de Argentina.
+        Usar esta función en lugar de datetime.now() o date.today()
+        """
+        import pytz
+        tz_arg = pytz.timezone('America/Argentina/Buenos_Aires')
+        return datetime.datetime.now(tz_arg)
+
+    def get_argentina_today():
+        """
+        Función helper para obtener la fecha actual de Argentina.
+        """
+        return get_argentina_now().date()
+
+    # Hacer las funciones disponibles globalmente en la app
+    app.get_argentina_now = get_argentina_now
+    app.get_argentina_today = get_argentina_today
     
     return app
 

@@ -29,7 +29,11 @@ TZ_ARG = pytz.timezone('America/Argentina/Buenos_Aires')
 
 def get_today_arg():
     """Devuelve la fecha de hoy en Argentina (zona horaria correcta)"""
-    return datetime.datetime.now(TZ_ARG).date()
+    import pytz
+    tz_arg = pytz.timezone('America/Argentina/Buenos_Aires')
+    now_arg = datetime.datetime.now(tz_arg)
+    print(f"🇦🇷 Hora actual Argentina: {now_arg.strftime('%Y-%m-%d %H:%M:%S %Z')}")  # Debug
+    return now_arg.date()
 
 @daily_records_bp.route('/')
 @daily_records_bp.route('/index')
