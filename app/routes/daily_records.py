@@ -421,8 +421,224 @@ def api_payment_breakdown():
         'data': breakdown
     })
 
+@daily_records_bp.route('/api/cash-trays')
+@login_required
+def api_cash_trays():
+    """
+    API para obtener el estado actual de todas las bandejas.
+    """
+    try:
+        from app.models.cash_tray import CashTray
+        
+        # Recalcular bandejas en tiempo real basándose en registros NO retirados
+        update_trays_from_records()
+        
+        summary = CashTray.get_all_trays_summary()
+        
+        return jsonify({
+            'status': 'success',
+            'data': summary
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+
+@daily_records_bp.route('/empty-all-trays', methods=['POST'])
+@login_required
+def empty_all_trays():
+    """
+    Vaciar todas las bandejas de efectivo.
+    Solo administradores pueden hacer esto.
+    """
+    if not current_user.is_admin_user():
+        flash('Solo los administradores pueden vaciar todas las bandejas.', 'error')
+        return redirect(url_for('daily_records.index'))
+    
+    try:
+        from app.models.cash_tray import CashTray
+        
+        # Vaciar todas las bandejas
+        trays = CashTray.query.all()
+        total_emptied = 0
+        
+        for tray in trays:
+            total_emptied += tray.get_total_accumulated()
+            tray.empty_tray()
+        
+        db.session.commit()
+        
+        flash(
+            f'Todas las bandejas han sido vaciadas. '
+            f'Total retirado: ${total_emptied:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'),
+            'success'
+        )
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error vaciando las bandejas: {str(e)}', 'error')
+    
+    return redirect(url_for('daily_records.index'))
+
+
+@daily_records_bp.route('/empty-branch-tray/<branch_name>', methods=['POST'])
+@login_required
+def empty_branch_tray(branch_name):
+    """
+    Vaciar la bandeja de una sucursal específica.
+    """
+    # Verificar permisos: admins pueden vaciar cualquier bandeja,
+    # usuarios de sucursal solo pueden vaciar la suya
+    if not current_user.is_admin_user() and current_user.branch_name != branch_name:
+        flash('No tienes permisos para vaciar esa bandeja.', 'error')
+        return redirect(url_for('daily_records.index'))
+    
+    try:
+        from app.models.cash_tray import CashTray
+        
+        tray = CashTray.query.filter_by(branch_name=branch_name).first()
+        if not tray:
+            flash(f'No se encontró la bandeja para {branch_name}.', 'warning')
+            return redirect(url_for('daily_records.index'))
+        
+        total_emptied = tray.get_total_accumulated()
+        tray.empty_tray()
+        db.session.commit()
+        
+        flash(
+            f'Bandeja de {branch_name} vaciada. '
+            f'Total retirado: ${total_emptied:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'),
+            'success'
+        )
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error vaciando la bandeja de {branch_name}: {str(e)}', 'error')
+    
+    return redirect(url_for('daily_records.index'))
+
+
+@daily_records_bp.route('/empty-record/<int:record_id>', methods=['POST'])
+@login_required
+def empty_record(record_id):
+    """
+    "Vaciar" un registro específico (marcarlo como retirado).
+    Útil cuando se olvida marcar que se retiró dinero de un día específico.
+    """
+    record = DailyRecord.query.get_or_404(record_id)
+    
+    # Verificar permisos
+    if not current_user.can_edit_record(record):
+        flash('No tienes permisos para modificar este registro.', 'error')
+        return redirect(url_for('daily_records.index'))
+    
+    # Verificar que no esté ya retirado
+    if record.is_withdrawn:
+        flash(f'El registro del {record.record_date.strftime("%d/%m/%Y")} ya fue retirado anteriormente.', 'warning')
+        return redirect(url_for('daily_records.index'))
+    
+    try:
+        from app.models.cash_tray import CashTray
+        
+        # Marcar el registro como retirado
+        record.mark_as_withdrawn(current_user)
+        
+        # Actualizar la bandeja correspondiente
+        tray = CashTray.query.filter_by(branch_name=record.branch_name).first()
+        if tray:
+            tray.subtract_amounts(
+                cash=record.cash_sales or 0,
+                mercadopago=record.mercadopago_sales or 0,
+                debit=record.debit_sales or 0,
+                credit=record.credit_sales or 0
+            )
+        
+        db.session.commit()
+        
+        total_removed = (
+            float(record.cash_sales or 0) +
+            float(record.mercadopago_sales or 0) +
+            float(record.debit_sales or 0) +
+            float(record.credit_sales or 0)
+        )
+        
+        flash(
+            f'Registro del {record.record_date.strftime("%d/%m/%Y")} retirado de la bandeja. '
+            f'Total: ${total_removed:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'),
+            'success'
+        )
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error procesando el retiro: {str(e)}', 'error')
+    
+    return redirect(url_for('daily_records.index'))
+
+
+@daily_records_bp.route('/recalculate-trays', methods=['POST'])
+@login_required
+def recalculate_trays():
+    """
+    Recalcular todas las bandejas desde cero.
+    Solo para administradores, útil si hay inconsistencias.
+    """
+    if not current_user.is_admin_user():
+        flash('Solo los administradores pueden recalcular las bandejas.', 'error')
+        return redirect(url_for('daily_records.index'))
+    
+    try:
+        update_trays_from_records()
+        flash('Todas las bandejas han sido recalculadas correctamente.', 'success')
+        
+    except Exception as e:
+        flash(f'Error recalculando las bandejas: {str(e)}', 'error')
+    
+    return redirect(url_for('daily_records.index'))
+
+
+
 
 # Funciones auxiliares
+
+def update_trays_from_records():
+    """
+    Actualizar todas las bandejas basándose en los registros NO retirados.
+    """
+    from app.models.cash_tray import CashTray
+    
+    try:
+        # Obtener todas las sucursales que tienen registros
+        branches = db.session.query(DailyRecord.branch_name).distinct().all()
+        
+        for (branch_name,) in branches:
+            # Obtener o crear bandeja para la sucursal
+            tray = CashTray.query.filter_by(branch_name=branch_name).first()
+            if not tray:
+                tray = CashTray(branch_name=branch_name)
+                db.session.add(tray)
+            
+            # Calcular totales de registros NO retirados
+            records = DailyRecord.query.filter_by(
+                branch_name=branch_name,
+                is_withdrawn=False
+            ).all()
+            
+            # Resetear y recalcular
+            tray.accumulated_cash = sum(float(r.cash_sales or 0) for r in records)
+            tray.accumulated_mercadopago = sum(float(r.mercadopago_sales or 0) for r in records)
+            tray.accumulated_debit = sum(float(r.debit_sales or 0) for r in records)
+            tray.accumulated_credit = sum(float(r.credit_sales or 0) for r in records)
+            tray.last_updated = datetime.datetime.now()
+        
+        db.session.commit()
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error actualizando bandejas: {e}")
+
 def get_quick_stats(user, target_date):
     """
     Obtener estadísticas rápidas para el dashboard.

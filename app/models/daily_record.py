@@ -409,6 +409,29 @@ class DailyRecord(db.Model):
                 'credit': sum(float(r.credit_sales) for r in records)
             }
         }
+    
+    # Campo para trackear si el registro fue retirado de la bandeja
+    is_withdrawn = db.Column(db.Boolean, default=False, nullable=False)
+    
+    withdrawn_at = db.Column(db.DateTime, nullable=True)
+    
+    withdrawn_by = db.Column(
+        db.Integer,
+        db.ForeignKey('users.id'),
+        nullable=True
+    )
+
+    def mark_as_withdrawn(self, user):
+        """Marcar el registro como retirado de la bandeja."""
+        self.is_withdrawn = True
+        self.withdrawn_at = datetime.datetime.now()
+        self.withdrawn_by = user.id
+
+    def unmark_withdrawn(self):
+        """Desmarcar el registro como retirado (para correcciones)."""
+        self.is_withdrawn = False
+        self.withdrawn_at = None
+        self.withdrawn_by = None
 
 
 # Event listeners para automatización

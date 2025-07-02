@@ -68,7 +68,7 @@ def create_app(config_name=None):
     with app.app_context():
         from app.models.user import User
         from app.models.daily_record import DailyRecord
-        
+        from app.models.cash_tray import CashTray
         # Crear todas las tablas si no existen
         db.create_all()
 

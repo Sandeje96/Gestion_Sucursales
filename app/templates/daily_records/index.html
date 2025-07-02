@@ -2,38 +2,157 @@
 {% extends "layout/base.html" %}
 
 {% block title %}
-    Registros Diarios - {{ current_user.branch_name if not current_user.is_admin_user() else 'Sistema' }}
+    Registros y Bandejas - {{ current_user.branch_name if not current_user.is_admin_user() else 'Sistema' }}
 {% endblock %}
 
 {% block extra_css %}
 <style>
-    .h3.mb-1 {
+
+    .mb-1 {
         margin-bottom: .25rem !important;
+        color: black;
+    }
+
+    .mb-3 {
+        margin-bottom: 1rem !important;
+        color: black;
+    }
+
+    .card-body.tt.text-center {
+        background: cornflowerblue;
+    }
+    .cash-tray-card {
+        transition: all 0.3s ease;
+        border: none;
+        border-radius: 15px;
+        overflow: hidden;
+        background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(248,249,250,0.95) 100%);
+        border-left: 5px solid;
+    }
+
+    .cash-tray-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    }
+
+    .cash-tray-card.efectivo { border-left-color: #10b981; }
+    .cash-tray-card.mercadopago { border-left-color: #3b82f6; }
+    .cash-tray-card.debito { border-left-color: #f59e0b; }
+    .cash-tray-card.credito { border-left-color: #ef4444; }
+    .cash-tray-card.total { border-left-color: #8b5cf6; }
+
+    .tray-amount {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+
+    .tray-icon {
+        width: 50px;
+        height: 50px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .tray-icon.efectivo { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+    .tray-icon.mercadopago { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
+    .tray-icon.debito { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+    .tray-icon.credito { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+    .tray-icon.total { background: rgba(139, 92, 246, 0.1); color: #8b5cf6; }
+
+    .branch-tray-card {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        border: 1px solid #e9ecef;
+        transition: all 0.2s ease;
+    }
+
+    .branch-tray-card:hover {
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        border-color: #0d6efd;
+    }
+
+    .btn-empty {
+        background: linear-gradient(135deg, #dc3545 0%, #b02a37 100%);
+        border: none;
+        color: white;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    .btn-empty:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
+        color: white;
+    }
+
+    .btn-empty-record {
+        background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+        border: none;
         color: #000;
+        font-weight: 600;
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+
+    .btn-empty-record:hover {
+        color: #000;
+        transform: scale(1.05);
+    }
+
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+
+    .records-section {
+        background: white;
+        border-radius: 15px;
+        overflow: hidden;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+
+    .filters-card {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 15px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        border: 1px solid #dee2e6;
     }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid my-4">
-    <div class="row">
-        <!-- Header con título y botones -->
+    <!-- Header -->
+    <div class="row mb-4">
         <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center mb-4">
+            <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <h1 class="h3 mb-1">
-                        <i class="fas fa-calendar-day text-primary me-2"></i>
-                        Registros Diarios
+                        <i class="fas fa-cash-register text-primary me-2"></i>
+                        Bandejas de Efectivo y Registros
                         {% if not current_user.is_admin_user() %}
                             - {{ current_user.branch_name }}
                         {% endif %}
                     </h1>
                     <p class="text-muted mb-0">
-                        {% if current_user.is_admin_user() %}
-                            Gestiona y supervisa todos los registros del sistema
-                        {% else %}
-                            Gestiona los registros diarios de tu sucursal
-                        {% endif %}
+                        Controla el efectivo acumulado y gestiona los registros diarios
                     </p>
                 </div>
                 
@@ -44,142 +163,166 @@
                         </a>
                     {% endif %}
                     
-                    {% if current_user.is_admin_user() %}
-                        <a href="{{ url_for('reports.index') }}" class="btn btn-outline-secondary">
-                            <i class="fas fa-file-chart me-2"></i>Reportes
-                        </a>
-                    {% endif %}
+                    <button class="btn btn-outline-info" onclick="refreshTrays()">
+                        <i class="fas fa-sync-alt me-2"></i>Actualizar
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Estadísticas rápidas -->
-    {% if stats %}
+    <!-- Tarjetas de bandejas totales -->
     <div class="row mb-4">
         <div class="col-12">
-            <div class="row g-3">
-                <!-- Estadísticas de hoy -->
-                <div class="col-md-3">
-                    <div class="card bg-primary text-white">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    <h6 class="card-title mb-1">Ventas Hoy</h6>
-                                    <h4 class="mb-0">${{ "{:,.2f}".format(stats.today.total_sales).replace(",", "X").replace(".", ",").replace("X", ".") }}</h4>
-                                </div>
-                                <div class="align-self-center">
-                                    <i class="fas fa-cash-register fa-2x opacity-75"></i>
-                                </div>
-                            </div>
-                            <small class="opacity-75">
-                                {{ stats.today.records_count }} registro{{ 's' if stats.today.records_count != 1 else '' }}
-                            </small>
-                        </div>
+            <h4 class="mb-3">
+                <i class="fas fa-wallet me-2 text-success"></i>
+                Dinero Disponible en Bandejas
+                <small class="text-muted">(Total acumulado por método de pago)</small>
+            </h4>
+        </div>
+        
+        <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+            <div class="card cash-tray-card efectivo">
+                <div class="card-body text-center">
+                    <div class="tray-icon efectivo mx-auto">
+                        <i class="fas fa-money-bill-wave"></i>
                     </div>
+                    <h6 class="card-title text-muted mb-2">Efectivo</h6>
+                    <div class="tray-amount text-success" id="totalCashTray">$0,00</div>
+                    <small class="text-muted">En todas las sucursales</small>
                 </div>
-                
-                <div class="col-md-3">
-                    <div class="card bg-success text-white">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    <h6 class="card-title mb-1">Ganancia Hoy</h6>
-                                    <h4 class="mb-0">${{ "{:,.2f}".format(stats.today.net_amount).replace(",", "X").replace(".", ",").replace("X", ".") }}</h4>
-                                </div>
-                                <div class="align-self-center">
-                                    <i class="fas fa-chart-line fa-2x opacity-75"></i>
-                                </div>
-                            </div>
-                            <small class="opacity-75">
-                                Gastos: ${{ "{:,.2f}".format(stats.today.total_expenses).replace(",", "X").replace(".", ",").replace("X", ".") }}
-                            </small>
-                        </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+            <div class="card cash-tray-card mercadopago">
+                <div class="card-body text-center">
+                    <div class="tray-icon mercadopago mx-auto">
+                        <i class="fas fa-mobile-alt"></i>
                     </div>
+                    <h6 class="card-title text-muted mb-2">MercadoPago</h6>
+                    <div class="tray-amount text-primary" id="totalMercadoPagoTray">$0,00</div>
+                    <small class="text-muted">En todas las sucursales</small>
                 </div>
-                
-                <div class="col-md-3">
-                    <div class="card bg-info text-white">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    <h6 class="card-title mb-1">Ventas del Mes</h6>
-                                    <h4 class="mb-0">${{ "{:,.2f}".format(stats.month.total_sales).replace(",", "X").replace(".", ",").replace("X", ".") }}</h4>
-                                </div>
-                                <div class="align-self-center">
-                                    <i class="fas fa-calendar-month fa-2x opacity-75"></i>
-                                </div>
-                            </div>
-                            <small class="opacity-75">
-                                {{ stats.month.records_count }} registro{{ 's' if stats.month.records_count != 1 else '' }}
-                            </small>
-                        </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+            <div class="card cash-tray-card debito">
+                <div class="card-body text-center">
+                    <div class="tray-icon debito mx-auto">
+                        <i class="fas fa-credit-card"></i>
                     </div>
+                    <h6 class="card-title text-muted mb-2">Débito</h6>
+                    <div class="tray-amount text-warning" id="totalDebitoTray">$0,00</div>
+                    <small class="text-muted">En todas las sucursales</small>
                 </div>
-                
-                <div class="col-md-3">
-                    <div class="card bg-warning text-dark">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    <h6 class="card-title mb-1">Ganancia del Mes</h6>
-                                    <h4 class="mb-0">${{ "{:,.2f}".format(stats.month.net_amount).replace(",", "X").replace(".", ",").replace("X", ".") }}</h4>
-                                </div>
-                                <div class="align-self-center">
-                                    <i class="fas fa-trophy fa-2x opacity-75"></i>
-                                </div>
-                            </div>
-                            <small class="opacity-75">
-                                Gastos: ${{ "{:,.2f}".format(stats.month.total_expenses).replace(",", "X").replace(".", ",").replace("X", ".") }}
-                            </small>
-                        </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+            <div class="card cash-tray-card credito">
+                <div class="card-body text-center">
+                    <div class="tray-icon credito mx-auto">
+                        <i class="fas fa-credit-card"></i>
                     </div>
+                    <h6 class="card-title text-muted mb-2">Crédito</h6>
+                    <div class="tray-amount text-danger" id="totalCreditoTray">$0,00</div>
+                    <small class="text-muted">En todas las sucursales</small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+            <div class="card cash-tray-card total">
+                <div class="card-body text-center">
+                    <div class="tray-icon total mx-auto">
+                        <i class="fas fa-calculator"></i>
+                    </div>
+                    <h6 class="card-title text-muted mb-2">Total General</h6>
+                    <div class="tray-amount text-purple" id="totalGeneralTray">$0,00</div>
+                    <small class="text-muted">Suma de todos los métodos</small>
+                </div>
+            </div>
+        </div>
+        
+        {% if current_user.is_admin_user() %}
+        <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+            <div class="card cash-tray-card bg-danger text-white">
+                <div class="card-body tt text-center">
+                    <div class="tray-icon bg-white bg-opacity-20 mx-auto">
+                        <i class="fas fa-broom text-white"></i>
+                    </div>
+                    <h6 class="card-title mb-3">Acciones</h6>
+                    <button class="btn btn-light btn-sm w-100 mb-2" onclick="emptyAllTrays()">
+                        <i class="fas fa-trash me-1"></i>Vaciar Todo
+                    </button>
+                    <button class="btn btn-outline-light btn-sm w-100" onclick="recalculateTrays()">
+                        <i class="fas fa-sync me-1"></i>Recalcular
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    <!-- Bandejas por sucursal -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h4 class="mb-3">
+                <i class="fas fa-store me-2 text-info"></i>
+                Bandejas por Sucursal
+            </h4>
+        </div>
+        
+        <div class="col-12">
+            <div id="branchTraysContainer">
+                <!-- Se carga dinámicamente con JavaScript -->
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando bandejas...</span>
+                    </div>
+                    <p class="text-muted mt-2">Cargando información de bandejas...</p>
                 </div>
             </div>
         </div>
     </div>
-    {% endif %}
 
     <!-- Filtros de búsqueda -->
     <div class="row mb-4">
         <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h6 class="mb-0">
-                        <i class="fas fa-filter me-2"></i>Filtros de Búsqueda
-                    </h6>
-                </div>
-                <div class="card-body">
-                    <form method="GET" class="row g-3">
-                        <div class="col-md-3">
-                            {{ filter_form.start_date.label(class="form-label") }}
-                            {{ filter_form.start_date(class="form-control", value=request.args.get('start_date', '')) }}
+            <div class="filters-card">
+                <h6 class="mb-3">
+                    <i class="fas fa-filter me-2"></i>Filtros de Registros
+                </h6>
+                <form method="GET" class="row g-3" id="filtersForm">
+                    <div class="col-md-3">
+                        {{ filter_form.start_date.label(class="form-label fw-semibold") }}
+                        {{ filter_form.start_date(class="form-control", value=request.args.get('start_date', '')) }}
+                    </div>
+                    
+                    <div class="col-md-3">
+                        {{ filter_form.end_date.label(class="form-label fw-semibold") }}
+                        {{ filter_form.end_date(class="form-control", value=request.args.get('end_date', '')) }}
+                    </div>
+                    
+                    {% if current_user.is_admin_user() %}
+                    <div class="col-md-3">
+                        {{ filter_form.branch_filter.label(class="form-label fw-semibold") }}
+                        {{ filter_form.branch_filter(class="form-select", value=request.args.get('branch_filter', '')) }}
+                    </div>
+                    {% endif %}
+                    
+                    <div class="col-md-3 d-flex align-items-end">
+                        <div class="d-grid gap-2 d-md-flex w-100">
+                            <button type="submit" class="btn btn-primary flex-fill">
+                                <i class="fas fa-search me-2"></i>Filtrar
+                            </button>
+                            <a href="{{ url_for('daily_records.index') }}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times"></i>
+                            </a>
                         </div>
-                        
-                        <div class="col-md-3">
-                            {{ filter_form.end_date.label(class="form-label") }}
-                            {{ filter_form.end_date(class="form-control", value=request.args.get('end_date', '')) }}
-                        </div>
-                        
-                        {% if current_user.is_admin_user() %}
-                        <div class="col-md-3">
-                            {{ filter_form.branch_filter.label(class="form-label") }}
-                            {{ filter_form.branch_filter(class="form-select", value=request.args.get('branch_filter', '')) }}
-                        </div>
-                        {% endif %}
-                        
-                        <div class="col-md-3 d-flex align-items-end">
-                            <div class="d-grid gap-2 d-md-flex w-100">
-                                <button type="submit" class="btn btn-primary flex-fill">
-                                    <i class="fas fa-search me-2"></i>Filtrar
-                                </button>
-                                <a href="{{ url_for('daily_records.index') }}" class="btn btn-outline-secondary">
-                                    <i class="fas fa-times"></i>
-                                </a>
-                            </div>
-                        </div>
-                    </form>
-                </div>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -187,8 +330,8 @@
     <!-- Tabla de registros -->
     <div class="row">
         <div class="col-12">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="records-section">
+                <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
                     <h6 class="mb-0">
                         <i class="fas fa-list me-2"></i>
                         Lista de Registros 
@@ -231,7 +374,7 @@
                                     <th>Gastos</th>
                                     <th>Ganancia</th>
                                     <th>Estado</th>
-                                    <th width="150">Acciones</th>
+                                    <th width="200">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -276,25 +419,25 @@
                                     <td>
                                         <div class="btn-group btn-group-sm" role="group">
                                             <a href="{{ url_for('daily_records.view', id=record.id) }}" 
-                                               class="btn btn-outline-primary" 
-                                               data-bs-toggle="tooltip" 
-                                               title="Ver detalles">
+                                            class="btn btn-outline-primary" 
+                                            data-bs-toggle="tooltip" 
+                                            title="Ver detalles">
                                                 <i class="fas fa-eye"></i>
                                             </a>
                                             
                                             {% if current_user.can_edit_record(record) %}
                                             <a href="{{ url_for('daily_records.edit', id=record.id) }}" 
-                                               class="btn btn-outline-warning"
-                                               data-bs-toggle="tooltip" 
-                                               title="Editar">
+                                            class="btn btn-outline-warning"
+                                            data-bs-toggle="tooltip" 
+                                            title="Editar">
                                                 <i class="fas fa-edit"></i>
                                             </a>
                                             {% endif %}
                                             
                                             {% if current_user.is_admin_user() %}
                                             <form method="POST" 
-                                                  action="{{ url_for('daily_records.verify', id=record.id) }}" 
-                                                  class="d-inline">
+                                                action="{{ url_for('daily_records.verify', id=record.id) }}" 
+                                                class="d-inline">
                                                 <button type="submit" 
                                                         class="btn {{ 'btn-outline-secondary' if record.is_verified else 'btn-outline-success' }}"
                                                         data-bs-toggle="tooltip" 
@@ -302,6 +445,25 @@
                                                     <i class="fas {{ 'fa-times' if record.is_verified else 'fa-check' }}"></i>
                                                 </button>
                                             </form>
+                                            {% endif %}
+                                            
+                                            <!-- Botón para vaciar registro individual -->
+                                            {% if current_user.can_edit_record(record) %}
+                                                {% if record.is_withdrawn %}
+                                                    <span class="btn btn-sm btn-success" 
+                                                        data-bs-toggle="tooltip" 
+                                                        title="Ya retirado el {{ record.withdrawn_at.strftime('%d/%m/%Y %H:%M') if record.withdrawn_at else '' }}">
+                                                        <i class="fas fa-check-circle"></i>
+                                                    </span>
+                                                {% else %}
+                                                    <button type="button" 
+                                                            class="btn btn-empty-record"
+                                                            onclick="emptyRecord({{ record.id }}, '{{ record.record_date.strftime('%d/%m/%Y') }}', '{{ record.branch_name }}')"
+                                                            data-bs-toggle="tooltip" 
+                                                            title="Retirar de bandeja">
+                                                        <i class="fas fa-hand-holding-usd"></i>
+                                                    </button>
+                                                {% endif %}
                                             {% endif %}
                                             
                                             {% if current_user.can_edit_record(record) %}
@@ -405,6 +567,16 @@
         </div>
     </div>
 </div>
+<!-- Loading overlay -->
+<div id="loadingOverlay" class="loading-overlay" style="display: none;">
+    <div class="text-center">
+        <div class="spinner-border text-light mb-3" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Procesando...</span>
+        </div>
+        <h5 class="text-white">Procesando...</h5>
+        <p class="text-light">Por favor espera un momento</p>
+    </div>
+</div>
 
 <!-- Modales de confirmación para eliminar -->
 {% for record in records.items %}
@@ -423,7 +595,7 @@
                 <p>¿Estás seguro de que deseas eliminar el registro del <strong>{{ record.record_date.strftime('%d/%m/%Y') }}</strong>?</p>
                 <div class="alert alert-warning">
                     <i class="fas fa-exclamation-circle me-2"></i>
-                    <strong>Esta acción no se puede deshacer.</strong>
+                    <strong>Esta acción no se puede deshacer y también afectará las bandejas de efectivo.</strong>
                 </div>
                 <div class="row">
                     <div class="col-6">
@@ -455,31 +627,404 @@
 
 {% block scripts %}
 <script>
+// Variables globales
+let currentTrays = null;
+
+// Funciones de formato argentino
+function formatCurrencyArgentino(amount) {
+    const num = parseFloat(amount) || 0;
+    return new Intl.NumberFormat('es-AR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(num);
+}
+
 document.addEventListener('DOMContentLoaded', function() {
-    // Inicializar tooltips
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
+    console.log('💰 Inicializando sistema de bandejas...');
+    
+    // Cargar datos iniciales
+    loadCashTrays();
+    
+    // Configurar tooltips
+    initializeTooltips();
+    
+    // Auto-refresh cada 2 minutos
+    setInterval(loadCashTrays, 120000);
+    
+    // Configurar filtros
+    setupFilters();
+});
+
+async function loadCashTrays() {
+    try {
+        console.log('📊 Cargando bandejas...');
+        
+        const response = await fetch('{{ url_for('daily_records.api_cash_trays') }}');
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            currentTrays = data.data;
+            updateTotalTrayCards(data.data.totals);
+            updateBranchTraysDisplay(data.data.trays);
+            console.log('✅ Bandejas cargadas correctamente');
+        } else {
+            console.error('❌ Error en respuesta:', data.message);
+            showErrorState();
+        }
+        
+    } catch (error) {
+        console.error('❌ Error cargando bandejas:', error);
+        showErrorState();
+    }
+}
+
+function updateTotalTrayCards(totals) {
+    // Actualizar tarjetas principales
+    document.getElementById('totalCashTray').textContent = '$' + formatCurrencyArgentino(totals.cash);
+    document.getElementById('totalMercadoPagoTray').textContent = '$' + formatCurrencyArgentino(totals.mercadopago);
+    document.getElementById('totalDebitoTray').textContent = '$' + formatCurrencyArgentino(totals.debit);
+    document.getElementById('totalCreditoTray').textContent = '$' + formatCurrencyArgentino(totals.credit);
+    document.getElementById('totalGeneralTray').textContent = '$' + formatCurrencyArgentino(totals.total);
+}
+
+function updateBranchTraysDisplay(trays) {
+    const container = document.getElementById('branchTraysContainer');
+    
+    if (!trays || trays.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-4">
+                <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No hay bandejas con dinero</h5>
+                <p class="text-muted">Las bandejas se crearán automáticamente cuando se carguen registros</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Ordenar por total descendente
+    trays.sort((a, b) => b.total_accumulated - a.total_accumulated);
+    
+    let html = '<div class="row">';
+    
+    trays.forEach(tray => {
+        const canEmpty = {{ 'true' if current_user.is_admin_user() else 'false' }} || 
+                        '{{ current_user.branch_name }}' === tray.branch_name;
+        
+        html += `
+            <div class="col-lg-6 col-xl-4 mb-3">
+                <div class="branch-tray-card">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h6 class="mb-1 fw-bold">${tray.branch_name}</h6>
+                            <small class="text-muted">Última actualización: ${new Date(tray.last_updated).toLocaleString('es-AR')}</small>
+                        </div>
+                        <div class="text-end">
+                            <div class="h5 mb-0 fw-bold text-success">$${formatCurrencyArgentino(tray.total_accumulated)}</div>
+                            <small class="text-muted">Total acumulado</small>
+                        </div>
+                    </div>
+                    
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <div class="small text-muted">Efectivo</div>
+                            <div class="fw-semibold text-success">$${formatCurrencyArgentino(tray.accumulated_cash)}</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="small text-muted">MercadoPago</div>
+                            <div class="fw-semibold text-primary">$${formatCurrencyArgentino(tray.accumulated_mercadopago)}</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="small text-muted">Débito</div>
+                            <div class="fw-semibold text-warning">$${formatCurrencyArgentino(tray.accumulated_debit)}</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="small text-muted">Crédito</div>
+                            <div class="fw-semibold text-danger">$${formatCurrencyArgentino(tray.accumulated_credit)}</div>
+                        </div>
+                    </div>
+                    
+                    ${canEmpty && tray.total_accumulated > 0 ? `
+                        <button class="btn btn-empty btn-sm w-100" onclick="emptyBranchTray('${tray.branch_name}')">
+                            <i class="fas fa-hand-holding-usd me-2"></i>Vaciar Bandeja
+                        </button>
+                    ` : tray.total_accumulated === 0 ? `
+                        <div class="text-center text-muted">
+                            <i class="fas fa-check-circle me-1"></i>Bandeja vacía
+                        </div>
+                    ` : `
+                        <div class="text-center text-muted">
+                            <i class="fas fa-lock me-1"></i>Sin permisos para vaciar
+                        </div>
+                    `}
+                </div>
+            </div>
+        `;
     });
     
-    // Auto-submit del formulario de filtros cuando cambian las fechas
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function showErrorState() {
+    // Mostrar estado de error en las tarjetas principales
+    const errorText = 'Error';
+    document.getElementById('totalCashTray').textContent = errorText;
+    document.getElementById('totalMercadoPagoTray').textContent = errorText;
+    document.getElementById('totalDebitoTray').textContent = errorText;
+    document.getElementById('totalCreditoTray').textContent = errorText;
+    document.getElementById('totalGeneralTray').textContent = errorText;
+    
+    // Mostrar error en bandejas por sucursal
+    document.getElementById('branchTraysContainer').innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+            <h5 class="text-danger">Error cargando bandejas</h5>
+            <p class="text-muted">Hubo un problema al cargar la información. Intenta refrescar la página.</p>
+            <button class="btn btn-outline-primary" onclick="loadCashTrays()">
+                <i class="fas fa-sync-alt me-2"></i>Reintentar
+            </button>
+        </div>
+    `;
+}
+
+// Funciones de acciones
+async function emptyAllTrays() {
+    if (!currentTrays || currentTrays.totals.total === 0) {
+        showToast('No hay dinero en las bandejas para vaciar', 'warning');
+        return;
+    }
+    
+    const totalAmount = formatCurrencyArgentino(currentTrays.totals.total);
+    
+    if (!confirm(`¿Estás seguro de que deseas vaciar TODAS las bandejas?\n\nTotal a retirar: $${totalAmount}\n\nEsta acción no se puede deshacer.`)) {
+        return;
+    }
+    
+    showLoading();
+    
+    try {
+        const response = await fetch('{{ url_for('daily_records.empty_all_trays') }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            showToast('Todas las bandejas han sido vaciadas correctamente', 'success');
+            await loadCashTrays();
+        } else {
+            showToast('Error al vaciar las bandejas', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión al vaciar las bandejas', 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+async function emptyBranchTray(branchName) {
+    const tray = currentTrays.trays.find(t => t.branch_name === branchName);
+    if (!tray || tray.total_accumulated === 0) {
+        showToast('No hay dinero en esa bandeja para vaciar', 'warning');
+        return;
+    }
+    
+    const totalAmount = formatCurrencyArgentino(tray.total_accumulated);
+    
+    if (!confirm(`¿Vaciar la bandeja de ${branchName}?\n\nTotal a retirar: $${totalAmount}`)) {
+        return;
+    }
+    
+    showLoading();
+    
+    try {
+        const response = await fetch(`{{ url_for('daily_records.empty_branch_tray', branch_name='BRANCH_NAME') }}`.replace('BRANCH_NAME', encodeURIComponent(branchName)), {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            showToast(`Bandeja de ${branchName} vaciada correctamente`, 'success');
+            await loadCashTrays();
+        } else {
+            showToast('Error al vaciar la bandeja', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+async function emptyRecord(recordId, recordDate, branchName) {
+    if (!confirm(`¿Retirar el registro del ${recordDate} de la bandeja de ${branchName}?\n\nEsto restará ese día específico del acumulado.`)) {
+        return;
+    }
+    
+    showLoading();
+    
+    try {
+        const response = await fetch(`{{ url_for('daily_records.empty_record', record_id=0) }}`.replace('0', recordId), {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            showToast(`Registro del ${recordDate} retirado de la bandeja`, 'success');
+            await loadCashTrays();
+        } else {
+            showToast('Error al retirar el registro', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+async function recalculateTrays() {
+    if (!confirm('¿Recalcular todas las bandejas desde cero?\n\nEsto puede tardar unos segundos y corregirá cualquier inconsistencia.')) {
+        return;
+    }
+    
+    showLoading();
+    
+    try {
+        const response = await fetch('{{ url_for('daily_records.recalculate_trays') }}', {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            showToast('Bandejas recalculadas correctamente', 'success');
+            await loadCashTrays();
+        } else {
+            showToast('Error al recalcular las bandejas', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error de conexión', 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+async function refreshTrays() {
+    const refreshBtn = document.querySelector('button[onclick="refreshTrays()"]');
+    const originalHtml = refreshBtn.innerHTML;
+    
+    refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Actualizando...';
+    refreshBtn.disabled = true;
+    
+    try {
+        await loadCashTrays();
+        showToast('Bandejas actualizadas correctamente', 'success');
+    } catch (error) {
+        showToast('Error al actualizar', 'error');
+    } finally {
+        refreshBtn.innerHTML = originalHtml;
+        refreshBtn.disabled = false;
+    }
+}
+
+// Funciones de utilidad
+function showLoading() {
+    document.getElementById('loadingOverlay').style.display = 'flex';
+}
+
+function hideLoading() {
+    document.getElementById('loadingOverlay').style.display = 'none';
+}
+
+function showToast(message, type = 'info') {
+    if (typeof window.showToast === 'function') {
+        window.showToast(message, type);
+    } else {
+        alert(message);
+    }
+}
+
+function initializeTooltips() {
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+}
+
+function setupFilters() {
     const startDate = document.querySelector('input[name="start_date"]');
     const endDate = document.querySelector('input[name="end_date"]');
     const branchFilter = document.querySelector('select[name="branch_filter"]');
     
+    // Auto-submit cuando cambian las fechas
     if (startDate && endDate) {
         [startDate, endDate, branchFilter].forEach(element => {
             if (element) {
                 element.addEventListener('change', function() {
-                    // Debounce para evitar múltiples envíos
                     clearTimeout(this.submitTimeout);
                     this.submitTimeout = setTimeout(() => {
-                        this.closest('form').submit();
-                    }, 500);
+                        document.getElementById('filtersForm').submit();
+                    }, 800);
                 });
             }
         });
     }
+    
+    // Validación de fechas
+    if (startDate && endDate) {
+        startDate.addEventListener('change', function() {
+            endDate.min = this.value;
+            if (endDate.value && endDate.value < this.value) {
+                endDate.value = this.value;
+            }
+        });
+        
+        endDate.addEventListener('change', function() {
+            startDate.max = this.value;
+            if (startDate.value && startDate.value > this.value) {
+                startDate.value = this.value;
+            }
+        });
+    }
+}
+
+// Manejo de errores globales
+window.addEventListener('error', function(e) {
+    console.error('Error capturado:', e.error);
+    if (e.error && e.error.message && e.error.message.includes('fetch')) {
+        showToast('Error de conexión. Verifica tu conexión a internet.', 'error');
+    }
 });
+
+// Event listeners adicionales
+document.addEventListener('keydown', function(e) {
+    // Ctrl/Cmd + R para refrescar bandejas
+    if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+        e.preventDefault();
+        refreshTrays();
+    }
+    
+    // Escape para cerrar loading
+    if (e.key === 'Escape') {
+        hideLoading();
+    }
+});
+
+// Animaciones de entrada
+document.addEventListener('DOMContentLoaded', function() {
+    // Animar tarjetas de bandejas
+    const trayCards = document.querySelectorAll('.cash-tray-card');
+    trayCards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        
+        setTimeout(() => {
+            card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 100);
+    });
+});
+
+console.log('💰 Sistema de bandejas inicializado correctamente');
 </script>
 {% endblock %}
