@@ -1,1 +1,1 @@
-web: python migrate_add_withdrawn_fields.py && gunicorn run:app
+web: python recreate_daily_records_table.py && gunicorn run:app
