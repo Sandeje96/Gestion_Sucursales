@@ -164,6 +164,9 @@ def register_template_filters(app):
         app: Instancia de la aplicación Flask
     """
     
+    import pytz
+    from datetime import datetime
+    
     @app.template_filter('currency_ar')
     def currency_ar_filter(amount):
         """
@@ -232,6 +235,37 @@ def register_template_filters(app):
             return f"{formatted}%"
         except (ValueError, TypeError):
             return "0,0%"
+        
+    @app.template_filter('datetime_ar')
+    def datetime_ar_filter(dt, format='%d/%m/%Y %H:%M:%S'):
+        """
+        Filtro para convertir datetime UTC a zona horaria argentina.
+        """
+        if not dt:
+            return 'No disponible'
+        
+        try:
+            # Zona horaria argentina
+            tz_arg = pytz.timezone('America/Argentina/Buenos_Aires')
+            
+            # Si el datetime no tiene zona horaria, asumimos que es UTC
+            if dt.tzinfo is None:
+                dt = pytz.utc.localize(dt)
+            
+            # Convertir a zona horaria argentina
+            dt_arg = dt.astimezone(tz_arg)
+            
+            return dt_arg.strftime(format)
+        except Exception as e:
+            print(f"Error en datetime_ar_filter: {e}")
+            return str(dt)
+        
+    @app.template_filter('date_ar')
+    def date_ar_filter(dt):
+        """
+        Filtro para mostrar solo la fecha en formato argentino.
+        """
+        return datetime_ar_filter(dt, '%d/%m/%Y')
     
     @app.template_filter('format_ar')
     def format_ar_filter(amount, format_type='currency', decimals=2):
@@ -254,6 +288,13 @@ def register_template_filters(app):
             return percentage_ar_filter(amount, decimals)
         else:
             return str(amount)
+        
+    @app.template_filter('time_ar')
+    def time_ar_filter(dt):
+        """
+        Filtro para mostrar solo la hora en formato argentino.
+        """
+        return datetime_ar_filter(dt, '%H:%M:%S')
     
     # Función auxiliar disponible en todas las plantillas
     @app.template_global()

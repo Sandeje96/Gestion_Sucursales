@@ -1,1 +1,1 @@
-web: python recreate_daily_records_table.py && gunicorn run:app
+web: gunicorn run:app

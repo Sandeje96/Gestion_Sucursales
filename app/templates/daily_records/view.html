@@ -102,7 +102,7 @@
                                 </span>
                                 {% if record.verified_at %}
                                 <div class="small opacity-75 mt-1">
-                                    Verificado el {{ record.verified_at.strftime('%d/%m/%Y %H:%M') }}
+                                    Verificado el {{ record.verified_at | datetime_ar }}
                                     {% if record.verifier %}
                                         por {{ record.verifier.username }}
                                     {% endif %}
@@ -231,10 +231,10 @@
                                     <div class="bg-light p-3 rounded">
                                         <small class="text-muted">Fecha de creación</small>
                                         <div class="fw-semibold">
-                                            {{ record.created_at.strftime('%d/%m/%Y') }}
+                                            {{ record.created_at | date_ar }}
                                         </div>
                                         <small class="text-muted">
-                                            {{ record.created_at.strftime('%H:%M:%S') }}
+                                            {{ record.created_at | time_ar }}
                                         </small>
                                     </div>
                                 </div>
@@ -242,10 +242,10 @@
                                     <div class="bg-light p-3 rounded">
                                         <small class="text-muted">Última modificación</small>
                                         <div class="fw-semibold">
-                                            {{ record.updated_at.strftime('%d/%m/%Y') }}
+                                            {{ record.updated_at | date_ar }}
                                         </div>
                                         <small class="text-muted">
-                                            {{ record.updated_at.strftime('%H:%M:%S') }}
+                                            {{ record.updated_at | time_ar }}
                                         </small>
                                     </div>
                                 </div>
@@ -264,6 +264,11 @@
                                         <small class="text-success">Verificado por</small>
                                         <div class="fw-semibold text-success">{{ record.verifier.username }}</div>
                                         <small class="text-success">Administrador</small>
+                                        {% if record.verified_at %}
+                                        <div class="small text-success mt-1">
+                                            {{ record.verified_at | datetime_ar }}
+                                        </div>
+                                        {% endif %}
                                     </div>
                                 </div>
                                 {% endif %}
