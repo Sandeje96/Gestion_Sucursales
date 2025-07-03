@@ -8,6 +8,37 @@
 {% block extra_css %}
 <style>
 
+    .filters-card {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        padding: 1.25rem;
+    }
+
+    .alert-sm {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.875rem;
+    }
+
+    .input-group-text {
+        background-color: #e9ecef;
+        border-color: #ced4da;
+    }
+
+    .btn-outline-info.btn-sm {
+        font-size: 0.8rem;
+        padding: 0.25rem 0.5rem;
+    }
+
+    .form-text {
+        font-size: 0.75rem;
+        color: #6c757d;
+    }
+
+    .invalid-feedback.d-block {
+        display: block !important;
+    }
+
     .mb-1 {
         margin-bottom: .25rem !important;
         color: black;
@@ -289,43 +320,136 @@
 
     <!-- Filtros de búsqueda -->
     <div class="row mb-4">
-        <div class="col-12">
-            <div class="filters-card">
-                <h6 class="mb-3">
+    <div class="col-12">
+        <div class="filters-card">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="mb-0">
                     <i class="fas fa-filter me-2"></i>Filtros de Registros
                 </h6>
-                <form method="GET" class="row g-3" id="filtersForm">
-                    <div class="col-md-3">
-                        {{ filter_form.start_date.label(class="form-label fw-semibold") }}
-                        {{ filter_form.start_date(class="form-control", value=request.args.get('start_date', '')) }}
+                {% if request.args %}
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearFilters()">
+                    <i class="fas fa-times me-1"></i>Limpiar Filtros
+                </button>
+                {% endif %}
+            </div>
+            
+            <!-- Mensaje de filtros aplicados -->
+            {% if filters_applied %}
+            <div class="alert alert-info alert-sm mb-3">
+                <i class="fas fa-info-circle me-2"></i>
+                <strong>Filtros aplicados:</strong> {{ ', '.join(filters_applied) }}
+            </div>
+            {% endif %}
+            
+            <form method="GET" class="row g-3" id="filtersForm" novalidate>
+                <div class="col-md-3">
+                    {{ filter_form.start_date.label(class="form-label fw-semibold") }}
+                    <div class="input-group">
+                        {{ filter_form.start_date(
+                            class="form-control",
+                            placeholder="dd/mm/yyyy",
+                            autocomplete="off"
+                        ) }}
+                        <span class="input-group-text">
+                            <i class="fas fa-calendar"></i>
+                        </span>
                     </div>
-                    
-                    <div class="col-md-3">
-                        {{ filter_form.end_date.label(class="form-label fw-semibold") }}
-                        {{ filter_form.end_date(class="form-control", value=request.args.get('end_date', '')) }}
-                    </div>
-                    
-                    {% if current_user.is_admin_user() %}
-                    <div class="col-md-3">
-                        {{ filter_form.branch_filter.label(class="form-label fw-semibold") }}
-                        {{ filter_form.branch_filter(class="form-select", value=request.args.get('branch_filter', '')) }}
-                    </div>
+                    {% if filter_form.start_date.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in filter_form.start_date.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
                     {% endif %}
-                    
-                    <div class="col-md-3 d-flex align-items-end">
-                        <div class="d-grid gap-2 d-md-flex w-100">
-                            <button type="submit" class="btn btn-primary flex-fill">
-                                <i class="fas fa-search me-2"></i>Filtrar
+                    <div class="form-text">
+                        <i class="fas fa-info-circle me-1"></i>Fecha desde la cual buscar
+                    </div>
+                </div>
+                
+                <div class="col-md-3">
+                    {{ filter_form.end_date.label(class="form-label fw-semibold") }}
+                    <div class="input-group">
+                        {{ filter_form.end_date(
+                            class="form-control",
+                            placeholder="dd/mm/yyyy",
+                            autocomplete="off"
+                        ) }}
+                        <span class="input-group-text">
+                            <i class="fas fa-calendar"></i>
+                        </span>
+                    </div>
+                    {% if filter_form.end_date.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in filter_form.end_date.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    <div class="form-text">
+                        <i class="fas fa-info-circle me-1"></i>Fecha hasta la cual buscar
+                    </div>
+                </div>
+                
+                {% if current_user.is_admin_user() %}
+                <div class="col-md-3">
+                    {{ filter_form.branch_filter.label(class="form-label fw-semibold") }}
+                    {{ filter_form.branch_filter(
+                        class="form-select",
+                        onchange="this.form.requestSubmit()"
+                    ) }}
+                    {% if filter_form.branch_filter.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in filter_form.branch_filter.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    <div class="form-text">
+                        <i class="fas fa-info-circle me-1"></i>Filtrar por sucursal específica
+                    </div>
+                </div>
+                {% endif %}
+                
+                <div class="col-md-3 d-flex align-items-end">
+                    <div class="d-grid gap-2 d-md-flex w-100">
+                        <button type="submit" class="btn btn-primary flex-fill" id="filterSubmitBtn">
+                            <i class="fas fa-search me-2"></i>Filtrar
+                        </button>
+                        <a href="{{ url_for('daily_records.index') }}" class="btn btn-outline-secondary" title="Limpiar filtros">
+                            <i class="fas fa-times"></i>
+                        </a>
+                    </div>
+                </div>
+                
+                <!-- Filtros rápidos adicionales -->
+                <div class="col-12">
+                    <div class="border-top pt-3 mt-2">
+                        <small class="text-muted fw-semibold">Filtros Rápidos:</small>
+                        <div class="mt-2">
+                            <button type="button" class="btn btn-outline-info btn-sm me-2" onclick="setQuickFilter('today')">
+                                <i class="fas fa-clock me-1"></i>Hoy
                             </button>
-                            <a href="{{ url_for('daily_records.index') }}" class="btn btn-outline-secondary">
-                                <i class="fas fa-times"></i>
-                            </a>
+                            <button type="button" class="btn btn-outline-info btn-sm me-2" onclick="setQuickFilter('yesterday')">
+                                <i class="fas fa-calendar-minus me-1"></i>Ayer
+                            </button>
+                            <button type="button" class="btn btn-outline-info btn-sm me-2" onclick="setQuickFilter('week')">
+                                <i class="fas fa-calendar-week me-1"></i>Esta Semana
+                            </button>
+                            <button type="button" class="btn btn-outline-info btn-sm me-2" onclick="setQuickFilter('month')">
+                                <i class="fas fa-calendar-alt me-1"></i>Este Mes
+                            </button>
+                            {% if current_user.is_admin_user() %}
+                            <button type="button" class="btn btn-outline-secondary btn-sm me-2" onclick="setQuickFilter('unverified')">
+                                <i class="fas fa-exclamation-triangle me-1"></i>Sin Verificar
+                            </button>
+                            {% endif %}
                         </div>
                     </div>
-                </form>
-            </div>
+                </div>
+            </form>
         </div>
     </div>
+</div>
 
     <!-- Tabla de registros -->
     <div class="row">
@@ -599,6 +723,7 @@
 <script>
 // Variables globales
 let currentTrays = null;
+let lastFilterValues = {};
 
 // Funciones de formato argentino
 function formatCurrencyArgentino(amount) {
@@ -610,7 +735,7 @@ function formatCurrencyArgentino(amount) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('💰 Inicializando sistema de bandejas...');
+    console.log('💰 Inicializando sistema de bandejas y filtros mejorado...');
     
     // Cargar datos iniciales
     loadCashTrays();
@@ -618,11 +743,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Configurar tooltips
     initializeTooltips();
     
+    // Configurar filtros mejorados
+    setupFilters();
+    
     // Auto-refresh cada 2 minutos
     setInterval(loadCashTrays, 120000);
     
-    // Configurar filtros
-    setupFilters();
+    console.log('✅ Sistema inicializado correctamente');
 });
 
 async function loadCashTrays() {
@@ -817,15 +944,20 @@ async function emptyAllTrays() {
         const response = await fetch('{{ url_for('daily_records.empty_all_trays') }}', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
             }
         });
         
         if (response.ok) {
             showToast('Todas las bandejas han sido vaciadas correctamente', 'success');
+            
+            // ✅ ACTUALIZACIÓN AUTOMÁTICA INMEDIATA
             await loadCashTrays();
+            
         } else {
-            showToast('Error al vaciar las bandejas', 'error');
+            const errorData = await response.json().catch(() => ({}));
+            showToast(errorData.message || 'Error al vaciar las bandejas', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
@@ -852,14 +984,28 @@ async function emptyBranchTray(branchName) {
     
     try {
         const response = await fetch(`{{ url_for('daily_records.empty_branch_tray', branch_name='BRANCH_NAME') }}`.replace('BRANCH_NAME', encodeURIComponent(branchName)), {
-            method: 'POST'
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
         });
         
         if (response.ok) {
             showToast(`Bandeja de ${branchName} vaciada correctamente`, 'success');
+            
+            // ✅ ACTUALIZACIÓN AUTOMÁTICA INMEDIATA
             await loadCashTrays();
+            
+            // También actualizar la tabla de registros si es necesario
+            setTimeout(() => {
+                // Opcional: recargar la página para reflejar cambios en la tabla
+                // window.location.reload();
+            }, 1000);
+            
         } else {
-            showToast('Error al vaciar la bandeja', 'error');
+            const errorData = await response.json().catch(() => ({}));
+            showToast(errorData.message || 'Error al vaciar la bandeja', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
@@ -878,14 +1024,27 @@ async function emptyRecord(recordId, recordDate, branchName) {
     
     try {
         const response = await fetch(`{{ url_for('daily_records.empty_record', record_id=0) }}`.replace('0', recordId), {
-            method: 'POST'
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
         });
         
         if (response.ok) {
             showToast(`Registro del ${recordDate} retirado de la bandeja`, 'success');
+            
+            // ✅ ACTUALIZACIÓN AUTOMÁTICA INMEDIATA
             await loadCashTrays();
+            
+            // Actualizar la tabla para mostrar el estado "retirado"
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+            
         } else {
-            showToast('Error al retirar el registro', 'error');
+            const errorData = await response.json().catch(() => ({}));
+            showToast(errorData.message || 'Error al retirar el registro', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
@@ -941,60 +1100,230 @@ async function refreshTrays() {
 
 // Funciones de utilidad
 function showLoading() {
-    document.getElementById('loadingOverlay').style.display = 'flex';
+    // Mostrar spinner global o en bandejas
+    const container = document.getElementById('branchTraysContainer');
+    if (container) {
+        const loadingOverlay = document.createElement('div');
+        loadingOverlay.id = 'loadingOverlay';
+        loadingOverlay.className = 'position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center';
+        loadingOverlay.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+        loadingOverlay.style.zIndex = '1000';
+        loadingOverlay.innerHTML = `
+            <div class="text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Procesando...</span>
+                </div>
+                <div class="mt-2 text-muted">Procesando...</div>
+            </div>
+        `;
+        
+        container.style.position = 'relative';
+        container.appendChild(loadingOverlay);
+    }
 }
 
 function hideLoading() {
-    document.getElementById('loadingOverlay').style.display = 'none';
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    if (loadingOverlay) {
+        loadingOverlay.remove();
+    }
 }
 
 function showToast(message, type = 'info') {
+    // Usar el sistema de toast del main.js si está disponible
     if (typeof window.showToast === 'function') {
         window.showToast(message, type);
     } else {
+        // Fallback a alert
         alert(message);
     }
 }
 
 function initializeTooltips() {
-    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-    const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+    // Inicializar tooltips de Bootstrap si están disponibles
+    if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    }
+}
+
+// Función para establecer filtros rápidos
+function setQuickFilter(type) {
+    const form = document.getElementById('filtersForm');
+    const startDate = form.querySelector('input[name="start_date"]');
+    const endDate = form.querySelector('input[name="end_date"]');
+    
+    // Obtener fecha actual en Argentina
+    const now = new Date();
+    const today = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
+    
+    switch(type) {
+        case 'today':
+            const todayStr = today.toISOString().split('T')[0];
+            startDate.value = todayStr;
+            endDate.value = todayStr;
+            break;
+            
+        case 'yesterday':
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yesterdayStr = yesterday.toISOString().split('T')[0];
+            startDate.value = yesterdayStr;
+            endDate.value = yesterdayStr;
+            break;
+            
+        case 'week':
+            const weekStart = new Date(today);
+            weekStart.setDate(today.getDate() - today.getDay()); // Domingo
+            startDate.value = weekStart.toISOString().split('T')[0];
+            endDate.value = today.toISOString().split('T')[0];
+            break;
+            
+        case 'month':
+            const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+            startDate.value = monthStart.toISOString().split('T')[0];
+            endDate.value = today.toISOString().split('T')[0];
+            break;
+            
+        case 'unverified':
+            // Para registros sin verificar, buscar en el último mes
+            const monthAgo = new Date(today);
+            monthAgo.setMonth(monthAgo.getMonth() - 1);
+            startDate.value = monthAgo.toISOString().split('T')[0];
+            endDate.value = today.toISOString().split('T')[0];
+            // Nota: El filtro de "sin verificar" se manejará en el backend
+            break;
+    }
+    
+    // Enviar formulario automáticamente
+    form.requestSubmit();
 }
 
 function setupFilters() {
-    const startDate = document.querySelector('input[name="start_date"]');
-    const endDate = document.querySelector('input[name="end_date"]');
-    const branchFilter = document.querySelector('select[name="branch_filter"]');
+    console.log('🔧 Configurando sistema de filtros mejorado...');
     
-    // Auto-submit cuando cambian las fechas
-    if (startDate && endDate) {
-        [startDate, endDate, branchFilter].forEach(element => {
-            if (element) {
-                element.addEventListener('change', function() {
-                    clearTimeout(this.submitTimeout);
-                    this.submitTimeout = setTimeout(() => {
-                        document.getElementById('filtersForm').submit();
-                    }, 800);
-                });
+    const filtersForm = document.getElementById('filtersForm');
+    const startDateInput = document.querySelector('input[name="start_date"]');
+    const endDateInput = document.querySelector('input[name="end_date"]');
+    const branchSelect = document.querySelector('select[name="branch_filter"]');
+    
+    if (!filtersForm) {
+        console.warn('⚠️ No se encontró el formulario de filtros');
+        return;
+    }
+    
+    // Función para aplicar filtros con validación
+    function applyFilters(showLoading = true) {
+        if (showLoading) {
+            showFilterLoading();
+        }
+        
+        const formData = new FormData(filtersForm);
+        const params = new URLSearchParams();
+        
+        // Validar y agregar parámetros
+        const startDate = formData.get('start_date');
+        const endDate = formData.get('end_date');
+        const branchFilter = formData.get('branch_filter');
+        
+        // Validación de fechas
+        if (startDate && endDate) {
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            
+            if (start > end) {
+                showToast('La fecha de inicio debe ser anterior a la fecha final', 'error');
+                hideFilterLoading();
+                return false;
             }
+        }
+        
+        // Agregar parámetros válidos
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+        if (branchFilter) params.append('branch_filter', branchFilter);
+        
+        // Construir URL y navegar
+        const baseUrl = window.location.pathname;
+        const newUrl = params.toString() ? `${baseUrl}?${params.toString()}` : baseUrl;
+        
+        console.log('🔄 Aplicando filtros:', {
+            startDate,
+            endDate,
+            branchFilter,
+            url: newUrl
+        });
+        
+        // Navegar a la nueva URL
+        window.location.href = newUrl;
+        return true;
+    }
+    
+    // Event listener para el formulario
+    filtersForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        applyFilters();
+    });
+    
+    // Auto-filtrado para el selector de sucursal (opcional)
+    if (branchSelect) {
+        branchSelect.addEventListener('change', function() {
+            // Pequeño delay para que el usuario vea el cambio
+            setTimeout(() => {
+                applyFilters();
+            }, 300);
         });
     }
     
-    // Validación de fechas
-    if (startDate && endDate) {
-        startDate.addEventListener('change', function() {
-            endDate.min = this.value;
-            if (endDate.value && endDate.value < this.value) {
-                endDate.value = this.value;
-            }
-        });
-        
-        endDate.addEventListener('change', function() {
-            startDate.max = this.value;
-            if (startDate.value && startDate.value > this.value) {
-                startDate.value = this.value;
-            }
-        });
+    // Función para limpiar filtros
+    window.clearFilters = function() {
+        window.location.href = window.location.pathname;
+    };
+    
+    // Preservar valores en los campos
+    preserveFilterValues();
+}
+
+function preserveFilterValues() {
+    const urlParams = new URLSearchParams(window.location.search);
+    
+    // Establecer valores de los filtros desde la URL
+    const startDate = urlParams.get('start_date');
+    const endDate = urlParams.get('end_date');
+    const branchFilter = urlParams.get('branch_filter');
+    
+    const startDateInput = document.querySelector('input[name="start_date"]');
+    const endDateInput = document.querySelector('input[name="end_date"]');
+    const branchSelect = document.querySelector('select[name="branch_filter"]');
+    
+    if (startDate && startDateInput) {
+        startDateInput.value = startDate;
+    }
+    
+    if (endDate && endDateInput) {
+        endDateInput.value = endDate;
+    }
+    
+    if (branchFilter && branchSelect) {
+        branchSelect.value = branchFilter;
+    }
+}
+
+function showFilterLoading() {
+    const submitBtn = document.querySelector('#filtersForm button[type="submit"]');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Filtrando...';
+    }
+}
+
+function hideFilterLoading() {
+    const submitBtn = document.querySelector('#filtersForm button[type="submit"]');
+    if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fas fa-search me-2"></i>Filtrar';
     }
 }
 
@@ -1034,6 +1363,31 @@ document.addEventListener('DOMContentLoaded', function() {
             card.style.transform = 'translateY(0)';
         }, index * 100);
     });
+});
+
+// Mejorar la experiencia de fecha
+document.addEventListener('DOMContentLoaded', function() {
+    // Agregar validación en tiempo real para fechas
+    const startDateInput = document.querySelector('input[name="start_date"]');
+    const endDateInput = document.querySelector('input[name="end_date"]');
+    
+    if (startDateInput && endDateInput) {
+        function validateDateRange() {
+            const start = new Date(startDateInput.value);
+            const end = new Date(endDateInput.value);
+            
+            if (startDateInput.value && endDateInput.value && start > end) {
+                endDateInput.setCustomValidity('La fecha final debe ser posterior a la inicial');
+                endDateInput.classList.add('is-invalid');
+            } else {
+                endDateInput.setCustomValidity('');
+                endDateInput.classList.remove('is-invalid');
+            }
+        }
+        
+        startDateInput.addEventListener('change', validateDateRange);
+        endDateInput.addEventListener('change', validateDateRange);
+    }
 });
 
 console.log('💰 Sistema de bandejas inicializado correctamente');

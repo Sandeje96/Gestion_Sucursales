@@ -78,7 +78,7 @@ def get_display_date_for_dashboard():
 @login_required
 def index():
     """
-    Página principal de registros diarios.
+    Lista principal de registros diarios.
     Muestra diferentes vistas según el rol del usuario.
     """
     page = request.args.get('page', 1, type=int)
@@ -86,42 +86,81 @@ def index():
     # Formulario de filtros
     filter_form = FilterForm()
     
+    # Debug de parámetros recibidos
+    print(f"🔍 Parámetros recibidos:")
+    print(f"   start_date: {request.args.get('start_date')}")
+    print(f"   end_date: {request.args.get('end_date')}")
+    print(f"   branch_filter: {request.args.get('branch_filter')}")
+    print(f"   page: {page}")
+    
     # Construir query base
     if current_user.is_admin_user():
         # Admins ven todos los registros
         query = DailyRecord.query
+        print(f"👤 Usuario admin: viendo todos los registros")
     else:
         # Usuarios de sucursal solo ven sus registros
         query = current_user.daily_records
+        print(f"👤 Usuario sucursal: viendo registros de {current_user.branch_name}")
     
     # Aplicar filtros si se enviaron
+    filters_applied = []
+    
+    # Filtro de fecha desde
     if request.args.get('start_date'):
         try:
             start_date = datetime.datetime.strptime(request.args.get('start_date'), '%Y-%m-%d').date()
             query = query.filter(DailyRecord.record_date >= start_date)
-        except ValueError:
-            pass
+            filters_applied.append(f"desde {start_date.strftime('%d/%m/%Y')}")
+            print(f"📅 Filtro fecha desde: {start_date}")
+        except ValueError as e:
+            print(f"❌ Error parseando start_date: {e}")
+            flash('Formato de fecha desde inválido', 'warning')
 
+    # Filtro de fecha hasta
     if request.args.get('end_date'):
         try:
             end_date = datetime.datetime.strptime(request.args.get('end_date'), '%Y-%m-%d').date()
             query = query.filter(DailyRecord.record_date <= end_date)
-        except ValueError:
-            pass
+            filters_applied.append(f"hasta {end_date.strftime('%d/%m/%Y')}")
+            print(f"📅 Filtro fecha hasta: {end_date}")
+        except ValueError as e:
+            print(f"❌ Error parseando end_date: {e}")
+            flash('Formato de fecha hasta inválido', 'warning')
 
+    # Filtro de sucursal (solo para admins)
     if request.args.get('branch_filter') and current_user.is_admin_user():
-        branch_name = request.args.get('branch_filter')
-        query = query.filter(DailyRecord.branch_name == branch_name)
+        branch_name = request.args.get('branch_filter').strip()
+        if branch_name:  # Solo aplicar si no está vacío
+            query = query.filter(DailyRecord.branch_name == branch_name)
+            filters_applied.append(f"sucursal {branch_name}")
+            print(f"🏢 Filtro sucursal: {branch_name}")
     
     # Ordenar por fecha descendente
     query = query.order_by(desc(DailyRecord.record_date))
     
+    # Contar total antes de paginación para debug
+    total_records = query.count()
+    print(f"📊 Total de registros encontrados: {total_records}")
+    
     # Paginación
-    records = query.paginate(
-        page=page,
-        per_page=20,
-        error_out=False
-    )
+    try:
+        records = query.paginate(
+            page=page,
+            per_page=20,
+            error_out=False
+        )
+        print(f"📄 Página {page}: {len(records.items)} registros mostrados")
+    except Exception as e:
+        print(f"❌ Error en paginación: {e}")
+        records = query.paginate(page=1, per_page=20, error_out=False)
+    
+    # Mensaje informativo sobre filtros aplicados
+    if filters_applied:
+        filter_message = f"Filtros aplicados: {', '.join(filters_applied)}"
+        print(f"✅ {filter_message}")
+        if not records.items:
+            flash(f'No se encontraron registros con los filtros aplicados: {", ".join(filters_applied)}', 'info')
     
     # Estadísticas rápidas
     today = get_today_arg()
@@ -132,7 +171,8 @@ def index():
         title='Registros Diarios',
         records=records,
         filter_form=filter_form,
-        stats=stats
+        stats=stats,
+        filters_applied=filters_applied
     )
 
 
@@ -495,10 +535,17 @@ def empty_all_trays():
     """
     Vaciar todas las bandejas de efectivo.
     Solo administradores pueden hacer esto.
+    MEJORADO: Devuelve JSON para mejor manejo en JavaScript.
     """
     if not current_user.is_admin_user():
-        flash('Solo los administradores pueden vaciar todas las bandejas.', 'error')
-        return redirect(url_for('daily_records.index'))
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'status': 'error',
+                'message': 'Solo los administradores pueden vaciar todas las bandejas.'
+            }), 403
+        else:
+            flash('Solo los administradores pueden vaciar todas las bandejas.', 'error')
+            return redirect(url_for('daily_records.index'))
     
     try:
         from app.models.cash_tray import CashTray
@@ -506,24 +553,46 @@ def empty_all_trays():
         # Vaciar todas las bandejas
         trays = CashTray.query.all()
         total_emptied = 0
+        branches_emptied = []
         
         for tray in trays:
-            total_emptied += tray.get_total_accumulated()
-            tray.empty_tray()
+            if tray.get_total_accumulated() > 0:
+                total_emptied += tray.get_total_accumulated()
+                branches_emptied.append(tray.branch_name)
+                tray.empty_tray()
         
         db.session.commit()
         
-        flash(
-            f'Todas las bandejas han sido vaciadas. '
-            f'Total retirado: ${total_emptied:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'),
-            'success'
-        )
+        # Formatear total en formato argentino
+        total_formatted = f'${total_emptied:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+        
+        success_message = f'Todas las bandejas han sido vaciadas. Total retirado: {total_formatted}'
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'status': 'success',
+                'message': success_message,
+                'data': {
+                    'total_emptied': total_emptied,
+                    'branches_count': len(branches_emptied),
+                    'branches_emptied': branches_emptied
+                }
+            })
+        else:
+            flash(success_message, 'success')
+            return redirect(url_for('daily_records.index'))
         
     except Exception as e:
         db.session.rollback()
-        flash(f'Error vaciando las bandejas: {str(e)}', 'error')
-    
-    return redirect(url_for('daily_records.index'))
+        error_message = f'Error vaciando las bandejas: {str(e)}'
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'status': 'error',
+                'message': error_message
+            }), 500
+        else:
+            return redirect(url_for('daily_records.index'))
 
 
 @daily_records_bp.route('/empty-branch-tray/<branch_name>', methods=['POST'])
@@ -531,36 +600,84 @@ def empty_all_trays():
 def empty_branch_tray(branch_name):
     """
     Vaciar la bandeja de una sucursal específica.
+    MEJORADO: Devuelve JSON para mejor manejo en JavaScript.
     """
     # Verificar permisos: admins pueden vaciar cualquier bandeja,
     # usuarios de sucursal solo pueden vaciar la suya
     if not current_user.is_admin_user() and current_user.branch_name != branch_name:
-        flash('No tienes permisos para vaciar esa bandeja.', 'error')
-        return redirect(url_for('daily_records.index'))
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'status': 'error',
+                'message': 'No tienes permisos para vaciar esa bandeja.'
+            }), 403
+        else:
+            flash('No tienes permisos para vaciar esa bandeja.', 'error')
+            return redirect(url_for('daily_records.index'))
     
     try:
         from app.models.cash_tray import CashTray
         
         tray = CashTray.query.filter_by(branch_name=branch_name).first()
         if not tray:
-            flash(f'No se encontró la bandeja para {branch_name}.', 'warning')
-            return redirect(url_for('daily_records.index'))
+            error_message = f'No se encontró la bandeja para {branch_name}.'
+            
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({
+                    'status': 'error',
+                    'message': error_message
+                }), 404
+            else:
+                flash(error_message, 'warning')
+                return redirect(url_for('daily_records.index'))
         
         total_emptied = tray.get_total_accumulated()
+        
+        if total_emptied == 0:
+            warning_message = f'La bandeja de {branch_name} ya está vacía.'
+            
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({
+                    'status': 'warning',
+                    'message': warning_message
+                })
+            else:
+                flash(warning_message, 'warning')
+                return redirect(url_for('daily_records.index'))
+        
         tray.empty_tray()
         db.session.commit()
         
-        flash(
-            f'Bandeja de {branch_name} vaciada. '
-            f'Total retirado: ${total_emptied:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'),
-            'success'
-        )
+        # Formatear total en formato argentino
+        total_formatted = f'${total_emptied:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+        
+        success_message = f'Bandeja de {branch_name} vaciada. Total retirado: {total_formatted}'
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'status': 'success',
+                'message': success_message,
+                'data': {
+                    'branch_name': branch_name,
+                    'total_emptied': total_emptied,
+                    'formatted_total': total_formatted
+                }
+            })
+        else:
+            flash(success_message, 'success')
+            return redirect(url_for('daily_records.index'))
         
     except Exception as e:
         db.session.rollback()
-        flash(f'Error vaciando la bandeja de {branch_name}: {str(e)}', 'error')
-    
-    return redirect(url_for('daily_records.index'))
+        error_message = f'Error vaciando la bandeja de {branch_name}: {str(e)}'
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'status': 'error',
+                'message': error_message
+            }), 500
+        else:
+            flash(error_message, 'error')
+            return redirect(url_for('daily_records.index'))
 
 
 @daily_records_bp.route('/empty-record/<int:record_id>', methods=['POST'])
@@ -568,19 +685,33 @@ def empty_branch_tray(branch_name):
 def empty_record(record_id):
     """
     "Vaciar" un registro específico (marcarlo como retirado).
-    Útil cuando se olvida marcar que se retiró dinero de un día específico.
+    MEJORADO: Devuelve JSON para mejor manejo en JavaScript.
     """
     record = DailyRecord.query.get_or_404(record_id)
     
     # Verificar permisos
     if not current_user.can_edit_record(record):
-        flash('No tienes permisos para modificar este registro.', 'error')
-        return redirect(url_for('daily_records.index'))
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'status': 'error',
+                'message': 'No tienes permisos para modificar este registro.'
+            }), 403
+        else:
+            flash('No tienes permisos para modificar este registro.', 'error')
+            return redirect(url_for('daily_records.index'))
     
     # Verificar que no esté ya retirado
     if record.is_withdrawn:
-        flash(f'El registro del {record.record_date.strftime("%d/%m/%Y")} ya fue retirado anteriormente.', 'warning')
-        return redirect(url_for('daily_records.index'))
+        warning_message = f'El registro del {record.record_date.strftime("%d/%m/%Y")} ya fue retirado anteriormente.'
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'status': 'warning',
+                'message': warning_message
+            })
+        else:
+            flash(warning_message, 'warning')
+            return redirect(url_for('daily_records.index'))
     
     try:
         from app.models.cash_tray import CashTray
@@ -607,17 +738,38 @@ def empty_record(record_id):
             float(record.credit_sales or 0)
         )
         
-        flash(
-            f'Registro del {record.record_date.strftime("%d/%m/%Y")} retirado de la bandeja. '
-            f'Total: ${total_removed:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'),
-            'success'
-        )
+        # Formatear total en formato argentino
+        total_formatted = f'${total_removed:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+        
+        success_message = f'Registro del {record.record_date.strftime("%d/%m/%Y")} retirado de la bandeja. Total: {total_formatted}'
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'status': 'success',
+                'message': success_message,
+                'data': {
+                    'record_id': record_id,
+                    'record_date': record.record_date.strftime("%d/%m/%Y"),
+                    'branch_name': record.branch_name,
+                    'total_removed': total_removed,
+                    'formatted_total': total_formatted
+                }
+            })
+        else:
+            flash(success_message, 'success')
+            return redirect(url_for('daily_records.index'))
         
     except Exception as e:
         db.session.rollback()
-        flash(f'Error procesando el retiro: {str(e)}', 'error')
-    
-    return redirect(url_for('daily_records.index'))
+        error_message = f'Error procesando el retiro: {str(e)}'
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'status': 'error',
+                'message': error_message
+            }), 500
+        else:
+            flash(error_message, 'error')
 
 
 @daily_records_bp.route('/recalculate-trays', methods=['POST'])
@@ -625,23 +777,88 @@ def empty_record(record_id):
 def recalculate_trays():
     """
     Recalcular todas las bandejas desde cero.
-    Solo para administradores, útil si hay inconsistencias.
+    MEJORADO: Devuelve JSON para mejor manejo en JavaScript.
     """
     if not current_user.is_admin_user():
-        flash('Solo los administradores pueden recalcular las bandejas.', 'error')
-        return redirect(url_for('daily_records.index'))
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'status': 'error',
+                'message': 'Solo los administradores pueden recalcular las bandejas.'
+            }), 403
+        else:
+            flash('Solo los administradores pueden recalcular las bandejas.', 'error')
+            return redirect(url_for('daily_records.index'))
     
     try:
         update_trays_from_records()
-        flash('Todas las bandejas han sido recalculadas correctamente.', 'success')
+        success_message = 'Todas las bandejas han sido recalculadas correctamente.'
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'status': 'success',
+                'message': success_message
+            })
+        else:
+            flash(success_message, 'success')
+            return redirect(url_for('daily_records.index'))
         
     except Exception as e:
-        flash(f'Error recalculando las bandejas: {str(e)}', 'error')
-    
-    return redirect(url_for('daily_records.index'))
-
-
-
+        error_message = f'Error recalculando las bandejas: {str(e)}'
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'status': 'error',
+                'message': error_message
+            }), 500
+        else:
+            flash(error_message, 'error')
+            return redirect(url_for('daily_records.index'))
+        
+# NUEVA FUNCIÓN: API para verificar estado de bandeja específica
+@daily_records_bp.route('/api/branch-tray-status/<branch_name>')
+@login_required
+def api_branch_tray_status(branch_name):
+    """
+    API para obtener el estado actual de una bandeja específica.
+    Útil para actualizaciones en tiempo real.
+    """
+    try:
+        from app.models.cash_tray import CashTray
+        
+        # Verificar permisos
+        if not current_user.is_admin_user() and current_user.branch_name != branch_name:
+            return jsonify({
+                'status': 'error',
+                'message': 'No tienes permisos para consultar esa bandeja.'
+            }), 403
+        
+        tray = CashTray.query.filter_by(branch_name=branch_name).first()
+        
+        if not tray:
+            return jsonify({
+                'status': 'error',
+                'message': f'No se encontró la bandeja para {branch_name}.'
+            }), 404
+        
+        return jsonify({
+            'status': 'success',
+            'data': {
+                'branch_name': tray.branch_name,
+                'accumulated_cash': float(tray.accumulated_cash or 0),
+                'accumulated_mercadopago': float(tray.accumulated_mercadopago or 0),
+                'accumulated_debit': float(tray.accumulated_debit or 0),
+                'accumulated_credit': float(tray.accumulated_credit or 0),
+                'total_accumulated': tray.get_total_accumulated(),
+                'last_updated': tray.last_updated.isoformat() if tray.last_updated else None
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+        
 
 # Funciones auxiliares
 
