@@ -86,14 +86,25 @@
                             {% if current_user.role == 'admin' %}
                                 <li class="nav-item">
                                     <a class="nav-link" href="{{ url_for('main.admin_dashboard') }}">
-                                        <i class="fas fa-tachometer-alt me-1"></i>Panel Admin
+                                        <i class="fas fa-tachometer-alt me-1"></i>Ventas de HOY
                                     </a>
                                 </li>
                                 <li class="nav-item">
                                     <a class="nav-link" href="{{ url_for('reports.index') }}">
-                                        <i class="fas fa-chart-bar me-1"></i>Reportes
+                                        <i class="fas fa-chart-bar me-1"></i>Reporte de ventas
                                     </a>
                                 </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('daily_records.index') }}">
+                                        <i class="fas fa-chart-bar me-1"></i>Dinero en Sucursales
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('reports.comparison') }}">
+                                        <i class="fas fa-chart-bar me-1"></i>Comparación Sucursales
+                                    </a>
+                                </li>
+                                
                             {% else %}
                                 <li class="nav-item">
                                     <a class="nav-link" href="{{ url_for('main.branch_dashboard') }}">
