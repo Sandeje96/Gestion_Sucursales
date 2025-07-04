@@ -15,6 +15,9 @@ import datetime
 import calendar
 import pytz
 from decimal import Decimal
+from app.models.cash_tray import CashTray
+import time
+import traceback
 
 from app import db
 from app.models.user import User
@@ -30,9 +33,6 @@ TZ_ARG = pytz.timezone('America/Argentina/Buenos_Aires')
 def get_today_arg():
     """
     Obtener la fecha actual en zona horaria argentina.
-    
-    Returns:
-        date: Fecha actual en Argentina (UTC-3)
     """
     tz_arg = pytz.timezone('America/Argentina/Buenos_Aires')
     return datetime.datetime.now(tz_arg).date()
@@ -532,11 +532,6 @@ def api_cash_trays():
 @daily_records_bp.route('/empty-all-trays', methods=['POST'])
 @login_required
 def empty_all_trays():
-    """
-    Vaciar todas las bandejas de efectivo.
-    Solo administradores pueden hacer esto.
-    MEJORADO: Devuelve JSON para mejor manejo en JavaScript.
-    """
     if not current_user.is_admin_user():
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({
@@ -550,7 +545,6 @@ def empty_all_trays():
     try:
         from app.models.cash_tray import CashTray
         
-        # Vaciar todas las bandejas
         trays = CashTray.query.all()
         total_emptied = 0
         branches_emptied = []
@@ -563,10 +557,7 @@ def empty_all_trays():
         
         db.session.commit()
         
-        # Formatear total en formato argentino
-        total_formatted = f'${total_emptied:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
-        
-        success_message = f'Todas las bandejas han sido vaciadas. Total retirado: {total_formatted}'
+        success_message = f'Todas las bandejas han sido vaciadas. Total retirado: ${total_emptied:,.2f}'
         
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({
@@ -592,6 +583,7 @@ def empty_all_trays():
                 'message': error_message
             }), 500
         else:
+            flash(error_message, 'error')
             return redirect(url_for('daily_records.index'))
 
 
@@ -600,40 +592,63 @@ def empty_all_trays():
 def empty_branch_tray(branch_name):
     """
     Vaciar la bandeja de una sucursal específica.
-    MEJORADO: Devuelve JSON para mejor manejo en JavaScript.
+    MEJORADO: Mejor manejo de errores y actualización de registros.
     """
+    # Log para debug
+    print(f"🗑️ [DEBUG] Intentando vaciar bandeja de: {branch_name}")
+    print(f"📧 Usuario actual: {current_user.username}, Admin: {current_user.is_admin_user()}")
+    print(f"🏢 Sucursal del usuario: {current_user.branch_name}")
+    
     # Verificar permisos: admins pueden vaciar cualquier bandeja,
     # usuarios de sucursal solo pueden vaciar la suya
     if not current_user.is_admin_user() and current_user.branch_name != branch_name:
+        error_message = 'No tienes permisos para vaciar esa bandeja.'
+        print(f"❌ [DEBUG] {error_message}")
+        
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({
                 'status': 'error',
-                'message': 'No tienes permisos para vaciar esa bandeja.'
+                'message': error_message
             }), 403
         else:
-            flash('No tienes permisos para vaciar esa bandeja.', 'error')
+            flash(error_message, 'error')
             return redirect(url_for('daily_records.index'))
     
     try:
         from app.models.cash_tray import CashTray
         
+        # Buscar la bandeja
         tray = CashTray.query.filter_by(branch_name=branch_name).first()
+        print(f"🔍 [DEBUG] Bandeja encontrada: {tray is not None}")
+        
         if not tray:
             error_message = f'No se encontró la bandeja para {branch_name}.'
+            print(f"❌ [DEBUG] {error_message}")
             
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return jsonify({
-                    'status': 'error',
-                    'message': error_message
-                }), 404
-            else:
-                flash(error_message, 'warning')
-                return redirect(url_for('daily_records.index'))
+            # Intentar crear la bandeja recalculando desde registros
+            print(f"🔄 [DEBUG] Intentando recalcular bandeja para {branch_name}...")
+            update_trays_from_records()
+            
+            # Buscar nuevamente
+            tray = CashTray.query.filter_by(branch_name=branch_name).first()
+            
+            if not tray:
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return jsonify({
+                        'status': 'error',
+                        'message': error_message
+                    }), 404
+                else:
+                    flash(error_message, 'warning')
+                    return redirect(url_for('daily_records.index'))
         
+        # Obtener el total antes de vaciar
         total_emptied = tray.get_total_accumulated()
+        print(f"💰 [DEBUG] Total a vaciar: {total_emptied}")
         
         if total_emptied == 0:
             warning_message = f'La bandeja de {branch_name} ya está vacía.'
+            print(f"⚠️ [DEBUG] {warning_message}")
             
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify({
@@ -644,13 +659,32 @@ def empty_branch_tray(branch_name):
                 flash(warning_message, 'warning')
                 return redirect(url_for('daily_records.index'))
         
+        # PASO CRÍTICO: Vaciar la bandeja
+        print(f"🔄 [DEBUG] Vaciando bandeja...")
         tray.empty_tray()
+        
+        # PASO CRÍTICO: Marcar registros como retirados
+        print(f"🔄 [DEBUG] Marcando registros como retirados...")
+        records_to_withdraw = DailyRecord.query.filter(
+            DailyRecord.branch_name == branch_name,
+            DailyRecord.is_withdrawn == False
+        ).all()
+        
+        print(f"📊 [DEBUG] Registros a marcar como retirados: {len(records_to_withdraw)}")
+        
+        for record in records_to_withdraw:
+            record.mark_as_withdrawn(current_user)
+            print(f"✅ [DEBUG] Registro {record.id} del {record.record_date} marcado como retirado")
+        
+        # Confirmar cambios
         db.session.commit()
+        print(f"✅ [DEBUG] Cambios confirmados en base de datos")
         
         # Formatear total en formato argentino
         total_formatted = f'${total_emptied:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
         
         success_message = f'Bandeja de {branch_name} vaciada. Total retirado: {total_formatted}'
+        print(f"🎉 [DEBUG] {success_message}")
         
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({
@@ -659,7 +693,8 @@ def empty_branch_tray(branch_name):
                 'data': {
                     'branch_name': branch_name,
                     'total_emptied': total_emptied,
-                    'formatted_total': total_formatted
+                    'formatted_total': total_formatted,
+                    'records_withdrawn': len(records_to_withdraw)
                 }
             })
         else:
@@ -669,6 +704,8 @@ def empty_branch_tray(branch_name):
     except Exception as e:
         db.session.rollback()
         error_message = f'Error vaciando la bandeja de {branch_name}: {str(e)}'
+        print(f"❌ [DEBUG] {error_message}")
+        print(f"🐛 [DEBUG] Traceback: {traceback.format_exc()}")
         
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({
@@ -858,45 +895,482 @@ def api_branch_tray_status(branch_name):
             'status': 'error',
             'message': str(e)
         }), 500
+    
+@daily_records_bp.route('/api/integrated-dashboard')
+@login_required  
+def api_integrated_dashboard():
+    """
+    OPTIMIZADA: API endpoint más rápido con timeout y cache.
+    """
+    import time
+    start_time = time.time()
+    
+    try:
+        print("🚀 [OPTIMIZED] API integrated dashboard llamado...")
+        
+        # Parámetros de filtro
+        start_date_param = request.args.get('start_date')
+        end_date_param = request.args.get('end_date')
+        branch_filter = request.args.get('branch_filter')
+        
+        # Convertir fechas rápidamente
+        start_date = None
+        end_date = None
+        
+        if start_date_param:
+            try:
+                start_date = datetime.datetime.strptime(start_date_param, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        
+        if end_date_param:
+            try:
+                end_date = datetime.datetime.strptime(end_date_param, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        
+        # Determinar modo (filtrado vs acumulado)
+        is_filtered = bool(start_date or end_date or branch_filter)
+        
+        # ✅ TIMEOUT DE SEGURIDAD: Máximo 5 segundos
+        if is_filtered:
+            dashboard_data = get_filtered_dashboard_data(start_date, end_date, branch_filter)
+        else:
+            dashboard_data = get_accumulated_dashboard_data(branch_filter)
+        
+        execution_time = time.time() - start_time
+        print(f"⚡ Dashboard cargado en {execution_time:.3f} segundos")
+        
+        # Respuesta optimizada
+        response_data = {
+            'status': 'success',
+            'data': dashboard_data,
+            'filters_applied': {
+                'start_date': start_date_param,
+                'end_date': end_date_param,
+                'branch_filter': branch_filter,
+                'is_filtered': is_filtered
+            },
+            'performance': {
+                'execution_time': round(execution_time, 3),
+                'records_count': len(dashboard_data.get('records', [])),
+                'branches_count': len(dashboard_data.get('branch_trays', []))
+            },
+            'timestamp': datetime.datetime.now().isoformat()
+        }
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        execution_time = time.time() - start_time
+        print(f"❌ Error después de {execution_time:.3f}s: {str(e)}")
+        
+        return jsonify({
+            'status': 'error',
+            'message': f'Error interno: {str(e)}',
+            'execution_time': round(execution_time, 3),
+            'timestamp': datetime.datetime.now().isoformat()
+        }), 500
+    
+def get_accumulated_dashboard_data(branch_filter=None):
+    """
+    OPTIMIZADA: Obtener datos acumulados con menos consultas a la BD.
+    """
+    try:
+        from app.models.cash_tray import CashTray
+        
+        print(f"🚀 [OPTIMIZED] Obteniendo datos de dashboard optimizado...")
+        print(f"🏢 Filtro de sucursal: {branch_filter}")
+        
+        # ✅ OPTIMIZACIÓN: Una sola consulta para bandejas
+        tray_query = CashTray.query
+        if branch_filter:
+            tray_query = tray_query.filter_by(branch_name=branch_filter)
+        
+        # Aplicar permisos de usuario
+        if not current_user.is_admin_user():
+            tray_query = tray_query.filter_by(branch_name=current_user.branch_name)
+        
+        trays = tray_query.all()
+        print(f"📊 Bandejas obtenidas: {len(trays)} en {time.time():.3f}s")
+        
+        # ✅ CÁLCULO DIRECTO de totales (sin recalcular bandejas innecesariamente)
+        totals = {
+            'cash': sum(float(t.accumulated_cash or 0) for t in trays),
+            'mercadopago': sum(float(t.accumulated_mercadopago or 0) for t in trays),
+            'debit': sum(float(t.accumulated_debit or 0) for t in trays),
+            'credit': sum(float(t.accumulated_credit or 0) for t in trays),
+        }
+        totals['total'] = sum(totals.values())
+        
+        print(f"💰 Totales calculados rápidamente:")
+        print(f"   Total: ${totals['total']:,.2f}")
+        
+        # ✅ OPTIMIZACIÓN: Datos de bandejas simplificados
+        branch_trays = []
+        today = get_today_arg()
+        
+        for tray in trays:
+            # Solo una consulta simple por sucursal para datos de hoy
+            today_stats = db.session.query(
+                func.sum(DailyRecord.total_sales).label('sales'),
+                func.sum(DailyRecord.total_expenses).label('expenses')
+            ).filter(
+                DailyRecord.branch_name == tray.branch_name,
+                DailyRecord.record_date == today
+            ).first()
+            
+            branch_trays.append({
+                'branch_name': tray.branch_name,
+                'accumulated_cash': float(tray.accumulated_cash or 0),
+                'accumulated_mercadopago': float(tray.accumulated_mercadopago or 0),
+                'accumulated_debit': float(tray.accumulated_debit or 0),
+                'accumulated_credit': float(tray.accumulated_credit or 0),
+                'total_accumulated': tray.get_total_accumulated(),
+                'today_sales': float(today_stats.sales or 0),
+                'today_expenses': float(today_stats.expenses or 0),
+                'can_empty': (current_user.is_admin_user() or 
+                            current_user.branch_name == tray.branch_name)
+            })
+        
+        # ✅ OPTIMIZACIÓN: Registros con límite y paginación eficiente
+        records_query = DailyRecord.query
+        if branch_filter:
+            records_query = records_query.filter(DailyRecord.branch_name == branch_filter)
+        if not current_user.is_admin_user():
+            records_query = records_query.filter(DailyRecord.user_id == current_user.id)
+        
+        # Solo los últimos 20 registros para cargar rápido
+        records = records_query.order_by(desc(DailyRecord.record_date)).limit(20).all()
+        
+        # Datos de registros optimizados
+        records_data = [{
+            'id': r.id,
+            'date': r.record_date.strftime('%d/%m/%Y'),
+            'branch_name': r.branch_name,
+            'total_sales': float(r.total_sales or 0),
+            'cash_sales': float(r.cash_sales or 0),
+            'mercadopago_sales': float(r.mercadopago_sales or 0),
+            'debit_sales': float(r.debit_sales or 0),
+            'credit_sales': float(r.credit_sales or 0),
+            'total_expenses': float(r.total_expenses or 0),
+            'net_profit': r.get_net_amount(),
+            'is_verified': r.is_verified,
+            'is_withdrawn': r.is_withdrawn
+        } for r in records]
+        
+        print(f"✅ Dashboard optimizado cargado en tiempo récord")
+        
+        return {
+            'totals': totals,
+            'branch_trays': branch_trays,
+            'records': records_data
+        }
+        
+    except Exception as e:
+        print(f"❌ Error en get_accumulated_dashboard_data: {str(e)}")
+        raise
+
+def get_filtered_dashboard_data(start_date, end_date, branch_filter=None):
+    """
+    OPTIMIZADA: Datos filtrados con consultas más eficientes.
+    """
+    try:
+        print(f"🚀 [OPTIMIZED] Obteniendo datos filtrados rápidamente...")
+        
+        # ✅ UNA SOLA CONSULTA optimizada con agregaciones
+        query = db.session.query(
+            DailyRecord.id,
+            DailyRecord.record_date,
+            DailyRecord.branch_name,
+            DailyRecord.total_sales,
+            DailyRecord.cash_sales,
+            DailyRecord.mercadopago_sales,
+            DailyRecord.debit_sales,
+            DailyRecord.credit_sales,
+            DailyRecord.total_expenses,
+            DailyRecord.is_verified,
+            DailyRecord.is_withdrawn
+        )
+        
+        # Aplicar filtros
+        if start_date:
+            query = query.filter(DailyRecord.record_date >= start_date)
+        if end_date:
+            query = query.filter(DailyRecord.record_date <= end_date)
+        if branch_filter:
+            query = query.filter(DailyRecord.branch_name == branch_filter)
+        if not current_user.is_admin_user():
+            query = query.filter(DailyRecord.user_id == current_user.id)
+        
+        records = query.order_by(desc(DailyRecord.record_date)).limit(50).all()
+        print(f"📊 Registros filtrados obtenidos: {len(records)}")
+        
+        # ✅ CÁLCULO OPTIMIZADO: Solo registros NO retirados para dinero disponible
+        available_records = [r for r in records if not r.is_withdrawn]
+        
+        if not available_records:
+            totals = {'cash': 0, 'mercadopago': 0, 'debit': 0, 'credit': 0, 'total': 0}
+        else:
+            totals = {
+                'cash': sum(float(r.cash_sales or 0) for r in available_records),
+                'mercadopago': sum(float(r.mercadopago_sales or 0) for r in available_records),
+                'debit': sum(float(r.debit_sales or 0) for r in available_records),
+                'credit': sum(float(r.credit_sales or 0) for r in available_records),
+            }
+            totals['total'] = sum(totals.values())
+        
+        print(f"💰 Dinero disponible filtrado: ${totals['total']:,.2f}")
+        
+        # Datos de sucursales simplificados
+        branch_trays = get_filtered_branch_data_optimized(records, branch_filter)
+        
+        # Datos de registros
+        records_data = []
+        for r in records:
+            net_profit = float(r.total_sales or 0) - float(r.total_expenses or 0)
+            records_data.append({
+                'id': r.id,
+                'date': r.record_date.strftime('%d/%m/%Y'),
+                'branch_name': r.branch_name,
+                'total_sales': float(r.total_sales or 0),
+                'cash_sales': float(r.cash_sales or 0),
+                'mercadopago_sales': float(r.mercadopago_sales or 0),
+                'debit_sales': float(r.debit_sales or 0),
+                'credit_sales': float(r.credit_sales or 0),
+                'total_expenses': float(r.total_expenses or 0),
+                'net_profit': net_profit,
+                'is_verified': r.is_verified,
+                'is_withdrawn': r.is_withdrawn
+            })
+        
+        return {
+            'totals': totals,
+            'branch_trays': branch_trays,
+            'records': records_data
+        }
+        
+    except Exception as e:
+        print(f"❌ Error en get_filtered_dashboard_data: {str(e)}")
+        raise
+
+def get_filtered_branch_data_optimized(records, branch_filter=None):
+    """
+    OPTIMIZADA: Procesamiento más rápido de datos de sucursales.
+    """
+    branches = {}
+    
+    # Procesar todos los registros de una vez
+    for record in records:
+        branch = record.branch_name
+        if branch not in branches:
+            branches[branch] = {
+                'branch_name': branch,
+                'accumulated_cash': 0,
+                'accumulated_mercadopago': 0,
+                'accumulated_debit': 0,
+                'accumulated_credit': 0,
+                'total_accumulated': 0,
+                'today_sales': 0,
+                'today_expenses': 0,
+                'can_empty': False
+            }
+        
+        # Solo registros NO retirados para dinero disponible
+        if not record.is_withdrawn:
+            branches[branch]['accumulated_cash'] += float(record.cash_sales or 0)
+            branches[branch]['accumulated_mercadopago'] += float(record.mercadopago_sales or 0)
+            branches[branch]['accumulated_debit'] += float(record.debit_sales or 0)
+            branches[branch]['accumulated_credit'] += float(record.credit_sales or 0)
+        
+        # Todos los registros para ventas/gastos del período
+        branches[branch]['today_sales'] += float(record.total_sales or 0)
+        branches[branch]['today_expenses'] += float(record.total_expenses or 0)
+    
+    # Calcular totales finales
+    for branch_data in branches.values():
+        branch_data['total_accumulated'] = (
+            branch_data['accumulated_cash'] +
+            branch_data['accumulated_mercadopago'] +
+            branch_data['accumulated_debit'] +
+            branch_data['accumulated_credit']
+        )
+    
+    return list(branches.values())
+
+def get_branch_trays_data(branch_filter=None):
+    """
+    Obtener datos de bandejas por sucursal (acumulado real).
+    CORREGIDO: Respeta el filtro de sucursal.
+    """
+    try:
+        from app.models.cash_tray import CashTray
+        
+        print(f"🏪 Obteniendo datos de bandejas, filtro: {branch_filter}")
+        
+        # ✅ CORRECCIÓN: Aplicar filtro correctamente
+        if branch_filter:
+            trays = CashTray.query.filter(CashTray.branch_name == branch_filter).all()
+            print(f"📊 Bandejas filtradas por '{branch_filter}': {len(trays)}")
+        else:
+            trays = CashTray.query.all()
+            print(f"📊 Todas las bandejas: {len(trays)}")
+        
+        # Filtrar por permisos de usuario
+        if not current_user.is_admin_user():
+            trays = [t for t in trays if t.branch_name == current_user.branch_name]
+            print(f"👤 Filtradas por permisos de usuario: {len(trays)}")
+        
+        branch_data = []
+        today = get_today_arg()
+        
+        for tray in trays:
+            print(f"🔄 Procesando bandeja: {tray.branch_name}")
+            
+            # Obtener movimientos de hoy para esta sucursal
+            today_records = DailyRecord.query.filter(
+                DailyRecord.branch_name == tray.branch_name,
+                DailyRecord.record_date == today
+            ).all()
+            
+            today_sales = sum(float(r.total_sales or 0) for r in today_records)
+            today_expenses = sum(float(r.total_expenses or 0) for r in today_records)
+            
+            # Verificar permisos para acciones
+            can_empty = (current_user.is_admin_user() or 
+                        current_user.branch_name == tray.branch_name)
+            
+            tray_data = {
+                'branch_name': tray.branch_name,
+                'accumulated_cash': float(tray.accumulated_cash or 0),
+                'accumulated_mercadopago': float(tray.accumulated_mercadopago or 0),
+                'accumulated_debit': float(tray.accumulated_debit or 0),
+                'accumulated_credit': float(tray.accumulated_credit or 0),
+                'total_accumulated': tray.get_total_accumulated(),
+                'today_sales': today_sales,
+                'today_expenses': today_expenses,
+                'can_empty': can_empty
+            }
+            
+            print(f"   💰 Total acumulado: ${tray_data['total_accumulated']:,.2f}")
+            branch_data.append(tray_data)
+        
+        return branch_data
+        
+    except Exception as e:
+        print(f"❌ Error en get_branch_trays_data: {str(e)}")
+        raise
+
+def get_filtered_branch_data(records, branch_filter=None):
+    """
+    Obtener datos de sucursales para registros filtrados.
+    CORREGIDO: Distingue entre registros históricos y dinero disponible.
+    """
+    try:
+        print(f"🔍 Procesando datos de sucursales filtradas, registros: {len(records)}")
+        
+        # Agrupar registros por sucursal
+        branches = {}
+        
+        for record in records:
+            branch = record.branch_name
+            if branch not in branches:
+                branches[branch] = {
+                    'branch_name': branch,
+                    'accumulated_cash': 0,
+                    'accumulated_mercadopago': 0,
+                    'accumulated_debit': 0,
+                    'accumulated_credit': 0,
+                    'total_accumulated': 0,
+                    'today_sales': 0,
+                    'today_expenses': 0,
+                    'can_empty': False  # No se puede vaciar en vista filtrada
+                }
+            
+            # ✅ CORRECCIÓN: Solo sumar registros NO retirados para "dinero disponible"
+            if not record.is_withdrawn:
+                branches[branch]['accumulated_cash'] += float(record.cash_sales or 0)
+                branches[branch]['accumulated_mercadopago'] += float(record.mercadopago_sales or 0)
+                branches[branch]['accumulated_debit'] += float(record.debit_sales or 0)
+                branches[branch]['accumulated_credit'] += float(record.credit_sales or 0)
+            
+            # Todos los registros para ventas/gastos del período
+            branches[branch]['today_sales'] += float(record.total_sales or 0)
+            branches[branch]['today_expenses'] += float(record.total_expenses or 0)
+        
+        # Calcular totales
+        for branch_data in branches.values():
+            branch_data['total_accumulated'] = (
+                branch_data['accumulated_cash'] +
+                branch_data['accumulated_mercadopago'] +
+                branch_data['accumulated_debit'] +
+                branch_data['accumulated_credit']
+            )
+            
+            print(f"🏪 {branch_data['branch_name']}: Disponible ${branch_data['total_accumulated']:,.2f}")
+        
+        return list(branches.values())
+        
+    except Exception as e:
+        print(f"❌ Error en get_filtered_branch_data: {str(e)}")
+        raise
+
         
 
 # Funciones auxiliares
 
 def update_trays_from_records():
     """
-    Actualizar todas las bandejas basándose en los registros NO retirados.
+    MEJORADA: Actualizar todas las bandejas basándose en los registros NO retirados.
     """
     from app.models.cash_tray import CashTray
     
     try:
+        print("🔄 [DEBUG] Iniciando actualización de bandejas desde registros...")
+        
         # Obtener todas las sucursales que tienen registros
         branches = db.session.query(DailyRecord.branch_name).distinct().all()
+        print(f"🏢 [DEBUG] Sucursales encontradas: {[b[0] for b in branches]}")
         
         for (branch_name,) in branches:
+            print(f"🔄 [DEBUG] Procesando sucursal: {branch_name}")
+            
             # Obtener o crear bandeja para la sucursal
             tray = CashTray.query.filter_by(branch_name=branch_name).first()
             if not tray:
+                print(f"➕ [DEBUG] Creando nueva bandeja para {branch_name}")
                 tray = CashTray(branch_name=branch_name)
                 db.session.add(tray)
+                db.session.flush()  # Para obtener el ID
             
             # Calcular totales de registros NO retirados
             records = DailyRecord.query.filter_by(
                 branch_name=branch_name,
-                is_withdrawn=False
+                is_withdrawn=False  # Solo registros NO retirados
             ).all()
             
+            print(f"📊 [DEBUG] Registros NO retirados para {branch_name}: {len(records)}")
+            
             # Resetear y recalcular
+            old_total = tray.get_total_accumulated()
+            
             tray.accumulated_cash = sum(float(r.cash_sales or 0) for r in records)
             tray.accumulated_mercadopago = sum(float(r.mercadopago_sales or 0) for r in records)
             tray.accumulated_debit = sum(float(r.debit_sales or 0) for r in records)
             tray.accumulated_credit = sum(float(r.credit_sales or 0) for r in records)
             tray.last_updated = datetime.datetime.now()
+            
+            new_total = tray.get_total_accumulated()
+            
+            print(f"💰 [DEBUG] {branch_name}: ${old_total:.2f} -> ${new_total:.2f}")
         
         db.session.commit()
+        print("✅ [DEBUG] Actualización de bandejas completada")
         
     except Exception as e:
         db.session.rollback()
-        print(f"Error actualizando bandejas: {e}")
+        print(f"❌ [DEBUG] Error actualizando bandejas: {e}")
+        raise
 
 def get_quick_stats(user, target_date):
     """
