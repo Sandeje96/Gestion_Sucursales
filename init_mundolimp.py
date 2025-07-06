@@ -38,31 +38,31 @@ def create_mundolimp_users():
         branches = [
             {
                 'name': 'Uruguay',
-                'username': 'uruguay',
+                'username': 'Uruguay',
                 'email': 'uruguay@mundolimp.com',
                 'default_password': 'uruguay2025'
             },
             {
                 'name': 'Villa Cabello',
-                'username': 'villacabello',
+                'username': 'Villacabello',
                 'email': 'villacabello@mundolimp.com',
                 'default_password': 'cabello2025'
             },
             {
                 'name': 'Tacuari',
-                'username': 'tacuari',
+                'username': 'Tacuari',
                 'email': 'tacuari@mundolimp.com',
                 'default_password': 'tacuari2025'
             },
             {
                 'name': 'Candelaria',
-                'username': 'candelaria',
+                'username': 'Candelaria',
                 'email': 'candelaria@mundolimp.com',
                 'default_password': 'candelaria2025'
             },
             {
                 'name': 'Itaembe Mini',
-                'username': 'itaembemini',
+                'username': 'Itaembemini',
                 'email': 'itaembemini@mundolimp.com',
                 'default_password': 'itaembe2025'
             }
