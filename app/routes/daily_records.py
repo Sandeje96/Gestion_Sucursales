@@ -79,8 +79,7 @@ def get_display_date_for_dashboard():
 def index():
     """
     Lista principal de registros diarios.
-    Muestra diferentes vistas según el rol del usuario.
-    CORREGIDO: Sin límites artificiales para mostrar todos los registros del período.
+    CORREGIDO: Filtros funcionan correctamente sin interferencias.
     """
     page = request.args.get('page', 1, type=int)
     
@@ -106,15 +105,12 @@ def index():
     
     # Aplicar filtros si se enviaron
     filters_applied = []
-    
-    # CORRECCIÓN: Si no hay filtros, mostrar todo el mes actual por defecto
-    today = get_today_arg()
-    default_start_date = today.replace(day=1)  # Primer día del mes actual
-    default_end_date = today  # Hasta hoy
+    has_explicit_filters = False  # Para controlar si hay filtros explícitos
     
     # Filtro de fecha desde
     start_date_param = request.args.get('start_date')
     if start_date_param:
+        has_explicit_filters = True
         try:
             start_date = datetime.datetime.strptime(start_date_param, '%Y-%m-%d').date()
             query = query.filter(DailyRecord.record_date >= start_date)
@@ -123,16 +119,11 @@ def index():
         except ValueError as e:
             print(f"❌ Error parseando start_date: {e}")
             flash('Formato de fecha desde inválido', 'warning')
-            start_date = default_start_date
-    else:
-        # Sin filtro específico: mostrar desde inicio del mes
-        start_date = default_start_date
-        query = query.filter(DailyRecord.record_date >= start_date)
-        print(f"📅 Aplicando filtro por defecto desde: {start_date}")
 
     # Filtro de fecha hasta
     end_date_param = request.args.get('end_date')
     if end_date_param:
+        has_explicit_filters = True
         try:
             end_date = datetime.datetime.strptime(end_date_param, '%Y-%m-%d').date()
             query = query.filter(DailyRecord.record_date <= end_date)
@@ -141,20 +132,24 @@ def index():
         except ValueError as e:
             print(f"❌ Error parseando end_date: {e}")
             flash('Formato de fecha hasta inválido', 'warning')
-            end_date = default_end_date
-    else:
-        # Sin filtro específico: mostrar hasta hoy
-        end_date = default_end_date
-        query = query.filter(DailyRecord.record_date <= end_date)
-        print(f"📅 Aplicando filtro por defecto hasta: {end_date}")
 
     # Filtro de sucursal (solo para admins)
-    if request.args.get('branch_filter') and current_user.is_admin_user():
-        branch_name = request.args.get('branch_filter').strip()
+    branch_filter_param = request.args.get('branch_filter')
+    if branch_filter_param and current_user.is_admin_user():
+        branch_name = branch_filter_param.strip()
         if branch_name:  # Solo aplicar si no está vacío
+            has_explicit_filters = True
             query = query.filter(DailyRecord.branch_name == branch_name)
             filters_applied.append(f"sucursal {branch_name}")
             print(f"🏢 Filtro sucursal: {branch_name}")
+    
+    # CORRECCIÓN: Solo aplicar filtro por defecto si NO hay filtros explícitos
+    if not has_explicit_filters:
+        today = get_today_arg()
+        default_start_date = today.replace(day=1)  # Primer día del mes actual
+        query = query.filter(DailyRecord.record_date >= default_start_date)
+        query = query.filter(DailyRecord.record_date <= today)
+        print(f"📅 Sin filtros explícitos: mostrando mes actual ({default_start_date} - {today})")
     
     # Ordenar por fecha descendente
     query = query.order_by(desc(DailyRecord.record_date))
@@ -163,11 +158,11 @@ def index():
     total_records = query.count()
     print(f"📊 Total de registros encontrados: {total_records}")
     
-    # CORRECCIÓN: Aumentar registros por página para mostrar más datos
+    # Paginación
     try:
         records = query.paginate(
             page=page,
-            per_page=50,  # Aumentado de 20 a 50
+            per_page=50,  # Aumentado para mostrar más datos
             error_out=False
         )
         print(f"📄 Página {page}: {len(records.items)} registros mostrados de {total_records} totales")
@@ -182,12 +177,13 @@ def index():
         if not records.items:
             flash(f'No se encontraron registros con los filtros aplicados: {", ".join(filters_applied)}', 'info')
     else:
-        # Mostrar información de que se están viendo registros del mes actual
-        print(f"📅 Mostrando registros del mes actual: {start_date} a {end_date}")
-        if not records.items:
-            flash(f'No hay registros disponibles para el período del {start_date.strftime("%d/%m/%Y")} al {end_date.strftime("%d/%m/%Y")}', 'info')
+        # Solo mostrar mensaje si no hay registros y no hay filtros
+        if not records.items and not has_explicit_filters:
+            today = get_today_arg()
+            flash(f'No hay registros disponibles para el mes actual', 'info')
     
     # Estadísticas rápidas
+    today = get_today_arg()
     stats = get_quick_stats(current_user, today)
     
     return render_template(
@@ -196,8 +192,7 @@ def index():
         records=records,
         filter_form=filter_form,
         stats=stats,
-        filters_applied=filters_applied,
-        current_period={'start': start_date, 'end': end_date}  # Para mostrar en la UI
+        filters_applied=filters_applied
     )
 
 
@@ -1178,7 +1173,7 @@ def get_simple_branch_data(records):
 # FUNCIÓN CORREGIDA: Dashboard filtrado    
 def get_filtered_dashboard_data(start_date, end_date, branch_filter=None):
     """
-    CORREGIDO: Versión simplificada con manejo de errores robusto.
+    CORREGIDO: Sin límites artificiales que oculten registros filtrados.
     """
     try:
         print(f"🚀 [DEBUG] Obteniendo datos filtrados...")
@@ -1199,8 +1194,8 @@ def get_filtered_dashboard_data(start_date, end_date, branch_filter=None):
             if not current_user.is_admin_user():
                 query = query.filter(DailyRecord.user_id == current_user.id)
             
-            # Limitar para evitar problemas de rendimiento
-            records = query.order_by(desc(DailyRecord.record_date)).limit(100).all()
+            # CORRECCIÓN: Obtener TODOS los registros filtrados sin límites
+            records = query.order_by(desc(DailyRecord.record_date)).all()
             print(f"📊 [DEBUG] Registros filtrados: {len(records)}")
             
         except Exception as e:
@@ -1225,16 +1220,22 @@ def get_filtered_dashboard_data(start_date, end_date, branch_filter=None):
                     'credit': sum(float(r.credit_sales or 0) for r in available_records),
                 }
                 totals['total'] = sum(totals.values())
+                print(f"💰 [DEBUG] Dinero disponible: ${totals['total']:,.2f}")
             except Exception as e:
                 print(f"❌ [DEBUG] Error calculando totales filtrados: {e}")
                 totals = {'cash': 0, 'mercadopago': 0, 'debit': 0, 'credit': 0, 'total': 0}
         
-        # CORRECCIÓN: Usar función correcta
+        # Datos de bandejas
         branch_trays = get_simple_branch_data(available_records)
+        
+        # CORRECCIÓN: Mostrar todos los registros filtrados, limitando solo para UI
+        display_records = records[:200] if len(records) > 200 else records
+        if len(records) > 200:
+            print(f"⚠️ [DEBUG] Mostrando primeros 200 de {len(records)} registros para rendimiento")
         
         # Datos de registros
         records_data = []
-        for r in records:
+        for r in display_records:
             try:
                 records_data.append({
                     'id': r.id,
@@ -1257,7 +1258,8 @@ def get_filtered_dashboard_data(start_date, end_date, branch_filter=None):
         return {
             'totals': totals,
             'branch_trays': branch_trays,
-            'records': records_data
+            'records': records_data,
+            'total_found': len(records)  # Para mostrar en UI si hay más registros
         }
         
     except Exception as e:
