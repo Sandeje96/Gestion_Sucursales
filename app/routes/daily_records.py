@@ -79,7 +79,7 @@ def get_display_date_for_dashboard():
 def index():
     """
     Lista principal de registros diarios.
-    CORREGIDO: Filtros funcionan correctamente sin interferencias.
+    CORREGIDO: Con normalización de nombres de sucursales.
     """
     page = request.args.get('page', 1, type=int)
     
@@ -90,22 +90,20 @@ def index():
     print(f"🔍 Parámetros recibidos:")
     print(f"   start_date: {request.args.get('start_date')}")
     print(f"   end_date: {request.args.get('end_date')}")
-    print(f"   branch_filter: {request.args.get('branch_filter')}")
+    print(f"   branch_filter: '{request.args.get('branch_filter')}'")
     print(f"   page: {page}")
     
     # Construir query base
     if current_user.is_admin_user():
-        # Admins ven todos los registros
         query = DailyRecord.query
         print(f"👤 Usuario admin: viendo todos los registros")
     else:
-        # Usuarios de sucursal solo ven sus registros
         query = current_user.daily_records
         print(f"👤 Usuario sucursal: viendo registros de {current_user.branch_name}")
     
-    # Aplicar filtros si se enviaron
+    # Aplicar filtros
     filters_applied = []
-    has_explicit_filters = False  # Para controlar si hay filtros explícitos
+    has_explicit_filters = False
     
     # Filtro de fecha desde
     start_date_param = request.args.get('start_date')
@@ -133,20 +131,43 @@ def index():
             print(f"❌ Error parseando end_date: {e}")
             flash('Formato de fecha hasta inválido', 'warning')
 
-    # Filtro de sucursal (solo para admins)
+    # CORRECCIÓN: Filtro de sucursal con normalización
     branch_filter_param = request.args.get('branch_filter')
     if branch_filter_param and current_user.is_admin_user():
-        branch_name = branch_filter_param.strip()
-        if branch_name:  # Solo aplicar si no está vacío
+        branch_name_input = branch_filter_param.strip()
+        print(f"🏢 Input original: '{branch_name_input}'")
+        
+        if branch_name_input:
             has_explicit_filters = True
-            query = query.filter(DailyRecord.branch_name == branch_name)
-            filters_applied.append(f"sucursal {branch_name}")
-            print(f"🏢 Filtro sucursal: {branch_name}")
+            
+            # Normalizar el nombre de entrada
+            normalized_input = normalize_branch_name(branch_name_input)
+            print(f"🏢 Nombre normalizado: '{normalized_input}'")
+            
+            # Buscar registros que coincidan con el nombre normalizado
+            # Usar una consulta más flexible que maneje variaciones
+            subquery = db.session.query(DailyRecord.branch_name).distinct().all()
+            matching_branches = []
+            
+            for (db_branch_name,) in subquery:
+                if db_branch_name and normalize_branch_name(db_branch_name) == normalized_input:
+                    matching_branches.append(db_branch_name)
+            
+            print(f"🏢 Sucursales coincidentes en BD: {matching_branches}")
+            
+            if matching_branches:
+                # Filtrar por cualquiera de las variaciones encontradas
+                query = query.filter(DailyRecord.branch_name.in_(matching_branches))
+                filters_applied.append(f"sucursal {normalized_input}")
+                print(f"✅ Filtro sucursal aplicado para: {matching_branches}")
+            else:
+                print(f"⚠️ No se encontraron registros para sucursal '{normalized_input}'")
+                flash(f'No se encontraron registros para la sucursal "{normalized_input}".', 'info')
     
-    # CORRECCIÓN: Solo aplicar filtro por defecto si NO hay filtros explícitos
+    # Solo aplicar filtro por defecto si NO hay filtros explícitos
     if not has_explicit_filters:
         today = get_today_arg()
-        default_start_date = today.replace(day=1)  # Primer día del mes actual
+        default_start_date = today.replace(day=1)
         query = query.filter(DailyRecord.record_date >= default_start_date)
         query = query.filter(DailyRecord.record_date <= today)
         print(f"📅 Sin filtros explícitos: mostrando mes actual ({default_start_date} - {today})")
@@ -154,15 +175,15 @@ def index():
     # Ordenar por fecha descendente
     query = query.order_by(desc(DailyRecord.record_date))
     
-    # Contar total antes de paginación para debug
+    # Contar total después de filtros
     total_records = query.count()
-    print(f"📊 Total de registros encontrados: {total_records}")
+    print(f"📊 Total registros después de filtros: {total_records}")
     
     # Paginación
     try:
         records = query.paginate(
             page=page,
-            per_page=50,  # Aumentado para mostrar más datos
+            per_page=50,
             error_out=False
         )
         print(f"📄 Página {page}: {len(records.items)} registros mostrados de {total_records} totales")
@@ -170,16 +191,14 @@ def index():
         print(f"❌ Error en paginación: {e}")
         records = query.paginate(page=1, per_page=50, error_out=False)
     
-    # Mensaje informativo sobre filtros aplicados
+    # Mensaje informativo
     if filters_applied:
         filter_message = f"Filtros aplicados: {', '.join(filters_applied)}"
         print(f"✅ {filter_message}")
         if not records.items:
             flash(f'No se encontraron registros con los filtros aplicados: {", ".join(filters_applied)}', 'info')
     else:
-        # Solo mostrar mensaje si no hay registros y no hay filtros
         if not records.items and not has_explicit_filters:
-            today = get_today_arg()
             flash(f'No hay registros disponibles para el mes actual', 'info')
     
     # Estadísticas rápidas
@@ -992,6 +1011,45 @@ def api_integrated_dashboard():
             'execution_time': round(execution_time, 3),
             'timestamp': datetime.datetime.now().isoformat()
         }), 500
+    
+@daily_records_bp.route('/debug/branch-names')
+@login_required
+def debug_branch_names():
+    """
+    Ruta de debug para ver las inconsistencias en nombres de sucursales.
+    """
+    if not current_user.is_admin_user():
+        abort(403)
+    
+    try:
+        # Obtener todos los nombres únicos en la BD
+        raw_branches = db.session.query(DailyRecord.branch_name).distinct().all()
+        
+        # Crear mapeo de nombres originales a normalizados
+        branch_analysis = []
+        for (original_name,) in raw_branches:
+            if original_name:
+                normalized = normalize_branch_name(original_name)
+                count = DailyRecord.query.filter_by(branch_name=original_name).count()
+                
+                branch_analysis.append({
+                    'original': original_name,
+                    'normalized': normalized,
+                    'records_count': count,
+                    'needs_fix': original_name != normalized
+                })
+        
+        # Ordenar por nombre normalizado
+        branch_analysis.sort(key=lambda x: x['normalized'])
+        
+        return jsonify({
+            'total_variations': len(branch_analysis),
+            'branches': branch_analysis,
+            'available_normalized': sorted(list(set(b['normalized'] for b in branch_analysis)))
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # FUNCIÓN CORREGIDA: Dashboard acumulado sin errores    
 def get_accumulated_dashboard_data():
@@ -1173,12 +1231,12 @@ def get_simple_branch_data(records):
 # FUNCIÓN CORREGIDA: Dashboard filtrado    
 def get_filtered_dashboard_data(start_date, end_date, branch_filter=None):
     """
-    CORREGIDO: Sin límites artificiales que oculten registros filtrados.
+    CORREGIDO: Con normalización de nombres de sucursales.
     """
     try:
-        print(f"🚀 [DEBUG] Obteniendo datos filtrados...")
-        print(f"📅 [DEBUG] Rango: {start_date} - {end_date}")
-        print(f"🏢 [DEBUG] Sucursal: {branch_filter or 'Todas'}")
+        print(f"🚀 [API] Obteniendo datos filtrados...")
+        print(f"📅 [API] Rango: {start_date} - {end_date}")
+        print(f"🏢 [API] Sucursal input: '{branch_filter}'")
         
         # Query básica
         query = DailyRecord.query
@@ -1189,21 +1247,47 @@ def get_filtered_dashboard_data(start_date, end_date, branch_filter=None):
                 query = query.filter(DailyRecord.record_date >= start_date)
             if end_date:
                 query = query.filter(DailyRecord.record_date <= end_date)
+                
+            # CORRECCIÓN: Filtro de sucursal con normalización
             if branch_filter:
-                query = query.filter(DailyRecord.branch_name == branch_filter)
+                normalized_input = normalize_branch_name(branch_filter)
+                print(f"🏢 [API] Sucursal normalizada: '{normalized_input}'")
+                
+                # Buscar todas las variaciones en la BD que coincidan
+                all_branches = db.session.query(DailyRecord.branch_name).distinct().all()
+                matching_branches = []
+                
+                for (db_branch_name,) in all_branches:
+                    if db_branch_name and normalize_branch_name(db_branch_name) == normalized_input:
+                        matching_branches.append(db_branch_name)
+                
+                print(f"🏢 [API] Sucursales coincidentes: {matching_branches}")
+                
+                if matching_branches:
+                    query = query.filter(DailyRecord.branch_name.in_(matching_branches))
+                else:
+                    print(f"⚠️ [API] No hay registros para sucursal '{normalized_input}'")
+                    return {
+                        'totals': {'cash': 0, 'mercadopago': 0, 'debit': 0, 'credit': 0, 'total': 0},
+                        'branch_trays': [],
+                        'records': [],
+                        'message': f'No hay registros para la sucursal "{normalized_input}"'
+                    }
+                    
             if not current_user.is_admin_user():
                 query = query.filter(DailyRecord.user_id == current_user.id)
             
-            # CORRECCIÓN: Obtener TODOS los registros filtrados sin límites
+            # Obtener todos los registros filtrados
             records = query.order_by(desc(DailyRecord.record_date)).all()
-            print(f"📊 [DEBUG] Registros filtrados: {len(records)}")
+            print(f"📊 [API] Registros obtenidos: {len(records)}")
             
         except Exception as e:
-            print(f"❌ [DEBUG] Error en query filtrada: {e}")
+            print(f"❌ [API] Error en query filtrada: {e}")
             return {
                 'totals': {'cash': 0, 'mercadopago': 0, 'debit': 0, 'credit': 0, 'total': 0},
                 'branch_trays': [],
-                'records': []
+                'records': [],
+                'error': str(e)
             }
         
         # Calcular totales de disponibles
@@ -1212,67 +1296,134 @@ def get_filtered_dashboard_data(start_date, end_date, branch_filter=None):
         if not available_records:
             totals = {'cash': 0, 'mercadopago': 0, 'debit': 0, 'credit': 0, 'total': 0}
         else:
-            try:
-                totals = {
-                    'cash': sum(float(r.cash_sales or 0) for r in available_records),
-                    'mercadopago': sum(float(r.mercadopago_sales or 0) for r in available_records),
-                    'debit': sum(float(r.debit_sales or 0) for r in available_records),
-                    'credit': sum(float(r.credit_sales or 0) for r in available_records),
-                }
-                totals['total'] = sum(totals.values())
-                print(f"💰 [DEBUG] Dinero disponible: ${totals['total']:,.2f}")
-            except Exception as e:
-                print(f"❌ [DEBUG] Error calculando totales filtrados: {e}")
-                totals = {'cash': 0, 'mercadopago': 0, 'debit': 0, 'credit': 0, 'total': 0}
+            totals = {
+                'cash': sum(float(r.cash_sales or 0) for r in available_records),
+                'mercadopago': sum(float(r.mercadopago_sales or 0) for r in available_records),
+                'debit': sum(float(r.debit_sales or 0) for r in available_records),
+                'credit': sum(float(r.credit_sales or 0) for r in available_records),
+            }
+            totals['total'] = sum(totals.values())
         
         # Datos de bandejas
         branch_trays = get_simple_branch_data(available_records)
         
-        # CORRECCIÓN: Mostrar todos los registros filtrados, limitando solo para UI
+        # Datos de registros (limitar para UI)
         display_records = records[:200] if len(records) > 200 else records
-        if len(records) > 200:
-            print(f"⚠️ [DEBUG] Mostrando primeros 200 de {len(records)} registros para rendimiento")
         
-        # Datos de registros
         records_data = []
         for r in display_records:
-            try:
-                records_data.append({
-                    'id': r.id,
-                    'date': r.record_date.strftime('%d/%m/%Y'),
-                    'branch_name': r.branch_name,
-                    'total_sales': float(r.total_sales or 0),
-                    'cash_sales': float(r.cash_sales or 0),
-                    'mercadopago_sales': float(r.mercadopago_sales or 0),
-                    'debit_sales': float(r.debit_sales or 0),
-                    'credit_sales': float(r.credit_sales or 0),
-                    'total_expenses': float(r.total_expenses or 0),
-                    'net_profit': float(r.total_sales or 0) - float(r.total_expenses or 0),
-                    'is_verified': r.is_verified,
-                    'is_withdrawn': r.is_withdrawn
-                })
-            except Exception as e:
-                print(f"❌ [DEBUG] Error procesando registro filtrado {r.id}: {e}")
-                continue
+            records_data.append({
+                'id': r.id,
+                'date': r.record_date.strftime('%d/%m/%Y'),
+                'branch_name': normalize_branch_name(r.branch_name),  # Normalizar en salida
+                'total_sales': float(r.total_sales or 0),
+                'cash_sales': float(r.cash_sales or 0),
+                'mercadopago_sales': float(r.mercadopago_sales or 0),
+                'debit_sales': float(r.debit_sales or 0),
+                'credit_sales': float(r.credit_sales or 0),
+                'total_expenses': float(r.total_expenses or 0),
+                'net_profit': float(r.total_sales or 0) - float(r.total_expenses or 0),
+                'is_verified': r.is_verified,
+                'is_withdrawn': r.is_withdrawn
+            })
         
         return {
             'totals': totals,
             'branch_trays': branch_trays,
             'records': records_data,
-            'total_found': len(records)  # Para mostrar en UI si hay más registros
+            'total_found': len(records)
         }
         
     except Exception as e:
-        print(f"❌ [DEBUG] Error crítico en get_filtered_dashboard_data: {e}")
+        print(f"❌ [API] Error crítico: {e}")
         import traceback
         traceback.print_exc()
         return {
             'totals': {'cash': 0, 'mercadopago': 0, 'debit': 0, 'credit': 0, 'total': 0},
             'branch_trays': [],
-            'records': []
+            'records': [],
+            'error': str(e)
         }
 
 # Funciones auxiliares
+
+def normalize_branch_name(branch_name):
+    """
+    Normalizar nombres de sucursales para evitar problemas de inconsistencia.
+    """
+    if not branch_name:
+        return branch_name
+    
+    # Convertir a string, quitar espacios y normalizar
+    normalized = str(branch_name).strip()
+    
+    # Mapeo de variaciones conocidas a nombres estándar
+    branch_mapping = {
+        # Variaciones de Uruguay
+        'uruguay': 'Uruguay',
+        'URUGUAY': 'Uruguay',
+        ' uruguay ': 'Uruguay',
+        'uruguay ': 'Uruguay',
+        ' uruguay': 'Uruguay',
+        
+        # Variaciones de Villa Cabello
+        'villa cabello': 'Villa Cabello',
+        'VILLA CABELLO': 'Villa Cabello',
+        'Villa cabello': 'Villa Cabello',
+        'villacabello': 'Villa Cabello',
+        'villa_cabello': 'Villa Cabello',
+        
+        # Variaciones de Tacuari
+        'tacuari': 'Tacuari',
+        'TACUARI': 'Tacuari',
+        'tacuarí': 'Tacuari',
+        'Tacuarí': 'Tacuari',
+        
+        # Variaciones de Candelaria
+        'candelaria': 'Candelaria',
+        'CANDELARIA': 'Candelaria',
+        
+        # Variaciones de Itaembe Mini
+        'itaembe mini': 'Itaembe Mini',
+        'ITAEMBE MINI': 'Itaembe Mini',
+        'Itaembe mini': 'Itaembe Mini',
+        'itaembe_mini': 'Itaembe Mini',
+        'itaembemini': 'Itaembe Mini'
+    }
+    
+    # Buscar en el mapeo (insensible a mayúsculas)
+    normalized_lower = normalized.lower()
+    for variation, standard in branch_mapping.items():
+        if normalized_lower == variation.lower():
+            return standard
+    
+    # Si no está en el mapeo, devolver capitalizado
+    return normalized.title()
+
+def get_available_branches():
+    """
+    Obtener todas las sucursales disponibles en la base de datos, normalizadas.
+    """
+    try:
+        # Obtener todas las sucursales únicas
+        raw_branches = db.session.query(DailyRecord.branch_name).distinct().all()
+        
+        # Normalizar y deduplicar
+        normalized_branches = set()
+        for (branch_name,) in raw_branches:
+            if branch_name:
+                normalized = normalize_branch_name(branch_name)
+                normalized_branches.add(normalized)
+        
+        # Convertir a lista ordenada
+        available_branches = sorted(list(normalized_branches))
+        
+        print(f"🏢 [DEBUG] Sucursales disponibles normalizadas: {available_branches}")
+        return available_branches
+        
+    except Exception as e:
+        print(f"❌ [DEBUG] Error obteniendo sucursales: {e}")
+        return []
 
 def update_trays_from_records():
     """

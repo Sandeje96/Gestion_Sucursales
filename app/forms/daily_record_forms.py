@@ -208,6 +208,7 @@ class DailyRecordForm(FlaskForm):
 class FilterForm(FlaskForm):
     """
     Formulario para filtrar registros por diferentes criterios.
+    ACTUALIZADO: Carga sucursales dinámicamente desde la BD.
     """
     start_date = DateField(
         'Fecha Desde',
@@ -225,14 +226,7 @@ class FilterForm(FlaskForm):
     )
     branch_filter = SelectField(
         'Sucursal',
-        choices=[
-            ('', 'Todas las sucursales'),
-            ('Uruguay', 'Uruguay'),
-            ('Villa Cabello', 'Villa Cabello'),
-            ('Tacuari', 'Tacuari'),
-            ('Candelaria', 'Candelaria'),
-            ('Itaembe Mini', 'Itaembe Mini')
-        ],
+        choices=[],  # Se carga dinámicamente
         validators=[Optional()],
         render_kw={
             'class': 'form-select'
@@ -244,19 +238,108 @@ class FilterForm(FlaskForm):
             'class': 'btn btn-outline-primary'
         }
     )
+    
+    def __init__(self, *args, **kwargs):
+        """
+        Constructor que carga las sucursales dinámicamente desde la BD.
+        """
+        super(FilterForm, self).__init__(*args, **kwargs)
+        
+        # Cargar sucursales dinámicamente
+        self.load_branch_choices()
+    
+    def load_branch_choices(self):
+        """
+        Cargar las opciones de sucursales desde la base de datos.
+        """
+        try:
+            from app.models.daily_record import DailyRecord
+            from app import db
+            
+            # Función de normalización (copiar aquí o importar)
+            def normalize_branch_name(branch_name):
+                if not branch_name:
+                    return branch_name
+                
+                normalized = str(branch_name).strip()
+                
+                branch_mapping = {
+                    'uruguay': 'Uruguay',
+                    'URUGUAY': 'Uruguay',
+                    ' uruguay ': 'Uruguay',
+                    'uruguay ': 'Uruguay',
+                    ' uruguay': 'Uruguay',
+                    'villa cabello': 'Villa Cabello',
+                    'VILLA CABELLO': 'Villa Cabello',
+                    'Villa cabello': 'Villa Cabello',
+                    'villacabello': 'Villa Cabello',
+                    'villa_cabello': 'Villa Cabello',
+                    'tacuari': 'Tacuari',
+                    'TACUARI': 'Tacuari',
+                    'tacuarí': 'Tacuari',
+                    'Tacuarí': 'Tacuari',
+                    'candelaria': 'Candelaria',
+                    'CANDELARIA': 'Candelaria',
+                    'itaembe mini': 'Itaembe Mini',
+                    'ITAEMBE MINI': 'Itaembe Mini',
+                    'Itaembe mini': 'Itaembe Mini',
+                    'itaembe_mini': 'Itaembe Mini',
+                    'itaembemini': 'Itaembe Mini'
+                }
+                
+                normalized_lower = normalized.lower()
+                for variation, standard in branch_mapping.items():
+                    if normalized_lower == variation.lower():
+                        return standard
+                
+                return normalized.title()
+            
+            # Obtener sucursales únicas y normalizarlas
+            raw_branches = db.session.query(DailyRecord.branch_name).distinct().all()
+            
+            # Crear set para evitar duplicados
+            normalized_branches = set()
+            for (branch_name,) in raw_branches:
+                if branch_name:
+                    normalized = normalize_branch_name(branch_name)
+                    normalized_branches.add(normalized)
+            
+            # Crear lista de opciones ordenada
+            branch_choices = [('', 'Todas las sucursales')]
+            for branch in sorted(list(normalized_branches)):
+                branch_choices.append((branch, branch))
+            
+            self.branch_filter.choices = branch_choices
+            
+            print(f"🏢 [FORM] Sucursales cargadas: {[choice[1] for choice in branch_choices[1:]]}")
+            
+        except Exception as e:
+            print(f"❌ [FORM] Error cargando sucursales: {e}")
+            # Fallback a opciones estáticas si hay error
+            self.branch_filter.choices = [
+                ('', 'Todas las sucursales'),
+                ('Uruguay', 'Uruguay'),
+                ('Villa Cabello', 'Villa Cabello'),
+                ('Tacuari', 'Tacuari'),
+                ('Candelaria', 'Candelaria'),
+                ('Itaembe Mini', 'Itaembe Mini')
+            ]
+    
     def validate(self, extra_validators=None):
         """
         Validación personalizada para el rango de fechas.
         """
-        if not super().validate(extra_validators):
-            return False
+        result = super(FilterForm, self).validate(extra_validators)
+        
+        # Validar que la fecha de inicio no sea posterior a la fecha de fin
         if self.start_date.data and self.end_date.data:
             if self.start_date.data > self.end_date.data:
                 self.end_date.errors.append(
-                    'La fecha final debe ser posterior a la fecha inicial.'
+                    'La fecha final debe ser posterior o igual a la fecha inicial.'
                 )
-                return False
-        return True
+                result = False
+        
+        return result
 
 class QuickStatsForm(FlaskForm):
     """
