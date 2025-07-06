@@ -80,6 +80,7 @@ def index():
     """
     Lista principal de registros diarios.
     Muestra diferentes vistas según el rol del usuario.
+    CORREGIDO: Sin límites artificiales para mostrar todos los registros del período.
     """
     page = request.args.get('page', 1, type=int)
     
@@ -106,27 +107,46 @@ def index():
     # Aplicar filtros si se enviaron
     filters_applied = []
     
+    # CORRECCIÓN: Si no hay filtros, mostrar todo el mes actual por defecto
+    today = get_today_arg()
+    default_start_date = today.replace(day=1)  # Primer día del mes actual
+    default_end_date = today  # Hasta hoy
+    
     # Filtro de fecha desde
-    if request.args.get('start_date'):
+    start_date_param = request.args.get('start_date')
+    if start_date_param:
         try:
-            start_date = datetime.datetime.strptime(request.args.get('start_date'), '%Y-%m-%d').date()
+            start_date = datetime.datetime.strptime(start_date_param, '%Y-%m-%d').date()
             query = query.filter(DailyRecord.record_date >= start_date)
             filters_applied.append(f"desde {start_date.strftime('%d/%m/%Y')}")
             print(f"📅 Filtro fecha desde: {start_date}")
         except ValueError as e:
             print(f"❌ Error parseando start_date: {e}")
             flash('Formato de fecha desde inválido', 'warning')
+            start_date = default_start_date
+    else:
+        # Sin filtro específico: mostrar desde inicio del mes
+        start_date = default_start_date
+        query = query.filter(DailyRecord.record_date >= start_date)
+        print(f"📅 Aplicando filtro por defecto desde: {start_date}")
 
     # Filtro de fecha hasta
-    if request.args.get('end_date'):
+    end_date_param = request.args.get('end_date')
+    if end_date_param:
         try:
-            end_date = datetime.datetime.strptime(request.args.get('end_date'), '%Y-%m-%d').date()
+            end_date = datetime.datetime.strptime(end_date_param, '%Y-%m-%d').date()
             query = query.filter(DailyRecord.record_date <= end_date)
             filters_applied.append(f"hasta {end_date.strftime('%d/%m/%Y')}")
             print(f"📅 Filtro fecha hasta: {end_date}")
         except ValueError as e:
             print(f"❌ Error parseando end_date: {e}")
             flash('Formato de fecha hasta inválido', 'warning')
+            end_date = default_end_date
+    else:
+        # Sin filtro específico: mostrar hasta hoy
+        end_date = default_end_date
+        query = query.filter(DailyRecord.record_date <= end_date)
+        print(f"📅 Aplicando filtro por defecto hasta: {end_date}")
 
     # Filtro de sucursal (solo para admins)
     if request.args.get('branch_filter') and current_user.is_admin_user():
@@ -143,17 +163,17 @@ def index():
     total_records = query.count()
     print(f"📊 Total de registros encontrados: {total_records}")
     
-    # Paginación
+    # CORRECCIÓN: Aumentar registros por página para mostrar más datos
     try:
         records = query.paginate(
             page=page,
-            per_page=20,
+            per_page=50,  # Aumentado de 20 a 50
             error_out=False
         )
-        print(f"📄 Página {page}: {len(records.items)} registros mostrados")
+        print(f"📄 Página {page}: {len(records.items)} registros mostrados de {total_records} totales")
     except Exception as e:
         print(f"❌ Error en paginación: {e}")
-        records = query.paginate(page=1, per_page=20, error_out=False)
+        records = query.paginate(page=1, per_page=50, error_out=False)
     
     # Mensaje informativo sobre filtros aplicados
     if filters_applied:
@@ -161,9 +181,13 @@ def index():
         print(f"✅ {filter_message}")
         if not records.items:
             flash(f'No se encontraron registros con los filtros aplicados: {", ".join(filters_applied)}', 'info')
+    else:
+        # Mostrar información de que se están viendo registros del mes actual
+        print(f"📅 Mostrando registros del mes actual: {start_date} a {end_date}")
+        if not records.items:
+            flash(f'No hay registros disponibles para el período del {start_date.strftime("%d/%m/%Y")} al {end_date.strftime("%d/%m/%Y")}', 'info')
     
     # Estadísticas rápidas
-    today = get_today_arg()
     stats = get_quick_stats(current_user, today)
     
     return render_template(
@@ -172,7 +196,8 @@ def index():
         records=records,
         filter_form=filter_form,
         stats=stats,
-        filters_applied=filters_applied
+        filters_applied=filters_applied,
+        current_period={'start': start_date, 'end': end_date}  # Para mostrar en la UI
     )
 
 
@@ -972,76 +997,58 @@ def api_integrated_dashboard():
             'timestamp': datetime.datetime.now().isoformat()
         }), 500
     
-def get_accumulated_dashboard_data(branch_filter=None):
+def get_accumulated_dashboard_data():
     """
-    OPTIMIZADA: Obtener datos acumulados con menos consultas a la BD.
+    CORREGIDO: Obtener todos los datos del dashboard sin límites artificiales.
+    Obtiene todos los registros NO retirados para el cálculo correcto del dinero disponible.
     """
     try:
-        from app.models.cash_tray import CashTray
+        print(f"🚀 Obteniendo datos completos del dashboard...")
+        start_time = time.time()
         
-        print(f"🚀 [OPTIMIZED] Obteniendo datos de dashboard optimizado...")
-        print(f"🏢 Filtro de sucursal: {branch_filter}")
+        # ✅ CORRECCIÓN: Obtener TODOS los registros NO retirados sin límites
+        query = DailyRecord.query.filter(DailyRecord.is_withdrawn == False)
         
-        # ✅ OPTIMIZACIÓN: Una sola consulta para bandejas
-        tray_query = CashTray.query
-        if branch_filter:
-            tray_query = tray_query.filter_by(branch_name=branch_filter)
-        
-        # Aplicar permisos de usuario
+        # Aplicar filtros de permisos
         if not current_user.is_admin_user():
-            tray_query = tray_query.filter_by(branch_name=current_user.branch_name)
+            query = query.filter(DailyRecord.user_id == current_user.id)
         
-        trays = tray_query.all()
-        print(f"📊 Bandejas obtenidas: {len(trays)} en {time.time():.3f}s")
+        # Obtener todos los registros no retirados para cálculo correcto
+        all_available_records = query.all()
+        print(f"📊 Total registros NO retirados: {len(all_available_records)}")
         
-        # ✅ CÁLCULO DIRECTO de totales (sin recalcular bandejas innecesariamente)
-        totals = {
-            'cash': sum(float(t.accumulated_cash or 0) for t in trays),
-            'mercadopago': sum(float(t.accumulated_mercadopago or 0) for t in trays),
-            'debit': sum(float(t.accumulated_debit or 0) for t in trays),
-            'credit': sum(float(t.accumulated_credit or 0) for t in trays),
-        }
-        totals['total'] = sum(totals.values())
+        # Calcular totales de dinero disponible
+        if not all_available_records:
+            totals = {'cash': 0, 'mercadopago': 0, 'debit': 0, 'credit': 0, 'total': 0}
+        else:
+            totals = {
+                'cash': sum(float(r.cash_sales or 0) for r in all_available_records),
+                'mercadopago': sum(float(r.mercadopago_sales or 0) for r in all_available_records),
+                'debit': sum(float(r.debit_sales or 0) for r in all_available_records),
+                'credit': sum(float(r.credit_sales or 0) for r in all_available_records),
+            }
+            totals['total'] = sum(totals.values())
         
-        print(f"💰 Totales calculados rápidamente:")
-        print(f"   Total: ${totals['total']:,.2f}")
+        print(f"💰 Dinero total disponible: ${totals['total']:,.2f}")
         
-        # ✅ OPTIMIZACIÓN: Datos de bandejas simplificados
-        branch_trays = []
+        # Datos de bandejas por sucursal
+        branch_trays = get_filtered_branch_data_optimized(all_available_records)
+        
+        # ✅ CORRECCIÓN: Para la lista de registros, obtener más registros recientes
+        # pero manteniendo un límite razonable para el rendimiento de la UI
+        recent_query = DailyRecord.query
+        if not current_user.is_admin_user():
+            recent_query = recent_query.filter(DailyRecord.user_id == current_user.id)
+        
+        # Obtener registros recientes del mes actual + mes anterior
         today = get_today_arg()
+        two_months_ago = (today.replace(day=1) - datetime.timedelta(days=32)).replace(day=1)
         
-        for tray in trays:
-            # Solo una consulta simple por sucursal para datos de hoy
-            today_stats = db.session.query(
-                func.sum(DailyRecord.total_sales).label('sales'),
-                func.sum(DailyRecord.total_expenses).label('expenses')
-            ).filter(
-                DailyRecord.branch_name == tray.branch_name,
-                DailyRecord.record_date == today
-            ).first()
-            
-            branch_trays.append({
-                'branch_name': tray.branch_name,
-                'accumulated_cash': float(tray.accumulated_cash or 0),
-                'accumulated_mercadopago': float(tray.accumulated_mercadopago or 0),
-                'accumulated_debit': float(tray.accumulated_debit or 0),
-                'accumulated_credit': float(tray.accumulated_credit or 0),
-                'total_accumulated': tray.get_total_accumulated(),
-                'today_sales': float(today_stats.sales or 0),
-                'today_expenses': float(today_stats.expenses or 0),
-                'can_empty': (current_user.is_admin_user() or 
-                            current_user.branch_name == tray.branch_name)
-            })
+        recent_records = recent_query.filter(
+            DailyRecord.record_date >= two_months_ago
+        ).order_by(desc(DailyRecord.record_date)).limit(100).all()  # Aumentado a 100
         
-        # ✅ OPTIMIZACIÓN: Registros con límite y paginación eficiente
-        records_query = DailyRecord.query
-        if branch_filter:
-            records_query = records_query.filter(DailyRecord.branch_name == branch_filter)
-        if not current_user.is_admin_user():
-            records_query = records_query.filter(DailyRecord.user_id == current_user.id)
-        
-        # Solo los últimos 20 registros para cargar rápido
-        records = records_query.order_by(desc(DailyRecord.record_date)).limit(20).all()
+        print(f"📋 Registros recientes para la lista: {len(recent_records)}")
         
         # Datos de registros optimizados
         records_data = [{
@@ -1057,9 +1064,10 @@ def get_accumulated_dashboard_data(branch_filter=None):
             'net_profit': r.get_net_amount(),
             'is_verified': r.is_verified,
             'is_withdrawn': r.is_withdrawn
-        } for r in records]
+        } for r in recent_records]
         
-        print(f"✅ Dashboard optimizado cargado en tiempo récord")
+        elapsed = time.time() - start_time
+        print(f"✅ Dashboard completo cargado en {elapsed:.2f}s")
         
         return {
             'totals': totals,
@@ -1069,31 +1077,22 @@ def get_accumulated_dashboard_data(branch_filter=None):
         
     except Exception as e:
         print(f"❌ Error en get_accumulated_dashboard_data: {str(e)}")
+        traceback.print_exc()
         raise
 
 def get_filtered_dashboard_data(start_date, end_date, branch_filter=None):
     """
-    OPTIMIZADA: Datos filtrados con consultas más eficientes.
+    CORREGIDO: Obtener todos los datos filtrados sin límites artificiales.
     """
     try:
-        print(f"🚀 [OPTIMIZED] Obteniendo datos filtrados rápidamente...")
+        print(f"🚀 Obteniendo datos filtrados completos...")
+        print(f"📅 Rango: {start_date} - {end_date}")
+        print(f"🏢 Sucursal: {branch_filter if branch_filter else 'Todas'}")
         
-        # ✅ UNA SOLA CONSULTA optimizada con agregaciones
-        query = db.session.query(
-            DailyRecord.id,
-            DailyRecord.record_date,
-            DailyRecord.branch_name,
-            DailyRecord.total_sales,
-            DailyRecord.cash_sales,
-            DailyRecord.mercadopago_sales,
-            DailyRecord.debit_sales,
-            DailyRecord.credit_sales,
-            DailyRecord.total_expenses,
-            DailyRecord.is_verified,
-            DailyRecord.is_withdrawn
-        )
+        # Construir query con filtros
+        query = DailyRecord.query
         
-        # Aplicar filtros
+        # Aplicar filtros de fecha
         if start_date:
             query = query.filter(DailyRecord.record_date >= start_date)
         if end_date:
@@ -1103,10 +1102,11 @@ def get_filtered_dashboard_data(start_date, end_date, branch_filter=None):
         if not current_user.is_admin_user():
             query = query.filter(DailyRecord.user_id == current_user.id)
         
-        records = query.order_by(desc(DailyRecord.record_date)).limit(50).all()
+        # ✅ CORRECCIÓN: Obtener TODOS los registros del período filtrado
+        records = query.order_by(desc(DailyRecord.record_date)).all()
         print(f"📊 Registros filtrados obtenidos: {len(records)}")
         
-        # ✅ CÁLCULO OPTIMIZADO: Solo registros NO retirados para dinero disponible
+        # ✅ CÁLCULO CORRECTO: Solo registros NO retirados para dinero disponible
         available_records = [r for r in records if not r.is_withdrawn]
         
         if not available_records:
@@ -1122,12 +1122,18 @@ def get_filtered_dashboard_data(start_date, end_date, branch_filter=None):
         
         print(f"💰 Dinero disponible filtrado: ${totals['total']:,.2f}")
         
-        # Datos de sucursales simplificados
-        branch_trays = get_filtered_branch_data_optimized(records, branch_filter)
+        # Datos de sucursales basados en registros filtrados
+        branch_trays = get_filtered_branch_data_optimized(available_records, branch_filter)
+        
+        # ✅ CORRECCIÓN: Mostrar todos los registros del período filtrado
+        # Para períodos largos, limitamos a los primeros 200 para mantener rendimiento en UI
+        display_records = records[:200] if len(records) > 200 else records
+        if len(records) > 200:
+            print(f"⚠️ Mostrando los primeros 200 registros de {len(records)} totales")
         
         # Datos de registros
         records_data = []
-        for r in records:
+        for r in display_records:
             net_profit = float(r.total_sales or 0) - float(r.total_expenses or 0)
             records_data.append({
                 'id': r.id,
@@ -1147,13 +1153,16 @@ def get_filtered_dashboard_data(start_date, end_date, branch_filter=None):
         return {
             'totals': totals,
             'branch_trays': branch_trays,
-            'records': records_data
+            'records': records_data,
+            'total_records_found': len(records),  # Para mostrar en UI si hay más
+            'showing_partial': len(records) > 200
         }
         
     except Exception as e:
         print(f"❌ Error en get_filtered_dashboard_data: {str(e)}")
+        traceback.print_exc()
         raise
-
+    
 def get_filtered_branch_data_optimized(records, branch_filter=None):
     """
     OPTIMIZADA: Procesamiento más rápido de datos de sucursales.
