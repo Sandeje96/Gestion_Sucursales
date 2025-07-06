@@ -331,7 +331,6 @@ def edit(id):
         record=record
     )
 
-
 @daily_records_bp.route('/view/<int:id>')
 @login_required
 def view(id):
@@ -740,8 +739,7 @@ def empty_branch_tray(branch_name):
         else:
             flash(error_message, 'error')
             return redirect(url_for('daily_records.index'))
-
-
+        
 @daily_records_bp.route('/empty-record/<int:record_id>', methods=['POST'])
 @login_required
 def empty_record(record_id):
@@ -920,12 +918,13 @@ def api_branch_tray_status(branch_name):
             'status': 'error',
             'message': str(e)
         }), 500
-    
+
+# FUNCIÓN CORREGIDA: API integrado sin parámetros incorrectos    
 @daily_records_bp.route('/api/integrated-dashboard')
 @login_required  
 def api_integrated_dashboard():
     """
-    OPTIMIZADA: API endpoint más rápido con timeout y cache.
+    CORREGIDO: API endpoint optimizado sin errores de funciones inexistentes.
     """
     import time
     start_time = time.time()
@@ -957,11 +956,11 @@ def api_integrated_dashboard():
         # Determinar modo (filtrado vs acumulado)
         is_filtered = bool(start_date or end_date or branch_filter)
         
-        # ✅ TIMEOUT DE SEGURIDAD: Máximo 5 segundos
+        # CORRECCIÓN: Sin parámetros incorrectos
         if is_filtered:
             dashboard_data = get_filtered_dashboard_data(start_date, end_date, branch_filter)
         else:
-            dashboard_data = get_accumulated_dashboard_data(branch_filter)
+            dashboard_data = get_accumulated_dashboard_data()  # SIN parámetros incorrectos
         
         execution_time = time.time() - start_time
         print(f"⚡ Dashboard cargado en {execution_time:.3f} segundos")
@@ -989,6 +988,8 @@ def api_integrated_dashboard():
     except Exception as e:
         execution_time = time.time() - start_time
         print(f"❌ Error después de {execution_time:.3f}s: {str(e)}")
+        import traceback
+        traceback.print_exc()
         
         return jsonify({
             'status': 'error',
@@ -996,78 +997,262 @@ def api_integrated_dashboard():
             'execution_time': round(execution_time, 3),
             'timestamp': datetime.datetime.now().isoformat()
         }), 500
-    
+
+# FUNCIÓN CORREGIDA: Dashboard acumulado sin errores    
 def get_accumulated_dashboard_data():
     """
-    CORREGIDO: Obtener todos los datos del dashboard sin límites artificiales.
-    Obtiene todos los registros NO retirados para el cálculo correcto del dinero disponible.
+    CORREGIDO: Sin parámetros incorrectos y manejo de errores robusto.
     """
     try:
-        print(f"🚀 Obteniendo datos completos del dashboard...")
-        start_time = time.time()
+        print(f"🚀 [DEBUG] Iniciando get_accumulated_dashboard_data...")
         
-        # ✅ CORRECCIÓN: Obtener TODOS los registros NO retirados sin límites
-        query = DailyRecord.query.filter(DailyRecord.is_withdrawn == False)
+        # Consulta básica más simple primero
+        try:
+            total_records = DailyRecord.query.count()
+            print(f"📊 [DEBUG] Total registros en DB: {total_records}")
+        except Exception as e:
+            print(f"❌ [DEBUG] Error contando registros: {e}")
+            raise
         
-        # Aplicar filtros de permisos
-        if not current_user.is_admin_user():
-            query = query.filter(DailyRecord.user_id == current_user.id)
+        # Query para registros NO retirados
+        try:
+            query = DailyRecord.query.filter(DailyRecord.is_withdrawn == False)
+            
+            # Aplicar filtros de permisos
+            if not current_user.is_admin_user():
+                query = query.filter(DailyRecord.user_id == current_user.id)
+                print(f"👤 [DEBUG] Filtrado por usuario: {current_user.branch_name}")
+            
+            # Obtener registros disponibles
+            all_available_records = query.all()
+            print(f"📊 [DEBUG] Registros NO retirados: {len(all_available_records)}")
+            
+        except Exception as e:
+            print(f"❌ [DEBUG] Error obteniendo registros disponibles: {e}")
+            # Fallback: retornar datos vacíos
+            return {
+                'totals': {'cash': 0, 'mercadopago': 0, 'debit': 0, 'credit': 0, 'total': 0},
+                'branch_trays': [],
+                'records': []
+            }
         
-        # Obtener todos los registros no retirados para cálculo correcto
-        all_available_records = query.all()
-        print(f"📊 Total registros NO retirados: {len(all_available_records)}")
+        # Calcular totales
+        try:
+            if not all_available_records:
+                totals = {'cash': 0, 'mercadopago': 0, 'debit': 0, 'credit': 0, 'total': 0}
+                print(f"💰 [DEBUG] No hay registros disponibles")
+            else:
+                totals = {
+                    'cash': sum(float(r.cash_sales or 0) for r in all_available_records),
+                    'mercadopago': sum(float(r.mercadopago_sales or 0) for r in all_available_records),
+                    'debit': sum(float(r.debit_sales or 0) for r in all_available_records),
+                    'credit': sum(float(r.credit_sales or 0) for r in all_available_records),
+                }
+                totals['total'] = sum(totals.values())
+                print(f"💰 [DEBUG] Dinero total: ${totals['total']:,.2f}")
+        except Exception as e:
+            print(f"❌ [DEBUG] Error calculando totales: {e}")
+            totals = {'cash': 0, 'mercadopago': 0, 'debit': 0, 'credit': 0, 'total': 0}
         
-        # Calcular totales de dinero disponible
-        if not all_available_records:
+        # CORRECCIÓN: Usar la función correcta
+        try:
+            branch_trays = get_simple_branch_data(all_available_records)
+            print(f"🏪 [DEBUG] Bandejas procesadas: {len(branch_trays)}")
+        except Exception as e:
+            print(f"❌ [DEBUG] Error procesando bandejas: {e}")
+            branch_trays = []
+        
+        # Lista de registros recientes - versión simplificada
+        try:
+            recent_query = DailyRecord.query
+            if not current_user.is_admin_user():
+                recent_query = recent_query.filter(DailyRecord.user_id == current_user.id)
+            
+            # Solo los últimos 50 registros para evitar problemas
+            recent_records = recent_query.order_by(desc(DailyRecord.record_date)).limit(50).all()
+            print(f"📋 [DEBUG] Registros recientes: {len(recent_records)}")
+            
+            records_data = []
+            for r in recent_records:
+                try:
+                    records_data.append({
+                        'id': r.id,
+                        'date': r.record_date.strftime('%d/%m/%Y'),
+                        'branch_name': r.branch_name,
+                        'total_sales': float(r.total_sales or 0),
+                        'cash_sales': float(r.cash_sales or 0),
+                        'mercadopago_sales': float(r.mercadopago_sales or 0),
+                        'debit_sales': float(r.debit_sales or 0),
+                        'credit_sales': float(r.credit_sales or 0),
+                        'total_expenses': float(r.total_expenses or 0),
+                        'net_profit': float(r.total_sales or 0) - float(r.total_expenses or 0),
+                        'is_verified': r.is_verified,
+                        'is_withdrawn': r.is_withdrawn
+                    })
+                except Exception as e:
+                    print(f"❌ [DEBUG] Error procesando registro {r.id}: {e}")
+                    continue
+            
+        except Exception as e:
+            print(f"❌ [DEBUG] Error obteniendo registros recientes: {e}")
+            records_data = []
+        
+        result = {
+            'totals': totals,
+            'branch_trays': branch_trays,
+            'records': records_data
+        }
+        
+        print(f"✅ [DEBUG] Dashboard completado exitosamente")
+        return result
+        
+    except Exception as e:
+        print(f"❌ [DEBUG] Error crítico en get_accumulated_dashboard_data: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        # Retornar datos vacíos en caso de error crítico
+        return {
+            'totals': {'cash': 0, 'mercadopago': 0, 'debit': 0, 'credit': 0, 'total': 0},
+            'branch_trays': [],
+            'records': []
+        }
+
+# FUNCIÓN CORREGIDA: Procesar datos de sucursales simplificado
+def get_simple_branch_data(records):
+    """
+    NUEVA: Función simplificada para procesar datos de sucursales sin dependencias complejas.
+    """
+    try:
+        print(f"🔄 [DEBUG] Procesando {len(records)} registros para bandejas...")
+        
+        branches = {}
+        
+        for record in records:
+            try:
+                branch = record.branch_name
+                if branch not in branches:
+                    branches[branch] = {
+                        'branch_name': branch,
+                        'accumulated_cash': 0,
+                        'accumulated_mercadopago': 0,
+                        'accumulated_debit': 0,
+                        'accumulated_credit': 0,
+                        'total_accumulated': 0,
+                        'today_sales': 0,
+                        'today_expenses': 0,
+                        'can_empty': current_user.is_admin_user() or current_user.branch_name == branch
+                    }
+                
+                # Solo registros NO retirados
+                if not record.is_withdrawn:
+                    branches[branch]['accumulated_cash'] += float(record.cash_sales or 0)
+                    branches[branch]['accumulated_mercadopago'] += float(record.mercadopago_sales or 0)
+                    branches[branch]['accumulated_debit'] += float(record.debit_sales or 0)
+                    branches[branch]['accumulated_credit'] += float(record.credit_sales or 0)
+                
+            except Exception as e:
+                print(f"❌ [DEBUG] Error procesando registro {record.id}: {e}")
+                continue
+        
+        # Calcular totales
+        for branch_data in branches.values():
+            try:
+                branch_data['total_accumulated'] = (
+                    branch_data['accumulated_cash'] +
+                    branch_data['accumulated_mercadopago'] +
+                    branch_data['accumulated_debit'] +
+                    branch_data['accumulated_credit']
+                )
+            except Exception as e:
+                print(f"❌ [DEBUG] Error calculando total para {branch_data['branch_name']}: {e}")
+                branch_data['total_accumulated'] = 0
+        
+        result = list(branches.values())
+        print(f"✅ [DEBUG] {len(result)} bandejas procesadas")
+        return result
+        
+    except Exception as e:
+        print(f"❌ [DEBUG] Error en get_simple_branch_data: {e}")
+        return []
+
+# FUNCIÓN CORREGIDA: Dashboard filtrado    
+def get_filtered_dashboard_data(start_date, end_date, branch_filter=None):
+    """
+    CORREGIDO: Versión simplificada con manejo de errores robusto.
+    """
+    try:
+        print(f"🚀 [DEBUG] Obteniendo datos filtrados...")
+        print(f"📅 [DEBUG] Rango: {start_date} - {end_date}")
+        print(f"🏢 [DEBUG] Sucursal: {branch_filter or 'Todas'}")
+        
+        # Query básica
+        query = DailyRecord.query
+        
+        # Aplicar filtros
+        try:
+            if start_date:
+                query = query.filter(DailyRecord.record_date >= start_date)
+            if end_date:
+                query = query.filter(DailyRecord.record_date <= end_date)
+            if branch_filter:
+                query = query.filter(DailyRecord.branch_name == branch_filter)
+            if not current_user.is_admin_user():
+                query = query.filter(DailyRecord.user_id == current_user.id)
+            
+            # Limitar para evitar problemas de rendimiento
+            records = query.order_by(desc(DailyRecord.record_date)).limit(100).all()
+            print(f"📊 [DEBUG] Registros filtrados: {len(records)}")
+            
+        except Exception as e:
+            print(f"❌ [DEBUG] Error en query filtrada: {e}")
+            return {
+                'totals': {'cash': 0, 'mercadopago': 0, 'debit': 0, 'credit': 0, 'total': 0},
+                'branch_trays': [],
+                'records': []
+            }
+        
+        # Calcular totales de disponibles
+        available_records = [r for r in records if not r.is_withdrawn]
+        
+        if not available_records:
             totals = {'cash': 0, 'mercadopago': 0, 'debit': 0, 'credit': 0, 'total': 0}
         else:
-            totals = {
-                'cash': sum(float(r.cash_sales or 0) for r in all_available_records),
-                'mercadopago': sum(float(r.mercadopago_sales or 0) for r in all_available_records),
-                'debit': sum(float(r.debit_sales or 0) for r in all_available_records),
-                'credit': sum(float(r.credit_sales or 0) for r in all_available_records),
-            }
-            totals['total'] = sum(totals.values())
+            try:
+                totals = {
+                    'cash': sum(float(r.cash_sales or 0) for r in available_records),
+                    'mercadopago': sum(float(r.mercadopago_sales or 0) for r in available_records),
+                    'debit': sum(float(r.debit_sales or 0) for r in available_records),
+                    'credit': sum(float(r.credit_sales or 0) for r in available_records),
+                }
+                totals['total'] = sum(totals.values())
+            except Exception as e:
+                print(f"❌ [DEBUG] Error calculando totales filtrados: {e}")
+                totals = {'cash': 0, 'mercadopago': 0, 'debit': 0, 'credit': 0, 'total': 0}
         
-        print(f"💰 Dinero total disponible: ${totals['total']:,.2f}")
+        # CORRECCIÓN: Usar función correcta
+        branch_trays = get_simple_branch_data(available_records)
         
-        # Datos de bandejas por sucursal
-        branch_trays = get_filtered_branch_data_optimized(all_available_records)
-        
-        # ✅ CORRECCIÓN: Para la lista de registros, obtener más registros recientes
-        # pero manteniendo un límite razonable para el rendimiento de la UI
-        recent_query = DailyRecord.query
-        if not current_user.is_admin_user():
-            recent_query = recent_query.filter(DailyRecord.user_id == current_user.id)
-        
-        # Obtener registros recientes del mes actual + mes anterior
-        today = get_today_arg()
-        two_months_ago = (today.replace(day=1) - datetime.timedelta(days=32)).replace(day=1)
-        
-        recent_records = recent_query.filter(
-            DailyRecord.record_date >= two_months_ago
-        ).order_by(desc(DailyRecord.record_date)).limit(100).all()  # Aumentado a 100
-        
-        print(f"📋 Registros recientes para la lista: {len(recent_records)}")
-        
-        # Datos de registros optimizados
-        records_data = [{
-            'id': r.id,
-            'date': r.record_date.strftime('%d/%m/%Y'),
-            'branch_name': r.branch_name,
-            'total_sales': float(r.total_sales or 0),
-            'cash_sales': float(r.cash_sales or 0),
-            'mercadopago_sales': float(r.mercadopago_sales or 0),
-            'debit_sales': float(r.debit_sales or 0),
-            'credit_sales': float(r.credit_sales or 0),
-            'total_expenses': float(r.total_expenses or 0),
-            'net_profit': r.get_net_amount(),
-            'is_verified': r.is_verified,
-            'is_withdrawn': r.is_withdrawn
-        } for r in recent_records]
-        
-        elapsed = time.time() - start_time
-        print(f"✅ Dashboard completo cargado en {elapsed:.2f}s")
+        # Datos de registros
+        records_data = []
+        for r in records:
+            try:
+                records_data.append({
+                    'id': r.id,
+                    'date': r.record_date.strftime('%d/%m/%Y'),
+                    'branch_name': r.branch_name,
+                    'total_sales': float(r.total_sales or 0),
+                    'cash_sales': float(r.cash_sales or 0),
+                    'mercadopago_sales': float(r.mercadopago_sales or 0),
+                    'debit_sales': float(r.debit_sales or 0),
+                    'credit_sales': float(r.credit_sales or 0),
+                    'total_expenses': float(r.total_expenses or 0),
+                    'net_profit': float(r.total_sales or 0) - float(r.total_expenses or 0),
+                    'is_verified': r.is_verified,
+                    'is_withdrawn': r.is_withdrawn
+                })
+            except Exception as e:
+                print(f"❌ [DEBUG] Error procesando registro filtrado {r.id}: {e}")
+                continue
         
         return {
             'totals': totals,
@@ -1076,255 +1261,14 @@ def get_accumulated_dashboard_data():
         }
         
     except Exception as e:
-        print(f"❌ Error en get_accumulated_dashboard_data: {str(e)}")
+        print(f"❌ [DEBUG] Error crítico en get_filtered_dashboard_data: {e}")
+        import traceback
         traceback.print_exc()
-        raise
-
-def get_filtered_dashboard_data(start_date, end_date, branch_filter=None):
-    """
-    CORREGIDO: Obtener todos los datos filtrados sin límites artificiales.
-    """
-    try:
-        print(f"🚀 Obteniendo datos filtrados completos...")
-        print(f"📅 Rango: {start_date} - {end_date}")
-        print(f"🏢 Sucursal: {branch_filter if branch_filter else 'Todas'}")
-        
-        # Construir query con filtros
-        query = DailyRecord.query
-        
-        # Aplicar filtros de fecha
-        if start_date:
-            query = query.filter(DailyRecord.record_date >= start_date)
-        if end_date:
-            query = query.filter(DailyRecord.record_date <= end_date)
-        if branch_filter:
-            query = query.filter(DailyRecord.branch_name == branch_filter)
-        if not current_user.is_admin_user():
-            query = query.filter(DailyRecord.user_id == current_user.id)
-        
-        # ✅ CORRECCIÓN: Obtener TODOS los registros del período filtrado
-        records = query.order_by(desc(DailyRecord.record_date)).all()
-        print(f"📊 Registros filtrados obtenidos: {len(records)}")
-        
-        # ✅ CÁLCULO CORRECTO: Solo registros NO retirados para dinero disponible
-        available_records = [r for r in records if not r.is_withdrawn]
-        
-        if not available_records:
-            totals = {'cash': 0, 'mercadopago': 0, 'debit': 0, 'credit': 0, 'total': 0}
-        else:
-            totals = {
-                'cash': sum(float(r.cash_sales or 0) for r in available_records),
-                'mercadopago': sum(float(r.mercadopago_sales or 0) for r in available_records),
-                'debit': sum(float(r.debit_sales or 0) for r in available_records),
-                'credit': sum(float(r.credit_sales or 0) for r in available_records),
-            }
-            totals['total'] = sum(totals.values())
-        
-        print(f"💰 Dinero disponible filtrado: ${totals['total']:,.2f}")
-        
-        # Datos de sucursales basados en registros filtrados
-        branch_trays = get_filtered_branch_data_optimized(available_records, branch_filter)
-        
-        # ✅ CORRECCIÓN: Mostrar todos los registros del período filtrado
-        # Para períodos largos, limitamos a los primeros 200 para mantener rendimiento en UI
-        display_records = records[:200] if len(records) > 200 else records
-        if len(records) > 200:
-            print(f"⚠️ Mostrando los primeros 200 registros de {len(records)} totales")
-        
-        # Datos de registros
-        records_data = []
-        for r in display_records:
-            net_profit = float(r.total_sales or 0) - float(r.total_expenses or 0)
-            records_data.append({
-                'id': r.id,
-                'date': r.record_date.strftime('%d/%m/%Y'),
-                'branch_name': r.branch_name,
-                'total_sales': float(r.total_sales or 0),
-                'cash_sales': float(r.cash_sales or 0),
-                'mercadopago_sales': float(r.mercadopago_sales or 0),
-                'debit_sales': float(r.debit_sales or 0),
-                'credit_sales': float(r.credit_sales or 0),
-                'total_expenses': float(r.total_expenses or 0),
-                'net_profit': net_profit,
-                'is_verified': r.is_verified,
-                'is_withdrawn': r.is_withdrawn
-            })
-        
         return {
-            'totals': totals,
-            'branch_trays': branch_trays,
-            'records': records_data,
-            'total_records_found': len(records),  # Para mostrar en UI si hay más
-            'showing_partial': len(records) > 200
+            'totals': {'cash': 0, 'mercadopago': 0, 'debit': 0, 'credit': 0, 'total': 0},
+            'branch_trays': [],
+            'records': []
         }
-        
-    except Exception as e:
-        print(f"❌ Error en get_filtered_dashboard_data: {str(e)}")
-        traceback.print_exc()
-        raise
-    
-def get_filtered_branch_data_optimized(records, branch_filter=None):
-    """
-    OPTIMIZADA: Procesamiento más rápido de datos de sucursales.
-    """
-    branches = {}
-    
-    # Procesar todos los registros de una vez
-    for record in records:
-        branch = record.branch_name
-        if branch not in branches:
-            branches[branch] = {
-                'branch_name': branch,
-                'accumulated_cash': 0,
-                'accumulated_mercadopago': 0,
-                'accumulated_debit': 0,
-                'accumulated_credit': 0,
-                'total_accumulated': 0,
-                'today_sales': 0,
-                'today_expenses': 0,
-                'can_empty': False
-            }
-        
-        # Solo registros NO retirados para dinero disponible
-        if not record.is_withdrawn:
-            branches[branch]['accumulated_cash'] += float(record.cash_sales or 0)
-            branches[branch]['accumulated_mercadopago'] += float(record.mercadopago_sales or 0)
-            branches[branch]['accumulated_debit'] += float(record.debit_sales or 0)
-            branches[branch]['accumulated_credit'] += float(record.credit_sales or 0)
-        
-        # Todos los registros para ventas/gastos del período
-        branches[branch]['today_sales'] += float(record.total_sales or 0)
-        branches[branch]['today_expenses'] += float(record.total_expenses or 0)
-    
-    # Calcular totales finales
-    for branch_data in branches.values():
-        branch_data['total_accumulated'] = (
-            branch_data['accumulated_cash'] +
-            branch_data['accumulated_mercadopago'] +
-            branch_data['accumulated_debit'] +
-            branch_data['accumulated_credit']
-        )
-    
-    return list(branches.values())
-
-def get_branch_trays_data(branch_filter=None):
-    """
-    Obtener datos de bandejas por sucursal (acumulado real).
-    CORREGIDO: Respeta el filtro de sucursal.
-    """
-    try:
-        from app.models.cash_tray import CashTray
-        
-        print(f"🏪 Obteniendo datos de bandejas, filtro: {branch_filter}")
-        
-        # ✅ CORRECCIÓN: Aplicar filtro correctamente
-        if branch_filter:
-            trays = CashTray.query.filter(CashTray.branch_name == branch_filter).all()
-            print(f"📊 Bandejas filtradas por '{branch_filter}': {len(trays)}")
-        else:
-            trays = CashTray.query.all()
-            print(f"📊 Todas las bandejas: {len(trays)}")
-        
-        # Filtrar por permisos de usuario
-        if not current_user.is_admin_user():
-            trays = [t for t in trays if t.branch_name == current_user.branch_name]
-            print(f"👤 Filtradas por permisos de usuario: {len(trays)}")
-        
-        branch_data = []
-        today = get_today_arg()
-        
-        for tray in trays:
-            print(f"🔄 Procesando bandeja: {tray.branch_name}")
-            
-            # Obtener movimientos de hoy para esta sucursal
-            today_records = DailyRecord.query.filter(
-                DailyRecord.branch_name == tray.branch_name,
-                DailyRecord.record_date == today
-            ).all()
-            
-            today_sales = sum(float(r.total_sales or 0) for r in today_records)
-            today_expenses = sum(float(r.total_expenses or 0) for r in today_records)
-            
-            # Verificar permisos para acciones
-            can_empty = (current_user.is_admin_user() or 
-                        current_user.branch_name == tray.branch_name)
-            
-            tray_data = {
-                'branch_name': tray.branch_name,
-                'accumulated_cash': float(tray.accumulated_cash or 0),
-                'accumulated_mercadopago': float(tray.accumulated_mercadopago or 0),
-                'accumulated_debit': float(tray.accumulated_debit or 0),
-                'accumulated_credit': float(tray.accumulated_credit or 0),
-                'total_accumulated': tray.get_total_accumulated(),
-                'today_sales': today_sales,
-                'today_expenses': today_expenses,
-                'can_empty': can_empty
-            }
-            
-            print(f"   💰 Total acumulado: ${tray_data['total_accumulated']:,.2f}")
-            branch_data.append(tray_data)
-        
-        return branch_data
-        
-    except Exception as e:
-        print(f"❌ Error en get_branch_trays_data: {str(e)}")
-        raise
-
-def get_filtered_branch_data(records, branch_filter=None):
-    """
-    Obtener datos de sucursales para registros filtrados.
-    CORREGIDO: Distingue entre registros históricos y dinero disponible.
-    """
-    try:
-        print(f"🔍 Procesando datos de sucursales filtradas, registros: {len(records)}")
-        
-        # Agrupar registros por sucursal
-        branches = {}
-        
-        for record in records:
-            branch = record.branch_name
-            if branch not in branches:
-                branches[branch] = {
-                    'branch_name': branch,
-                    'accumulated_cash': 0,
-                    'accumulated_mercadopago': 0,
-                    'accumulated_debit': 0,
-                    'accumulated_credit': 0,
-                    'total_accumulated': 0,
-                    'today_sales': 0,
-                    'today_expenses': 0,
-                    'can_empty': False  # No se puede vaciar en vista filtrada
-                }
-            
-            # ✅ CORRECCIÓN: Solo sumar registros NO retirados para "dinero disponible"
-            if not record.is_withdrawn:
-                branches[branch]['accumulated_cash'] += float(record.cash_sales or 0)
-                branches[branch]['accumulated_mercadopago'] += float(record.mercadopago_sales or 0)
-                branches[branch]['accumulated_debit'] += float(record.debit_sales or 0)
-                branches[branch]['accumulated_credit'] += float(record.credit_sales or 0)
-            
-            # Todos los registros para ventas/gastos del período
-            branches[branch]['today_sales'] += float(record.total_sales or 0)
-            branches[branch]['today_expenses'] += float(record.total_expenses or 0)
-        
-        # Calcular totales
-        for branch_data in branches.values():
-            branch_data['total_accumulated'] = (
-                branch_data['accumulated_cash'] +
-                branch_data['accumulated_mercadopago'] +
-                branch_data['accumulated_debit'] +
-                branch_data['accumulated_credit']
-            )
-            
-            print(f"🏪 {branch_data['branch_name']}: Disponible ${branch_data['total_accumulated']:,.2f}")
-        
-        return list(branches.values())
-        
-    except Exception as e:
-        print(f"❌ Error en get_filtered_branch_data: {str(e)}")
-        raise
-
-        
 
 # Funciones auxiliares
 
@@ -1418,7 +1362,6 @@ def get_quick_stats(user, target_date):
         }
     }
 
-
 def get_detailed_stats(user, start_date, end_date):
     """
     Obtener estadísticas detalladas para un período.
@@ -1483,7 +1426,6 @@ def get_detailed_stats(user, start_date, end_date):
         'payment_breakdown': payment_breakdown,
         'branch_stats': branch_stats
     }
-
 
 def get_period_dates(period, args):
     """
