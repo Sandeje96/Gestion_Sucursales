@@ -630,16 +630,22 @@ def empty_all_trays():
 def empty_branch_tray(branch_name):
     """
     Vaciar la bandeja de una sucursal específica.
-    MEJORADO: Mejor manejo de errores y actualización de registros.
+    CORREGIDO: Con normalización de nombres de sucursales.
     """
     # Log para debug
-    print(f"🗑️ [DEBUG] Intentando vaciar bandeja de: {branch_name}")
+    print(f"🗑️ [DEBUG] Intentando vaciar bandeja de: '{branch_name}'")
     print(f"📧 Usuario actual: {current_user.username}, Admin: {current_user.is_admin_user()}")
     print(f"🏢 Sucursal del usuario: {current_user.branch_name}")
     
+    # CORRECCIÓN: Normalizar el nombre de la sucursal recibida
+    normalized_branch_name = normalize_branch_name(branch_name)
+    print(f"🏢 [DEBUG] Nombre normalizado: '{normalized_branch_name}'")
+    
     # Verificar permisos: admins pueden vaciar cualquier bandeja,
     # usuarios de sucursal solo pueden vaciar la suya
-    if not current_user.is_admin_user() and current_user.branch_name != branch_name:
+    user_branch_normalized = normalize_branch_name(current_user.branch_name) if current_user.branch_name else None
+    
+    if not current_user.is_admin_user() and user_branch_normalized != normalized_branch_name:
         error_message = 'No tienes permisos para vaciar esa bandeja.'
         print(f"❌ [DEBUG] {error_message}")
         
@@ -655,37 +661,39 @@ def empty_branch_tray(branch_name):
     try:
         from app.models.cash_tray import CashTray
         
-        # Buscar la bandeja
-        tray = CashTray.query.filter_by(branch_name=branch_name).first()
-        print(f"🔍 [DEBUG] Bandeja encontrada: {tray is not None}")
+        # CORRECCIÓN: Buscar registros que coincidan con el nombre normalizado
+        all_branches = db.session.query(DailyRecord.branch_name).distinct().all()
+        matching_db_branches = []
         
-        if not tray:
-            error_message = f'No se encontró la bandeja para {branch_name}.'
+        for (db_branch_name,) in all_branches:
+            if db_branch_name and normalize_branch_name(db_branch_name) == normalized_branch_name:
+                matching_db_branches.append(db_branch_name)
+        
+        print(f"🏢 [DEBUG] Sucursales coincidentes en BD: {matching_db_branches}")
+        
+        if not matching_db_branches:
+            error_message = f'No se encontraron registros para la sucursal {normalized_branch_name}.'
             print(f"❌ [DEBUG] {error_message}")
             
-            # Intentar crear la bandeja recalculando desde registros
-            print(f"🔄 [DEBUG] Intentando recalcular bandeja para {branch_name}...")
-            update_trays_from_records()
-            
-            # Buscar nuevamente
-            tray = CashTray.query.filter_by(branch_name=branch_name).first()
-            
-            if not tray:
-                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                    return jsonify({
-                        'status': 'error',
-                        'message': error_message
-                    }), 404
-                else:
-                    flash(error_message, 'warning')
-                    return redirect(url_for('daily_records.index'))
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({
+                    'status': 'error',
+                    'message': error_message
+                }), 404
+            else:
+                flash(error_message, 'warning')
+                return redirect(url_for('daily_records.index'))
         
-        # Obtener el total antes de vaciar
-        total_emptied = tray.get_total_accumulated()
-        print(f"💰 [DEBUG] Total a vaciar: {total_emptied}")
+        # CORRECCIÓN: Buscar registros NO retirados de todas las variaciones
+        records_to_withdraw = DailyRecord.query.filter(
+            DailyRecord.branch_name.in_(matching_db_branches),
+            DailyRecord.is_withdrawn == False
+        ).all()
         
-        if total_emptied == 0:
-            warning_message = f'La bandeja de {branch_name} ya está vacía.'
+        print(f"📊 [DEBUG] Registros NO retirados encontrados: {len(records_to_withdraw)}")
+        
+        if not records_to_withdraw:
+            warning_message = f'La bandeja de {normalized_branch_name} ya está vacía.'
             print(f"⚠️ [DEBUG] {warning_message}")
             
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -697,22 +705,31 @@ def empty_branch_tray(branch_name):
                 flash(warning_message, 'warning')
                 return redirect(url_for('daily_records.index'))
         
-        # PASO CRÍTICO: Vaciar la bandeja
-        print(f"🔄 [DEBUG] Vaciando bandeja...")
-        tray.empty_tray()
+        # CORRECCIÓN: Calcular total antes de vaciar
+        total_emptied = 0
+        for record in records_to_withdraw:
+            total_emptied += (
+                float(record.cash_sales or 0) +
+                float(record.mercadopago_sales or 0) +
+                float(record.debit_sales or 0) +
+                float(record.credit_sales or 0)
+            )
+        
+        print(f"💰 [DEBUG] Total a vaciar: ${total_emptied:.2f}")
         
         # PASO CRÍTICO: Marcar registros como retirados
-        print(f"🔄 [DEBUG] Marcando registros como retirados...")
-        records_to_withdraw = DailyRecord.query.filter(
-            DailyRecord.branch_name == branch_name,
-            DailyRecord.is_withdrawn == False
-        ).all()
-        
-        print(f"📊 [DEBUG] Registros a marcar como retirados: {len(records_to_withdraw)}")
+        print(f"🔄 [DEBUG] Marcando {len(records_to_withdraw)} registros como retirados...")
         
         for record in records_to_withdraw:
             record.mark_as_withdrawn(current_user)
-            print(f"✅ [DEBUG] Registro {record.id} del {record.record_date} marcado como retirado")
+            print(f"✅ [DEBUG] Registro {record.id} del {record.record_date} ({record.branch_name}) marcado como retirado")
+        
+        # CORRECCIÓN: Actualizar bandejas de todas las variaciones encontradas
+        for db_branch_name in matching_db_branches:
+            tray = CashTray.query.filter_by(branch_name=db_branch_name).first()
+            if tray:
+                print(f"🔄 [DEBUG] Vaciando bandeja física: {db_branch_name}")
+                tray.empty_tray()
         
         # Confirmar cambios
         db.session.commit()
@@ -721,7 +738,7 @@ def empty_branch_tray(branch_name):
         # Formatear total en formato argentino
         total_formatted = f'${total_emptied:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
         
-        success_message = f'Bandeja de {branch_name} vaciada. Total retirado: {total_formatted}'
+        success_message = f'Bandeja de {normalized_branch_name} vaciada. Total retirado: {total_formatted}'
         print(f"🎉 [DEBUG] {success_message}")
         
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -729,10 +746,11 @@ def empty_branch_tray(branch_name):
                 'status': 'success',
                 'message': success_message,
                 'data': {
-                    'branch_name': branch_name,
+                    'branch_name': normalized_branch_name,
                     'total_emptied': total_emptied,
                     'formatted_total': total_formatted,
-                    'records_withdrawn': len(records_to_withdraw)
+                    'records_withdrawn': len(records_to_withdraw),
+                    'db_branches_affected': matching_db_branches
                 }
             })
         else:
@@ -741,7 +759,7 @@ def empty_branch_tray(branch_name):
         
     except Exception as e:
         db.session.rollback()
-        error_message = f'Error vaciando la bandeja de {branch_name}: {str(e)}'
+        error_message = f'Error vaciando la bandeja de {normalized_branch_name}: {str(e)}'
         print(f"❌ [DEBUG] {error_message}")
         print(f"🐛 [DEBUG] Traceback: {traceback.format_exc()}")
         
@@ -1173,7 +1191,7 @@ def get_accumulated_dashboard_data():
 # FUNCIÓN CORREGIDA: Procesar datos de sucursales simplificado
 def get_simple_branch_data(records):
     """
-    NUEVA: Función simplificada para procesar datos de sucursales sin dependencias complejas.
+    CORREGIDA: Función simplificada con normalización de nombres de sucursales.
     """
     try:
         print(f"🔄 [DEBUG] Procesando {len(records)} registros para bandejas...")
@@ -1182,10 +1200,13 @@ def get_simple_branch_data(records):
         
         for record in records:
             try:
-                branch = record.branch_name
-                if branch not in branches:
-                    branches[branch] = {
-                        'branch_name': branch,
+                # CORRECCIÓN: Normalizar el nombre de la sucursal
+                original_branch = record.branch_name
+                normalized_branch = normalize_branch_name(original_branch)
+                
+                if normalized_branch not in branches:
+                    branches[normalized_branch] = {
+                        'branch_name': normalized_branch,  # Usar nombre normalizado
                         'accumulated_cash': 0,
                         'accumulated_mercadopago': 0,
                         'accumulated_debit': 0,
@@ -1193,15 +1214,17 @@ def get_simple_branch_data(records):
                         'total_accumulated': 0,
                         'today_sales': 0,
                         'today_expenses': 0,
-                        'can_empty': current_user.is_admin_user() or current_user.branch_name == branch
+                        'can_empty': current_user.is_admin_user() or normalize_branch_name(current_user.branch_name) == normalized_branch
                     }
                 
                 # Solo registros NO retirados
                 if not record.is_withdrawn:
-                    branches[branch]['accumulated_cash'] += float(record.cash_sales or 0)
-                    branches[branch]['accumulated_mercadopago'] += float(record.mercadopago_sales or 0)
-                    branches[branch]['accumulated_debit'] += float(record.debit_sales or 0)
-                    branches[branch]['accumulated_credit'] += float(record.credit_sales or 0)
+                    branches[normalized_branch]['accumulated_cash'] += float(record.cash_sales or 0)
+                    branches[normalized_branch]['accumulated_mercadopago'] += float(record.mercadopago_sales or 0)
+                    branches[normalized_branch]['accumulated_debit'] += float(record.debit_sales or 0)
+                    branches[normalized_branch]['accumulated_credit'] += float(record.credit_sales or 0)
+                
+                print(f"🔄 [DEBUG] Registro procesado: {original_branch} -> {normalized_branch}")
                 
             except Exception as e:
                 print(f"❌ [DEBUG] Error procesando registro {record.id}: {e}")
@@ -1216,18 +1239,19 @@ def get_simple_branch_data(records):
                     branch_data['accumulated_debit'] +
                     branch_data['accumulated_credit']
                 )
+                print(f"💰 [DEBUG] {branch_data['branch_name']}: ${branch_data['total_accumulated']:,.2f}")
             except Exception as e:
                 print(f"❌ [DEBUG] Error calculando total para {branch_data['branch_name']}: {e}")
                 branch_data['total_accumulated'] = 0
         
         result = list(branches.values())
-        print(f"✅ [DEBUG] {len(result)} bandejas procesadas")
+        print(f"✅ [DEBUG] {len(result)} bandejas procesadas y normalizadas")
         return result
         
     except Exception as e:
         print(f"❌ [DEBUG] Error en get_simple_branch_data: {e}")
         return []
-
+    
 # FUNCIÓN CORREGIDA: Dashboard filtrado    
 def get_filtered_dashboard_data(start_date, end_date, branch_filter=None):
     """
