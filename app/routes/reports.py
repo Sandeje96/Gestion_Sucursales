@@ -1,6 +1,7 @@
+# app/routes/reports.py - CORREGIDO para 6 sucursales reales
 """
 Blueprint para reportes y análisis del sistema.
-CORREGIDO para Railway con filtros por sucursal funcionando.
+CORREGIDO con las 6 sucursales reales: Uruguay, Villa Cabello, Tacuari, Candelaria, Itaembe, Garupa
 """
 
 from flask import Blueprint, render_template, request, jsonify, make_response, abort
@@ -24,7 +25,8 @@ reports_bp = Blueprint('reports', __name__)
 
 def normalize_branch_name_fixed(branch_name):
     """
-    Normalización DEFINITIVA que funciona tanto en local como Railway.
+    Normalización DEFINITIVA para las 6 sucursales reales.
+    Incluye: Uruguay, Villa Cabello, Tacuari, Candelaria, Itaembe, Garupa
     """
     if not branch_name:
         return branch_name
@@ -36,7 +38,7 @@ def normalize_branch_name_fixed(branch_name):
     import re
     normalized = re.sub(r'\s+', ' ', normalized)
     
-    # Mapeo EXACTO para todas las variaciones
+    # Mapeo COMPLETO para las 6 sucursales reales
     branch_mapping = {
         # Uruguay - todas las variaciones posibles
         'uruguay': 'Uruguay',
@@ -68,15 +70,23 @@ def normalize_branch_name_fixed(branch_name):
         'Candelaria': 'Candelaria',
         'CANDELARIA': 'Candelaria',
         
-        # Itaembe Mini - todas las variaciones posibles
-        'itaembe mini': 'Itaembe Mini',
-        'Itaembe Mini': 'Itaembe Mini',
-        'ITAEMBE MINI': 'Itaembe Mini',
-        'Itaembe mini': 'Itaembe Mini',
-        'itaembe_mini': 'Itaembe Mini',
-        'itaembemini': 'Itaembe Mini',
-        'ItaembeMini': 'Itaembe Mini'
+        # Itaembe (SIN "Mini") - todas las variaciones posibles
+        'itaembe': 'Itaembe',
+        'Itaembe': 'Itaembe',
+        'ITAEMBE': 'Itaembe',
+        'itaembe mini': 'Itaembe',  # Por si quedó algún registro viejo
+        'Itaembe Mini': 'Itaembe',  # Por si quedó algún registro viejo
+        'ITAEMBE MINI': 'Itaembe',  # Por si quedó algún registro viejo
+        'itaembe_mini': 'Itaembe',
+        'itaembemini': 'Itaembe',
         
+        # Garupa - NUEVA sucursal
+        'garupa': 'Garupa',
+        'Garupa': 'Garupa',
+        'GARUPA': 'Garupa',
+        ' garupa ': 'Garupa',
+        'garupa ': 'Garupa',
+        ' garupa': 'Garupa'
     }
     
     # 1. Buscar coincidencia exacta
@@ -96,23 +106,24 @@ def normalize_branch_name_fixed(branch_name):
 def get_matching_branches_fixed(branch_filter):
     """
     Función DEFINITIVA para obtener sucursales que coincidan.
-    Funciona tanto en local como en Railway.
+    Actualizada para las 6 sucursales reales.
     """
     if not branch_filter:
         return []
     
     try:
-        print(f"🔍 [FIXED] Buscando coincidencias para: '{branch_filter}'")
+        print(f"🔍 [FIXED 6] Buscando coincidencias para: '{branch_filter}'")
         
         # Obtener todas las sucursales de la BD
         all_branches_query = db.session.query(DailyRecord.branch_name).distinct().all()
         all_branch_names = [name[0] for name in all_branches_query if name[0]]
         
-        print(f"🔍 [FIXED] Sucursales en BD: {all_branch_names}")
+        print(f"🔍 [FIXED 6] Sucursales en BD: {all_branch_names}")
+        print(f"🔍 [FIXED 6] Total sucursales encontradas: {len(all_branch_names)}")
         
         # Normalizar el filtro de búsqueda
         normalized_filter = normalize_branch_name_fixed(branch_filter)
-        print(f"🔍 [FIXED] Filtro normalizado: '{normalized_filter}'")
+        print(f"🔍 [FIXED 6] Filtro normalizado: '{normalized_filter}'")
         
         # Buscar coincidencias con MÚLTIPLES métodos
         matching_branches = set()  # Usar set para evitar duplicados
@@ -150,11 +161,11 @@ def get_matching_branches_fixed(branch_filter):
                 continue
         
         matching_list = list(matching_branches)
-        print(f"🔍 [FIXED] Coincidencias finales encontradas: {matching_list}")
+        print(f"🔍 [FIXED 6] Coincidencias finales encontradas: {matching_list}")
         return matching_list
         
     except Exception as e:
-        print(f"❌ [FIXED ERROR] Error en get_matching_branches_fixed: {e}")
+        print(f"❌ [FIXED 6 ERROR] Error en get_matching_branches_fixed: {e}")
         import traceback
         traceback.print_exc()
         return []
@@ -166,7 +177,7 @@ def get_matching_branches_fixed(branch_filter):
 def index():
     """
     Dashboard principal de reportes.
-    VERSIÓN CORREGIDA FINAL.
+    ACTUALIZADO para 6 sucursales.
     """
     if not current_user.is_admin_user():
         abort(403)
@@ -180,8 +191,8 @@ def index():
     # Calcular fechas según el período
     start_date, end_date = get_period_dates(period, custom_start, custom_end)
     
-    print(f"🔍 [REPORTS INDEX] Filtro aplicado: período={period}, sucursal='{branch_filter}'")
-    print(f"📅 [REPORTS INDEX] Rango de fechas: {start_date} - {end_date}")
+    print(f"🔍 [REPORTS 6] Filtro aplicado: período={period}, sucursal='{branch_filter}'")
+    print(f"📅 [REPORTS 6] Rango de fechas: {start_date} - {end_date}")
     
     # Aplicar filtro de sucursal a las estadísticas usando la función corregida
     general_stats = get_general_statistics_fixed(start_date, end_date, branch_filter)
@@ -203,6 +214,104 @@ def index():
         current_branch_filter=branch_filter
     )
 
+
+@reports_bp.route('/branch/<branch_name>')
+@login_required
+def branch_detail(branch_name):
+    """
+    Reporte detallado de una sucursal específica.
+    ACTUALIZADO para incluir las 6 sucursales reales.
+    """
+    # ACTUALIZADO: Lista completa de sucursales válidas
+    valid_branches = ['Uruguay', 'Villa Cabello', 'Tacuari', 'Candelaria', 'Itaembe', 'Garupa']
+    if branch_name not in valid_branches:
+        abort(404)
+    
+    # Verificar permisos
+    if not current_user.is_admin_user() and current_user.branch_name != branch_name:
+        abort(403)
+    
+    # Fechas por defecto (últimos 30 días)
+    end_date = date.today()
+    start_date = end_date - timedelta(days=29)
+    
+    # Si hay filtros en la URL
+    if request.args.get('start_date'):
+        try:
+            start_date = datetime.strptime(request.args.get('start_date'), '%Y-%m-%d').date()
+        except ValueError:
+            pass
+    
+    if request.args.get('end_date'):
+        try:
+            end_date = datetime.strptime(request.args.get('end_date'), '%Y-%m-%d').date()
+        except ValueError:
+            pass
+    
+    # Obtener datos de la sucursal
+    branch_data = get_branch_detailed_stats(branch_name, start_date, end_date)
+    
+    # Comparativa con otras sucursales (solo para admins)
+    comparison_data = None
+    if current_user.is_admin_user():
+        comparison_data = get_branch_comparison(branch_name, start_date, end_date)
+    
+    return render_template(
+        'reports/branch_detail.html',
+        title=f'Reporte - {branch_name}',
+        branch_name=branch_name,
+        branch_data=branch_data,
+        comparison_data=comparison_data,
+        start_date=start_date,
+        end_date=end_date
+    )
+
+
+def get_branch_comparison(target_branch, start_date, end_date):
+    """
+    Comparar una sucursal con las demás.
+    ACTUALIZADO para las 6 sucursales reales.
+    """
+    # ACTUALIZADO: Lista completa de sucursales
+    all_branches = ['Uruguay', 'Villa Cabello', 'Tacuari', 'Candelaria', 'Itaembe', 'Garupa']
+    comparison = {}
+    
+    for branch in all_branches:
+        if branch == target_branch:
+            continue
+        
+        records = DailyRecord.query.filter(
+            DailyRecord.branch_name == branch,
+            DailyRecord.record_date.between(start_date, end_date)
+        ).all()
+        
+        if records:
+            total_sales = sum(float(r.total_sales) for r in records)
+            total_expenses = sum(float(r.total_expenses) for r in records)
+            
+            comparison[branch] = {
+                'total_sales': total_sales,
+                'total_expenses': total_expenses,
+                'net_profit': total_sales - total_expenses,
+                'avg_daily_sales': total_sales / len(records) if records else 0,
+                'records_count': len(records)
+            }
+    
+    return comparison
+
+
+# TODAS las demás funciones son iguales a la versión anterior, solo copialas del artefacto anterior:
+# - get_general_statistics_fixed
+# - get_branch_statistics_fixed  
+# - get_payment_distribution_fixed
+# - get_daily_trends_fixed
+# - api_daily_sales_chart
+# - api_payment_distribution
+# - api_branch_performance
+# - export_csv
+# - get_period_dates
+# - get_branch_detailed_stats
+# - get_comprehensive_comparison
 
 def get_general_statistics_fixed(start_date, end_date, branch_filter=None):
     """
@@ -745,58 +854,6 @@ def api_branch_performance():
         }), 500
 
 
-# Mantener las funciones originales que no cambian
-@reports_bp.route('/branch/<branch_name>')
-@login_required
-def branch_detail(branch_name):
-    """
-    Reporte detallado de una sucursal específica.
-    """
-    # Verificar que la sucursal existe
-    valid_branches = ['Uruguay', 'Villa Cabello', 'Tacuari', 'Candelaria', 'Itaembe Mini']
-    if branch_name not in valid_branches:
-        abort(404)
-    
-    # Verificar permisos
-    if not current_user.is_admin_user() and current_user.branch_name != branch_name:
-        abort(403)
-    
-    # Fechas por defecto (últimos 30 días)
-    end_date = date.today()
-    start_date = end_date - timedelta(days=29)
-    
-    # Si hay filtros en la URL
-    if request.args.get('start_date'):
-        try:
-            start_date = datetime.strptime(request.args.get('start_date'), '%Y-%m-%d').date()
-        except ValueError:
-            pass
-    
-    if request.args.get('end_date'):
-        try:
-            end_date = datetime.strptime(request.args.get('end_date'), '%Y-%m-%d').date()
-        except ValueError:
-            pass
-    
-    # Obtener datos de la sucursal
-    branch_data = get_branch_detailed_stats(branch_name, start_date, end_date)
-    
-    # Comparativa con otras sucursales (solo para admins)
-    comparison_data = None
-    if current_user.is_admin_user():
-        comparison_data = get_branch_comparison(branch_name, start_date, end_date)
-    
-    return render_template(
-        'reports/branch_detail.html',
-        title=f'Reporte - {branch_name}',
-        branch_name=branch_name,
-        branch_data=branch_data,
-        comparison_data=comparison_data,
-        start_date=start_date,
-        end_date=end_date
-    )
-
-
 @reports_bp.route('/comparison')
 @login_required
 def comparison():
@@ -1002,37 +1059,6 @@ def get_branch_detailed_stats(branch_name, start_date, end_date):
             'credit': sum(float(r.credit_sales) for r in records)
         }
     }
-
-
-def get_branch_comparison(target_branch, start_date, end_date):
-    """
-    Comparar una sucursal con las demás.
-    """
-    all_branches = ['Uruguay', 'Villa Cabello', 'Tacuari', 'Candelaria', 'Itaembe Mini']
-    comparison = {}
-    
-    for branch in all_branches:
-        if branch == target_branch:
-            continue
-        
-        records = DailyRecord.query.filter(
-            DailyRecord.branch_name == branch,
-            DailyRecord.record_date.between(start_date, end_date)
-        ).all()
-        
-        if records:
-            total_sales = sum(float(r.total_sales) for r in records)
-            total_expenses = sum(float(r.total_expenses) for r in records)
-            
-            comparison[branch] = {
-                'total_sales': total_sales,
-                'total_expenses': total_expenses,
-                'net_profit': total_sales - total_expenses,
-                'avg_daily_sales': total_sales / len(records) if records else 0,
-                'records_count': len(records)
-            }
-    
-    return comparison
 
 
 def get_comprehensive_comparison(start_date, end_date):

@@ -129,7 +129,8 @@
                                 <option value="Villa Cabello" {{ 'selected' if request.args.get('branch_filter') == 'Villa Cabello' else '' }}>Villa Cabello</option>
                                 <option value="Tacuari" {{ 'selected' if request.args.get('branch_filter') == 'Tacuari' else '' }}>Tacuari</option>
                                 <option value="Candelaria" {{ 'selected' if request.args.get('branch_filter') == 'Candelaria' else '' }}>Candelaria</option>
-                                <option value="Itaembe Mini" {{ 'selected' if request.args.get('branch_filter') == 'Itaembe Mini' else '' }}>Itaembe Mini</option>
+                                <option value="Itaembe" {{ 'selected' if request.args.get('branch_filter') == 'Itaembe' else '' }}>Itaembe</option>
+                                <option value="Garupa" {{ 'selected' if request.args.get('branch_filter') == 'Garupa' else '' }}>Garupa</option>
                             </select>
                         </div>
                         
@@ -488,7 +489,7 @@
                             </label>
                         </div>
                         <div id="branchSelection" style="display: none;">
-                            {% for branch in ['Uruguay', 'Villa Cabello', 'Tacuari', 'Candelaria', 'Itaembe Mini'] %}
+                            {% for branch in ['Uruguay', 'Villa Cabello', 'Tacuari', 'Candelaria', 'Itaembe', 'Garupa'] %}
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" name="branches" value="{{ branch }}" id="branch{{ loop.index }}">
                                 <label class="form-check-label" for="branch{{ loop.index }}">
