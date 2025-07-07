@@ -492,53 +492,65 @@ def get_period_dates(period, custom_start=None, custom_end=None):
 
 def get_general_statistics(start_date, end_date, branch_filter=None):
     """
-    Obtener estadísticas generales del sistema.
-    MEJORADO: Con filtro opcional por sucursal.
+    VERSIÓN CORREGIDA que usa get_matching_branches_reports
     """
-    query = DailyRecord.query.filter(
-        DailyRecord.record_date.between(start_date, end_date)
-    )
-    
-    # NUEVO: Aplicar filtro por sucursal si se especifica
-    if branch_filter:
-        # Usar normalización para manejar variaciones de nombres
-        from app.routes.daily_records import normalize_branch_name
-        normalized_filter = normalize_branch_name(branch_filter)
+    try:
+        query = DailyRecord.query.filter(
+            DailyRecord.record_date.between(start_date, end_date)
+        )
         
-        # Buscar todas las variaciones que coincidan
-        all_branches = db.session.query(DailyRecord.branch_name).distinct().all()
-        matching_branches = []
+        if branch_filter:
+            matching_branches = get_matching_branches_reports(branch_filter)
+            print(f"📊 [STATS] Aplicando filtro por sucursales: {matching_branches}")
+            
+            if matching_branches:
+                query = query.filter(DailyRecord.branch_name.in_(matching_branches))
+            else:
+                print(f"⚠️ [STATS] Sin coincidencias para: {branch_filter}")
+                return {
+                    'total_records': 0, 'total_sales': 0, 'total_expenses': 0,
+                    'net_profit': 0, 'avg_daily_sales': 0, 'active_branches': 0,
+                    'verified_records': 0, 'verification_rate': 0,
+                    'is_filtered_by_branch': True, 'filtered_branch': branch_filter
+                }
         
-        for (db_branch_name,) in all_branches:
-            if db_branch_name and normalize_branch_name(db_branch_name) == normalized_filter:
-                matching_branches.append(db_branch_name)
+        records = query.all()
+        print(f"📊 [STATS] Registros encontrados: {len(records)}")
         
-        if matching_branches:
-            query = query.filter(DailyRecord.branch_name.in_(matching_branches))
-        else:
-            # Si no hay coincidencias, retornar estadísticas vacías
-            return None
-    
-    records = query.all()
-    
-    if not records:
-        return None
-    
-    total_sales = sum(float(r.total_sales) for r in records)
-    total_expenses = sum(float(r.total_expenses) for r in records)
-    
-    return {
-        'total_records': len(records),
-        'total_sales': total_sales,
-        'total_expenses': total_expenses,
-        'net_profit': total_sales - total_expenses,
-        'avg_daily_sales': total_sales / ((end_date - start_date).days + 1),
-        'active_branches': len(set(r.branch_name for r in records)),
-        'verified_records': len([r for r in records if r.is_verified]),
-        'verification_rate': len([r for r in records if r.is_verified]) / len(records) * 100 if records else 0,
-        'is_filtered_by_branch': bool(branch_filter),  # NUEVO: Indicador de filtro
-        'filtered_branch': branch_filter  # NUEVO: Nombre de la sucursal filtrada
-    }
+        if not records:
+            return {
+                'total_records': 0, 'total_sales': 0, 'total_expenses': 0,
+                'net_profit': 0, 'avg_daily_sales': 0, 'active_branches': 0,
+                'verified_records': 0, 'verification_rate': 0,
+                'is_filtered_by_branch': bool(branch_filter), 'filtered_branch': branch_filter
+            }
+        
+        total_sales = sum(float(r.total_sales) for r in records)
+        total_expenses = sum(float(r.total_expenses) for r in records)
+        
+        return {
+            'total_records': len(records),
+            'total_sales': total_sales,
+            'total_expenses': total_expenses,
+            'net_profit': total_sales - total_expenses,
+            'avg_daily_sales': total_sales / ((end_date - start_date).days + 1),
+            'active_branches': len(set(r.branch_name for r in records)),
+            'verified_records': len([r for r in records if r.is_verified]),
+            'verification_rate': len([r for r in records if r.is_verified]) / len(records) * 100 if records else 0,
+            'is_filtered_by_branch': bool(branch_filter),
+            'filtered_branch': branch_filter
+        }
+        
+    except Exception as e:
+        print(f"❌ [STATS ERROR] {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'total_records': 0, 'total_sales': 0, 'total_expenses': 0,
+            'net_profit': 0, 'avg_daily_sales': 0, 'active_branches': 0,
+            'verified_records': 0, 'verification_rate': 0,
+            'is_filtered_by_branch': bool(branch_filter), 'filtered_branch': branch_filter
+        }
 
 
 def get_branch_statistics(start_date, end_date, branch_filter=None):
@@ -594,6 +606,95 @@ def get_branch_statistics(start_date, end_date, branch_filter=None):
         }
     
     return result
+
+def normalize_branch_name_reports(branch_name):
+    """
+    Normalización específica para reportes que maneja local vs Railway.
+    """
+    if not branch_name:
+        return branch_name
+    
+    # Limpiar espacios
+    import re
+    normalized = str(branch_name).strip()
+    normalized = re.sub(r'\s+', ' ', normalized)
+    
+    # Mapeo exhaustivo (el mismo que en daily_records.py)
+    branch_mapping = {
+        # Uruguay
+        'uruguay': 'Uruguay', 'Uruguay': 'Uruguay', 'URUGUAY': 'Uruguay',
+        # Villa Cabello  
+        'villa cabello': 'Villa Cabello', 'Villa Cabello': 'Villa Cabello', 
+        'VILLA CABELLO': 'Villa Cabello', 'Villa cabello': 'Villa Cabello',
+        'villa_cabello': 'Villa Cabello', 'villacabello': 'Villa Cabello',
+        # Tacuari
+        'tacuari': 'Tacuari', 'Tacuari': 'Tacuari', 'TACUARI': 'Tacuari',
+        'tacuarí': 'Tacuari', 'Tacuarí': 'Tacuari',
+        # Candelaria
+        'candelaria': 'Candelaria', 'Candelaria': 'Candelaria', 'CANDELARIA': 'Candelaria',
+        # Itaembe Mini
+        'itaembe mini': 'Itaembe Mini', 'Itaembe Mini': 'Itaembe Mini', 
+        'ITAEMBE MINI': 'Itaembe Mini', 'Itaembe mini': 'Itaembe Mini',
+        'itaembe_mini': 'Itaembe Mini', 'itaembemini': 'Itaembe Mini'
+    }
+    
+    # Buscar coincidencia exacta
+    if normalized in branch_mapping:
+        return branch_mapping[normalized]
+    
+    # Buscar insensible a mayúsculas
+    normalized_lower = normalized.lower()
+    for variation, standard in branch_mapping.items():
+        if normalized_lower == variation.lower():
+            return standard
+    
+    return normalized.title()
+
+def get_matching_branches_reports(branch_filter):
+    """
+    Obtener sucursales coincidentes para reportes.
+    MEJORADO para manejar diferencias local vs Railway.
+    """
+    if not branch_filter:
+        return []
+    
+    try:
+        # Obtener todas las sucursales
+        all_branches = db.session.query(DailyRecord.branch_name).distinct().all()
+        all_branch_names = [name[0] for name in all_branches if name[0]]
+        
+        print(f"🔍 [REPORTS] Buscando '{branch_filter}' en: {all_branch_names}")
+        
+        # Normalizar filtro
+        normalized_filter = normalize_branch_name_reports(branch_filter)
+        
+        # Buscar coincidencias con múltiples métodos
+        matching_branches = set()
+        
+        for db_branch_name in all_branch_names:
+            # Método 1: Exacta
+            if db_branch_name == branch_filter:
+                matching_branches.add(db_branch_name)
+            
+            # Método 2: Normalizada
+            elif normalize_branch_name_reports(db_branch_name) == normalized_filter:
+                matching_branches.add(db_branch_name)
+            
+            # Método 3: Insensible a mayúsculas
+            elif db_branch_name.lower() == branch_filter.lower():
+                matching_branches.add(db_branch_name)
+            
+            # Método 4: Normalizada insensible
+            elif normalize_branch_name_reports(db_branch_name).lower() == normalized_filter.lower():
+                matching_branches.add(db_branch_name)
+        
+        result = list(matching_branches)
+        print(f"🔍 [REPORTS] Coincidencias: {result}")
+        return result
+        
+    except Exception as e:
+        print(f"❌ [REPORTS ERROR] {e}")
+        return []
 
 
 def get_daily_trends(days, start_date=None, end_date=None, branch_filter=None):

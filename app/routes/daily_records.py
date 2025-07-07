@@ -1373,56 +1373,129 @@ def get_filtered_dashboard_data(start_date, end_date, branch_filter=None):
 
 def normalize_branch_name(branch_name):
     """
-    Normalizar nombres de sucursales para evitar problemas de inconsistencia.
+    Normalizar nombres de sucursal para manejar variaciones.
+    CORREGIDO para manejar diferencias entre local y Railway.
     """
     if not branch_name:
         return branch_name
     
-    # Convertir a string, quitar espacios y normalizar
+    # Convertir a string y limpiar espacios
     normalized = str(branch_name).strip()
     
-    # Mapeo de variaciones conocidas a nombres estándar
+    # Remover espacios múltiples
+    import re
+    normalized = re.sub(r'\s+', ' ', normalized)
+    
+    # Mapeo exhaustivo para todas las variaciones posibles
+    # Esto maneja tanto las versiones en minúsculas (local) como mayúsculas (Railway)
     branch_mapping = {
-        # Variaciones de Uruguay
+        # Uruguay - todas las variaciones
         'uruguay': 'Uruguay',
+        'Uruguay': 'Uruguay', 
         'URUGUAY': 'Uruguay',
         ' uruguay ': 'Uruguay',
         'uruguay ': 'Uruguay',
         ' uruguay': 'Uruguay',
         
-        # Variaciones de Villa Cabello
+        # Villa Cabello - todas las variaciones
         'villa cabello': 'Villa Cabello',
-        'VILLA CABELLO': 'Villa Cabello',
+        'Villa Cabello': 'Villa Cabello',
+        'VILLA CABELLO': 'Villa Cabello', 
         'Villa cabello': 'Villa Cabello',
-        'villacabello': 'Villa Cabello',
         'villa_cabello': 'Villa Cabello',
+        'villacabello': 'Villa Cabello',
+        'VillaCabello': 'Villa Cabello',
         
-        # Variaciones de Tacuari
+        # Tacuari - todas las variaciones
         'tacuari': 'Tacuari',
+        'Tacuari': 'Tacuari',
         'TACUARI': 'Tacuari',
         'tacuarí': 'Tacuari',
         'Tacuarí': 'Tacuari',
+        'TACUARÍ': 'Tacuari',
         
-        # Variaciones de Candelaria
+        # Candelaria - todas las variaciones
         'candelaria': 'Candelaria',
+        'Candelaria': 'Candelaria',
         'CANDELARIA': 'Candelaria',
         
-        # Variaciones de Itaembe Mini
+        # Itaembe Mini - todas las variaciones
         'itaembe mini': 'Itaembe Mini',
+        'Itaembe Mini': 'Itaembe Mini',
         'ITAEMBE MINI': 'Itaembe Mini',
         'Itaembe mini': 'Itaembe Mini',
         'itaembe_mini': 'Itaembe Mini',
-        'itaembemini': 'Itaembe Mini'
+        'itaembemini': 'Itaembe Mini',
+        'ItaembeMini': 'Itaembe Mini'
     }
     
-    # Buscar en el mapeo (insensible a mayúsculas)
+    # 1. Buscar coincidencia exacta primero
+    if normalized in branch_mapping:
+        return branch_mapping[normalized]
+    
+    # 2. Buscar por coincidencia insensible a mayúsculas
     normalized_lower = normalized.lower()
     for variation, standard in branch_mapping.items():
         if normalized_lower == variation.lower():
             return standard
     
-    # Si no está en el mapeo, devolver capitalizado
+    # 3. Si no encuentra en el mapeo, devolver capitalizado
     return normalized.title()
+
+def get_matching_branches_improved(branch_filter):
+    """
+    Función mejorada para obtener sucursales que coincidan con el filtro.
+    Maneja las diferencias entre local y Railway.
+    """
+    if not branch_filter:
+        return []
+    
+    try:
+        print(f"🔍 [DEBUG] Buscando coincidencias para: '{branch_filter}'")
+        
+        # Obtener todas las sucursales únicas de la BD
+        all_branches_query = db.session.query(DailyRecord.branch_name).distinct().all()
+        all_branch_names = [name[0] for name in all_branches_query if name[0]]
+        
+        print(f"🔍 [DEBUG] Sucursales en BD: {all_branch_names}")
+        
+        # Normalizar el filtro
+        normalized_filter = normalize_branch_name(branch_filter)
+        print(f"🔍 [DEBUG] Filtro normalizado: '{normalized_filter}'")
+        
+        # Buscar coincidencias usando múltiples métodos
+        matching_branches = set()  # Usar set para evitar duplicados
+        
+        for db_branch_name in all_branch_names:
+            # Método 1: Coincidencia exacta
+            if db_branch_name == branch_filter:
+                matching_branches.add(db_branch_name)
+                continue
+            
+            # Método 2: Coincidencia después de normalización
+            if normalize_branch_name(db_branch_name) == normalized_filter:
+                matching_branches.add(db_branch_name)
+                continue
+            
+            # Método 3: Coincidencia insensible a mayúsculas
+            if db_branch_name.lower() == branch_filter.lower():
+                matching_branches.add(db_branch_name)
+                continue
+            
+            # Método 4: Coincidencia de normalizados insensible a mayúsculas
+            if normalize_branch_name(db_branch_name).lower() == normalized_filter.lower():
+                matching_branches.add(db_branch_name)
+                continue
+        
+        matching_list = list(matching_branches)
+        print(f"🔍 [DEBUG] Coincidencias encontradas: {matching_list}")
+        return matching_list
+        
+    except Exception as e:
+        print(f"❌ [ERROR] Error en get_matching_branches_improved: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
 
 def get_available_branches():
     """
