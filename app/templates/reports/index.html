@@ -398,42 +398,6 @@
     </div>
     {% endif %}
 
-    <!-- Accesos rápidos -->
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h6 class="mb-0">
-                        <i class="fas fa-bolt me-2"></i>Accesos Rápidos
-                    </h6>
-                </div>
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-3">
-                            <a href="{{ url_for('daily_records.index') }}" class="btn btn-outline-primary w-100 d-flex align-items-center">
-                                <i class="fas fa-list me-2"></i>
-                                <div class="text-start">
-                                    <div>Ver Registros</div>
-                                    <small class="opacity-75">Todos los registros</small>
-                                </div>
-                            </a>
-                        </div>
-                        
-                        <div class="col-md-3">
-                            <a href="{{ url_for('reports.comparison') }}" class="btn btn-outline-info w-100 d-flex align-items-center">
-                                <i class="fas fa-balance-scale me-2"></i>
-                                <div class="text-start">
-                                    <div>Comparativas</div>
-                                    <small class="opacity-75">Entre sucursales</small>
-                                </div>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     {% else %}
     <!-- Estado sin datos -->
     <div class="row">
