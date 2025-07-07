@@ -120,12 +120,25 @@
                             </select>
                         </div>
                         
-                        <div class="col-md-3" id="customDates" style="display: {{ 'block' if request.args.get('period') == 'custom' else 'none' }};">
+                        <!-- NUEVO: Filtro por sucursal -->
+                        <div class="col-md-2">
+                            <label class="form-label fw-semibold">Sucursal:</label>
+                            <select name="branch_filter" class="form-select" onchange="updateBranchFilter()">
+                                <option value="" {{ 'selected' if not request.args.get('branch_filter') else '' }}>Todas las sucursales</option>
+                                <option value="Uruguay" {{ 'selected' if request.args.get('branch_filter') == 'Uruguay' else '' }}>Uruguay</option>
+                                <option value="Villa Cabello" {{ 'selected' if request.args.get('branch_filter') == 'Villa Cabello' else '' }}>Villa Cabello</option>
+                                <option value="Tacuari" {{ 'selected' if request.args.get('branch_filter') == 'Tacuari' else '' }}>Tacuari</option>
+                                <option value="Candelaria" {{ 'selected' if request.args.get('branch_filter') == 'Candelaria' else '' }}>Candelaria</option>
+                                <option value="Itaembe Mini" {{ 'selected' if request.args.get('branch_filter') == 'Itaembe Mini' else '' }}>Itaembe Mini</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-2" id="customDates" style="display: {{ 'block' if request.args.get('period') == 'custom' else 'none' }};">
                             <label class="form-label fw-semibold">Desde:</label>
                             <input type="date" name="start_date" class="form-control" value="{{ request.args.get('start_date', '') }}">
                         </div>
                         
-                        <div class="col-md-3" id="customDatesEnd" style="display: {{ 'block' if request.args.get('period') == 'custom' else 'none' }};">
+                        <div class="col-md-2" id="customDatesEnd" style="display: {{ 'block' if request.args.get('period') == 'custom' else 'none' }};">
                             <label class="form-label fw-semibold">Hasta:</label>
                             <input type="date" name="end_date" class="form-control" value="{{ request.args.get('end_date', '') }}">
                         </div>
@@ -147,7 +160,11 @@
                     <div class="mt-2">
                         <small class="text-muted">
                             <i class="fas fa-info-circle me-1"></i>
-                            Período actual: 
+                            <!-- MEJORADO: Mostrar filtro aplicado -->
+                            {% if request.args.get('branch_filter') %}
+                                Sucursal: <strong>{{ request.args.get('branch_filter') }}</strong> | 
+                            {% endif %}
+                            Período: 
                             <strong>{{ current_period.start.strftime('%d/%m/%Y') }} - {{ current_period.end.strftime('%d/%m/%Y') }}</strong>
                             {% if general_stats %}
                                 ({{ general_stats.total_records }} registro{{ 's' if general_stats.total_records != 1 else '' }})
@@ -163,16 +180,42 @@
     {% if general_stats %}
     <!-- Métricas principales -->
     <div class="row mb-4">
+    <!-- MEJORADO: Header con indicador de filtro -->
+        {% if general_stats.is_filtered_by_branch %}
+        <div class="col-12 mb-3">
+            <div class="alert alert-info d-flex align-items-center">
+                <i class="fas fa-filter me-2"></i>
+                <strong>Vista filtrada:</strong> Mostrando métricas únicamente de la sucursal 
+                <strong class="ms-1">{{ general_stats.filtered_branch }}</strong>
+                <a href="{{ url_for('reports.index', period=request.args.get('period', 'month'), start_date=request.args.get('start_date'), end_date=request.args.get('end_date')) }}" 
+                class="btn btn-sm btn-outline-primary ms-auto">
+                    <i class="fas fa-times me-1"></i>Ver todas las sucursales
+                </a>
+            </div>
+        </div>
+        {% endif %}
+        
         <div class="col-md-3">
             <div class="card metric-card bg-gradient-primary text-white">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
-                            <h6 class="card-title opacity-75">Ventas Totales</h6>
+                            <h6 class="card-title opacity-75">
+                                Ventas Totales
+                                {% if general_stats.is_filtered_by_branch %}
+                                    <small class="d-block opacity-50">{{ general_stats.filtered_branch }}</small>
+                                {% endif %}
+                            </h6>
                             <h3 class="mb-0">${{ "{:,.0f}".format(general_stats.total_sales).replace(",", "X").replace(".", ",").replace("X", ".") }}</h3>
                             <div class="trend-indicator">
                                 <i class="fas fa-arrow-up me-1"></i>
-                                <span>+12,5% vs período anterior</span>
+                                <span>
+                                    {% if general_stats.is_filtered_by_branch %}
+                                        {{ general_stats.total_records }} registro{{ 's' if general_stats.total_records != 1 else '' }}
+                                    {% else %}
+                                        +12,5% vs período anterior
+                                    {% endif %}
+                                </span>
                             </div>
                         </div>
                         <div class="align-self-center">
@@ -188,11 +231,18 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
-                            <h6 class="card-title opacity-75">Ganancia Neta</h6>
+                            <h6 class="card-title opacity-75">
+                                Ganancia Neta
+                                {% if general_stats.is_filtered_by_branch %}
+                                    <small class="d-block opacity-50">{{ general_stats.filtered_branch }}</small>
+                                {% endif %}
+                            </h6>
                             <h3 class="mb-0">${{ "{:,.0f}".format(general_stats.net_profit).replace(",", "X").replace(".", ",").replace("X", ".") }}</h3>
                             <div class="trend-indicator">
-                                <i class="fas fa-arrow-up me-1"></i>
-                                <span>+8,3% vs período anterior</span>
+                                <i class="fas fa-calculator me-1"></i>
+                                <span>
+                                    Gastos: ${{ "{:,.0f}".format(general_stats.total_expenses).replace(",", "X").replace(".", ",").replace("X", ".") }}
+                                </span>
                             </div>
                         </div>
                         <div class="align-self-center">
@@ -208,14 +258,36 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
-                            <h6 class="card-title opacity-75">Sucursales Activas</h6>
-                            <h3 class="mb-0">{{ general_stats.active_branches }}</h3>
+                            <h6 class="card-title opacity-75">
+                                {% if general_stats.is_filtered_by_branch %}
+                                    Promedio por Registro
+                                {% else %}
+                                    Sucursales Activas
+                                {% endif %}
+                            </h6>
+                            <h3 class="mb-0">
+                                {% if general_stats.is_filtered_by_branch %}
+                                    ${{ "{:,.0f}".format(general_stats.total_sales / general_stats.total_records if general_stats.total_records > 0 else 0).replace(",", "X").replace(".", ",").replace("X", ".") }}
+                                {% else %}
+                                    {{ general_stats.active_branches }}
+                                {% endif %}
+                            </h3>
                             <div class="trend-indicator">
-                                <span>de 5 sucursales</span>
+                                <span>
+                                    {% if general_stats.is_filtered_by_branch %}
+                                        por registro diario
+                                    {% else %}
+                                        de 5 sucursales
+                                    {% endif %}
+                                </span>
                             </div>
                         </div>
                         <div class="align-self-center">
-                            <i class="fas fa-store fa-2x opacity-50"></i>
+                            {% if general_stats.is_filtered_by_branch %}
+                                <i class="fas fa-calculator fa-2x opacity-50"></i>
+                            {% else %}
+                                <i class="fas fa-store fa-2x opacity-50"></i>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -227,10 +299,21 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
-                            <h6 class="card-title opacity-75">Promedio Diario</h6>
+                            <h6 class="card-title opacity-75">
+                                Promedio Diario
+                                {% if general_stats.is_filtered_by_branch %}
+                                    <small class="d-block opacity-50">{{ general_stats.filtered_branch }}</small>
+                                {% endif %}
+                            </h6>
                             <h3 class="mb-0">${{ "{:,.0f}".format(general_stats.avg_daily_sales).replace(",", "X").replace(".", ",").replace("X", ".") }}</h3>
                             <div class="trend-indicator">
-                                <span>por sucursal</span>
+                                <span>
+                                    {% if general_stats.is_filtered_by_branch %}
+                                        en el período
+                                    {% else %}
+                                        por sucursal
+                                    {% endif %}
+                                </span>
                             </div>
                         </div>
                         <div class="align-self-center">
@@ -596,6 +679,14 @@ function initializeSalesTrendChart() {
     }
 }
 
+function updateBranchFilter() {
+    const branchSelect = document.querySelector('select[name="branch_filter"]');
+    if (!branchSelect) return;
+    
+    // Auto-submit cuando cambie la sucursal
+    showLoadingAndSubmitReports();
+}
+
 function initializePaymentMethodsChart() {
     try {
         const canvas = document.getElementById('paymentMethodsChart');
@@ -759,6 +850,7 @@ async function updateSalesChart(days, targetElement = null) {
         const currentPeriod = urlParams.get('period') || 'month';
         const startDate = urlParams.get('start_date');
         const endDate = urlParams.get('end_date');
+        const branchFilter = urlParams.get('branch_filter');  // NUEVO: Obtener filtro de sucursal
         
         // Construir URL de la API con los filtros
         let apiUrl = `{{ url_for('reports.api_daily_sales_chart') }}?days=${days}`;
@@ -767,6 +859,13 @@ async function updateSalesChart(days, targetElement = null) {
             apiUrl += `&start_date=${startDate}&end_date=${endDate}`;
         }
         
+        // NUEVO: Agregar filtro de sucursal si existe
+        if (branchFilter) {
+            apiUrl += `&branch_filter=${encodeURIComponent(branchFilter)}`;
+        }
+        
+        console.log('📡 Llamando a API de ventas:', apiUrl);
+        
         const response = await fetch(apiUrl);
         const data = await response.json();
         
@@ -774,13 +873,16 @@ async function updateSalesChart(days, targetElement = null) {
             salesTrendChart.data = data.data;
             salesTrendChart.update();
             
+            // Actualizar título del gráfico si hay filtro de sucursal
+            updateChartTitles(branchFilter);
+            
             // Actualizar botones activos SOLO si se proporciona targetElement
             if (targetElement) {
                 document.querySelectorAll('.btn-group .btn').forEach(btn => btn.classList.remove('active'));
                 targetElement.classList.add('active');
             }
             
-            console.log('✅ Gráfico de ventas actualizado');
+            console.log('✅ Gráfico de ventas actualizado con filtro:', branchFilter || 'Todas');
         }
     } catch (error) {
         console.error('❌ Error actualizando gráfico de ventas:', error);
@@ -801,12 +903,20 @@ async function loadPaymentMethodsData() {
         const urlParams = new URLSearchParams(window.location.search);
         const startDate = urlParams.get('start_date');
         const endDate = urlParams.get('end_date');
+        const branchFilter = urlParams.get('branch_filter');  // NUEVO: Obtener filtro de sucursal
         
         let apiUrl = '{{ url_for('reports.api_payment_distribution') }}?days=30';
         
         if (startDate && endDate) {
             apiUrl += `&start_date=${startDate}&end_date=${endDate}`;
         }
+        
+        // NUEVO: Agregar filtro de sucursal si existe
+        if (branchFilter) {
+            apiUrl += `&branch_filter=${encodeURIComponent(branchFilter)}`;
+        }
+        
+        console.log('📡 Llamando a API de métodos de pago:', apiUrl);
         
         const response = await fetch(apiUrl);
         const data = await response.json();
@@ -839,7 +949,7 @@ async function loadPaymentMethodsData() {
                 topPercentageElement.textContent = formatPercentageArgentino(percentage, 1);
             }
             
-            console.log('✅ Datos de métodos de pago actualizados');
+            console.log('✅ Datos de métodos de pago actualizados con filtro:', branchFilter || 'Todas');
         }
     } catch (error) {
         console.error('❌ Error cargando datos de métodos de pago:', error);
@@ -859,6 +969,7 @@ async function loadBranchPerformanceData() {
         const period = urlParams.get('period') || 'month';
         const startDate = urlParams.get('start_date');
         const endDate = urlParams.get('end_date');
+        const branchFilter = urlParams.get('branch_filter');  // NUEVO: Obtener filtro de sucursal
         
         // Construir URL con parámetros
         let apiUrl = `{{ url_for('reports.api_branch_performance') }}?period=${period}`;
@@ -866,11 +977,15 @@ async function loadBranchPerformanceData() {
             apiUrl += `&start_date=${startDate}&end_date=${endDate}`;
         }
         
-        console.log('📡 Llamando a:', apiUrl);
+        // NUEVO: Agregar filtro de sucursal si existe
+        if (branchFilter) {
+            apiUrl += `&branch_filter=${encodeURIComponent(branchFilter)}`;
+        }
+        
+        console.log('📡 Llamando a API de rendimiento:', apiUrl);
         
         const response = await fetch(apiUrl);
         
-        // Verificar que la respuesta sea exitosa
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
@@ -878,24 +993,20 @@ async function loadBranchPerformanceData() {
         const data = await response.json();
         console.log('📦 Respuesta recibida:', data);
         
-        // Verificar que la respuesta tenga la estructura esperada
-        if (!data || typeof data !== 'object') {
-            throw new Error('Respuesta inválida del servidor');
-        }
-        
         if (data.status === 'success' && data.data) {
             branchPerformanceChart.data.labels = data.data.branches || [];
             branchPerformanceChart.data.datasets[0].data = data.data.sales || [];
             branchPerformanceChart.data.datasets[1].data = data.data.expenses || [];
             branchPerformanceChart.update();
             
-            console.log('✅ Gráfico de rendimiento actualizado');
+            // Actualizar título del gráfico si hay filtro
+            updateBranchPerformanceTitle(branchFilter);
+            
+            console.log('✅ Gráfico de rendimiento actualizado con filtro:', branchFilter || 'Todas');
         } else {
-            // Manejar respuesta de error del servidor
             const errorMsg = data.message || 'Error desconocido del servidor';
             console.warn('⚠️ Error del servidor:', errorMsg);
             
-            // Mostrar datos vacíos en lugar de error
             branchPerformanceChart.data.labels = [];
             branchPerformanceChart.data.datasets[0].data = [];
             branchPerformanceChart.data.datasets[1].data = [];
@@ -909,17 +1020,49 @@ async function loadBranchPerformanceData() {
     } catch (error) {
         console.error('❌ Error en loadBranchPerformanceData:', error);
         
-        // Mostrar datos vacíos en caso de error
         branchPerformanceChart.data.labels = [];
         branchPerformanceChart.data.datasets[0].data = [];
         branchPerformanceChart.data.datasets[1].data = [];
         branchPerformanceChart.update();
         
-        // Mostrar toast solo si showToast está disponible
         if (typeof showToast === 'function') {
             showToast('Error cargando datos de rendimiento', 'error');
+        }
+    }
+}
+
+function updateChartTitles(branchFilter) {
+    // Actualizar título del gráfico de tendencia de ventas
+    const salesChartTitle = document.querySelector('.card-header h6 .fa-chart-area').closest('h6');
+    if (salesChartTitle) {
+        const baseTitle = 'Tendencia de Ventas (Últimos 30 días)';
+        if (branchFilter) {
+            salesChartTitle.innerHTML = `<i class="fas fa-chart-area me-2"></i>${baseTitle} - ${branchFilter}`;
         } else {
-            console.warn('showToast no está disponible');
+            salesChartTitle.innerHTML = `<i class="fas fa-chart-area me-2"></i>${baseTitle}`;
+        }
+    }
+    
+    // Actualizar título del gráfico de métodos de pago
+    const paymentChartTitle = document.querySelector('.card-header h6 .fa-credit-card').closest('h6');
+    if (paymentChartTitle) {
+        const baseTitle = 'Métodos de Pago';
+        if (branchFilter) {
+            paymentChartTitle.innerHTML = `<i class="fas fa-credit-card me-2"></i>${baseTitle} - ${branchFilter}`;
+        } else {
+            paymentChartTitle.innerHTML = `<i class="fas fa-credit-card me-2"></i>${baseTitle}`;
+        }
+    }
+}
+
+// NUEVA FUNCIÓN: Actualizar título del gráfico de rendimiento por sucursal
+function updateBranchPerformanceTitle(branchFilter) {
+    const performanceChartTitle = document.querySelector('.card-header h6 .fa-building').closest('h6');
+    if (performanceChartTitle) {
+        if (branchFilter) {
+            performanceChartTitle.innerHTML = `<i class="fas fa-building me-2"></i>Rendimiento - ${branchFilter}`;
+        } else {
+            performanceChartTitle.innerHTML = `<i class="fas fa-building me-2"></i>Rendimiento por Sucursal`;
         }
     }
 }
@@ -945,6 +1088,8 @@ function resetFilters() {
     // Ir a la página sin filtros (período por defecto: mes)
     window.location.href = '{{ url_for('reports.index') }}';
 }
+
+console.log('🎯 Filtro por sucursal agregado correctamente a los reportes');
 
 function showLoadingAndSubmitReports() {
     const form = document.getElementById('periodForm');
