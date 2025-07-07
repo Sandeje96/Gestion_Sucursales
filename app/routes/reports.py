@@ -1,13 +1,6 @@
-# app/routes/reports.py
 """
 Blueprint para reportes y análisis del sistema.
-
-Este módulo contiene las rutas para:
-- Dashboard principal de reportes
-- Análisis por sucursal
-- Comparativas entre sucursales
-- Exportación de datos
-- Gráficos y visualizaciones
+CORREGIDO para Railway con filtros por sucursal funcionando.
 """
 
 from flask import Blueprint, render_template, request, jsonify, make_response, abort
@@ -29,13 +22,150 @@ from app.forms.daily_record_forms import FilterForm, QuickStatsForm
 reports_bp = Blueprint('reports', __name__)
 
 
+def normalize_branch_name_fixed(branch_name):
+    """
+    Normalización DEFINITIVA que funciona tanto en local como Railway.
+    """
+    if not branch_name:
+        return branch_name
+    
+    # Convertir a string y limpiar
+    normalized = str(branch_name).strip()
+    
+    # Remover espacios múltiples
+    import re
+    normalized = re.sub(r'\s+', ' ', normalized)
+    
+    # Mapeo EXACTO para todas las variaciones
+    branch_mapping = {
+        # Uruguay - todas las variaciones posibles
+        'uruguay': 'Uruguay',
+        'Uruguay': 'Uruguay', 
+        'URUGUAY': 'Uruguay',
+        ' uruguay ': 'Uruguay',
+        'uruguay ': 'Uruguay',
+        ' uruguay': 'Uruguay',
+        
+        # Villa Cabello - todas las variaciones posibles
+        'villa cabello': 'Villa Cabello',
+        'Villa Cabello': 'Villa Cabello',
+        'VILLA CABELLO': 'Villa Cabello', 
+        'Villa cabello': 'Villa Cabello',
+        'villa_cabello': 'Villa Cabello',
+        'villacabello': 'Villa Cabello',
+        'VillaCabello': 'Villa Cabello',
+        
+        # Tacuari - todas las variaciones posibles
+        'tacuari': 'Tacuari',
+        'Tacuari': 'Tacuari',
+        'TACUARI': 'Tacuari',
+        'tacuarí': 'Tacuari',
+        'Tacuarí': 'Tacuari',
+        'TACUARÍ': 'Tacuari',
+        
+        # Candelaria - todas las variaciones posibles
+        'candelaria': 'Candelaria',
+        'Candelaria': 'Candelaria',
+        'CANDELARIA': 'Candelaria',
+        
+        # Itaembe Mini - todas las variaciones posibles
+        'itaembe mini': 'Itaembe Mini',
+        'Itaembe Mini': 'Itaembe Mini',
+        'ITAEMBE MINI': 'Itaembe Mini',
+        'Itaembe mini': 'Itaembe Mini',
+        'itaembe_mini': 'Itaembe Mini',
+        'itaembemini': 'Itaembe Mini',
+        'ItaembeMini': 'Itaembe Mini'
+    }
+    
+    # 1. Buscar coincidencia exacta
+    if normalized in branch_mapping:
+        return branch_mapping[normalized]
+    
+    # 2. Buscar insensible a mayúsculas
+    normalized_lower = normalized.lower()
+    for variation, standard in branch_mapping.items():
+        if normalized_lower == variation.lower():
+            return standard
+    
+    # 3. Si no encuentra, devolver capitalizado
+    return normalized.title()
+
+
+def get_matching_branches_fixed(branch_filter):
+    """
+    Función DEFINITIVA para obtener sucursales que coincidan.
+    Funciona tanto en local como en Railway.
+    """
+    if not branch_filter:
+        return []
+    
+    try:
+        print(f"🔍 [FIXED] Buscando coincidencias para: '{branch_filter}'")
+        
+        # Obtener todas las sucursales de la BD
+        all_branches_query = db.session.query(DailyRecord.branch_name).distinct().all()
+        all_branch_names = [name[0] for name in all_branches_query if name[0]]
+        
+        print(f"🔍 [FIXED] Sucursales en BD: {all_branch_names}")
+        
+        # Normalizar el filtro de búsqueda
+        normalized_filter = normalize_branch_name_fixed(branch_filter)
+        print(f"🔍 [FIXED] Filtro normalizado: '{normalized_filter}'")
+        
+        # Buscar coincidencias con MÚLTIPLES métodos
+        matching_branches = set()  # Usar set para evitar duplicados
+        
+        for db_branch_name in all_branch_names:
+            # Método 1: Coincidencia exacta con el filtro original
+            if db_branch_name == branch_filter:
+                matching_branches.add(db_branch_name)
+                print(f"   ✅ Coincidencia exacta: {db_branch_name}")
+                continue
+            
+            # Método 2: Coincidencia después de normalizar ambos
+            normalized_db = normalize_branch_name_fixed(db_branch_name)
+            if normalized_db == normalized_filter:
+                matching_branches.add(db_branch_name)
+                print(f"   ✅ Coincidencia normalizada: {db_branch_name} -> {normalized_db}")
+                continue
+            
+            # Método 3: Coincidencia insensible a mayúsculas (filtro vs BD)
+            if db_branch_name.lower() == branch_filter.lower():
+                matching_branches.add(db_branch_name)
+                print(f"   ✅ Coincidencia insensible: {db_branch_name}")
+                continue
+            
+            # Método 4: Coincidencia normalizada insensible a mayúsculas
+            if normalized_db.lower() == normalized_filter.lower():
+                matching_branches.add(db_branch_name)
+                print(f"   ✅ Coincidencia normalizada insensible: {db_branch_name}")
+                continue
+            
+            # Método 5: Búsqueda parcial (contiene)
+            if branch_filter.lower() in db_branch_name.lower() or db_branch_name.lower() in branch_filter.lower():
+                matching_branches.add(db_branch_name)
+                print(f"   ✅ Coincidencia parcial: {db_branch_name}")
+                continue
+        
+        matching_list = list(matching_branches)
+        print(f"🔍 [FIXED] Coincidencias finales encontradas: {matching_list}")
+        return matching_list
+        
+    except Exception as e:
+        print(f"❌ [FIXED ERROR] Error en get_matching_branches_fixed: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+
 @reports_bp.route('/')
 @reports_bp.route('/index')
 @login_required
 def index():
     """
     Dashboard principal de reportes.
-    MEJORADO: Con filtro por sucursal.
+    VERSIÓN CORREGIDA FINAL.
     """
     if not current_user.is_admin_user():
         abort(403)
@@ -44,23 +174,22 @@ def index():
     period = request.args.get('period', 'month')
     custom_start = request.args.get('start_date')
     custom_end = request.args.get('end_date')
-    branch_filter = request.args.get('branch_filter')  # NUEVO: Filtro por sucursal
+    branch_filter = request.args.get('branch_filter')
     
     # Calcular fechas según el período
     start_date, end_date = get_period_dates(period, custom_start, custom_end)
     
-    print(f"🔍 Filtro aplicado en reports index: {period}")
-    print(f"📅 Rango de fechas: {start_date} - {end_date}")
-    print(f"🏢 Sucursal filtrada: {branch_filter or 'Todas'}")  # NUEVO: Log del filtro
+    print(f"🔍 [REPORTS INDEX] Filtro aplicado: período={period}, sucursal='{branch_filter}'")
+    print(f"📅 [REPORTS INDEX] Rango de fechas: {start_date} - {end_date}")
     
-    # NUEVO: Aplicar filtro de sucursal a las estadísticas
-    general_stats = get_general_statistics(start_date, end_date, branch_filter)
-    branch_stats = get_branch_statistics(start_date, end_date, branch_filter)
+    # Aplicar filtro de sucursal a las estadísticas usando la función corregida
+    general_stats = get_general_statistics_fixed(start_date, end_date, branch_filter)
+    branch_stats = get_branch_statistics_fixed(start_date, end_date, branch_filter)
     
-    # Datos para gráficos (también con filtro)
+    # Datos para gráficos
     days_in_period = (end_date - start_date).days + 1
-    daily_trends = get_daily_trends(days_in_period, start_date, end_date, branch_filter)
-    payment_distribution = get_payment_distribution(start_date, end_date, branch_filter)
+    daily_trends = get_daily_trends_fixed(days_in_period, start_date, end_date, branch_filter)
+    payment_distribution = get_payment_distribution_fixed(start_date, end_date, branch_filter)
     
     return render_template(
         'reports/index.html',
@@ -70,10 +199,552 @@ def index():
         daily_trends=daily_trends,
         payment_distribution=payment_distribution,
         current_period={'start': start_date, 'end': end_date, 'type': period},
-        current_branch_filter=branch_filter  # NUEVO: Pasar filtro al template
+        current_branch_filter=branch_filter
     )
 
 
+def get_general_statistics_fixed(start_date, end_date, branch_filter=None):
+    """
+    VERSIÓN CORREGIDA FINAL de estadísticas generales.
+    """
+    try:
+        query = DailyRecord.query.filter(
+            DailyRecord.record_date.between(start_date, end_date)
+        )
+        
+        if branch_filter:
+            matching_branches = get_matching_branches_fixed(branch_filter)
+            print(f"📊 [STATS FIXED] Aplicando filtro por sucursales: {matching_branches}")
+            
+            if matching_branches:
+                query = query.filter(DailyRecord.branch_name.in_(matching_branches))
+            else:
+                print(f"⚠️ [STATS FIXED] Sin coincidencias para: '{branch_filter}'")
+                return {
+                    'total_records': 0, 'total_sales': 0, 'total_expenses': 0,
+                    'net_profit': 0, 'avg_daily_sales': 0, 'active_branches': 0,
+                    'verified_records': 0, 'verification_rate': 0,
+                    'is_filtered_by_branch': True, 'filtered_branch': branch_filter
+                }
+        
+        records = query.all()
+        print(f"📊 [STATS FIXED] Registros encontrados: {len(records)}")
+        
+        if not records:
+            return {
+                'total_records': 0, 'total_sales': 0, 'total_expenses': 0,
+                'net_profit': 0, 'avg_daily_sales': 0, 'active_branches': 0,
+                'verified_records': 0, 'verification_rate': 0,
+                'is_filtered_by_branch': bool(branch_filter), 'filtered_branch': branch_filter
+            }
+        
+        total_sales = sum(float(r.total_sales) for r in records)
+        total_expenses = sum(float(r.total_expenses) for r in records)
+        
+        return {
+            'total_records': len(records),
+            'total_sales': total_sales,
+            'total_expenses': total_expenses,
+            'net_profit': total_sales - total_expenses,
+            'avg_daily_sales': total_sales / ((end_date - start_date).days + 1),
+            'active_branches': len(set(r.branch_name for r in records)),
+            'verified_records': len([r for r in records if r.is_verified]),
+            'verification_rate': len([r for r in records if r.is_verified]) / len(records) * 100 if records else 0,
+            'is_filtered_by_branch': bool(branch_filter),
+            'filtered_branch': branch_filter
+        }
+        
+    except Exception as e:
+        print(f"❌ [STATS FIXED ERROR] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'total_records': 0, 'total_sales': 0, 'total_expenses': 0,
+            'net_profit': 0, 'avg_daily_sales': 0, 'active_branches': 0,
+            'verified_records': 0, 'verification_rate': 0,
+            'is_filtered_by_branch': bool(branch_filter), 'filtered_branch': branch_filter
+        }
+
+
+def get_branch_statistics_fixed(start_date, end_date, branch_filter=None):
+    """
+    VERSIÓN CORREGIDA FINAL de estadísticas por sucursal.
+    """
+    try:
+        query = db.session.query(
+            DailyRecord.branch_name,
+            func.count(DailyRecord.id).label('records_count'),
+            func.sum(DailyRecord.total_sales).label('total_sales'),
+            func.sum(DailyRecord.total_expenses).label('total_expenses'),
+            func.avg(DailyRecord.total_sales).label('avg_sales'),
+            func.sum(DailyRecord.cash_sales).label('cash_sales'),
+            func.sum(DailyRecord.mercadopago_sales).label('mercadopago_sales'),
+            func.sum(DailyRecord.debit_sales).label('debit_sales'),
+            func.sum(DailyRecord.credit_sales).label('credit_sales')
+        ).filter(
+            DailyRecord.record_date.between(start_date, end_date)
+        )
+        
+        if branch_filter:
+            matching_branches = get_matching_branches_fixed(branch_filter)
+            if matching_branches:
+                query = query.filter(DailyRecord.branch_name.in_(matching_branches))
+            else:
+                return {}
+        
+        branch_stats = query.group_by(DailyRecord.branch_name).all()
+        
+        result = {}
+        for stat in branch_stats:
+            result[stat.branch_name] = {
+                'records_count': stat.records_count,
+                'total_sales': float(stat.total_sales or 0),
+                'total_expenses': float(stat.total_expenses or 0),
+                'net_profit': float(stat.total_sales or 0) - float(stat.total_expenses or 0),
+                'avg_sales': float(stat.avg_sales or 0),
+                'payment_breakdown': {
+                    'cash': float(stat.cash_sales or 0),
+                    'mercadopago': float(stat.mercadopago_sales or 0),
+                    'debit': float(stat.debit_sales or 0),
+                    'credit': float(stat.credit_sales or 0)
+                }
+            }
+        
+        return result
+        
+    except Exception as e:
+        print(f"❌ [BRANCH STATS FIXED ERROR] Error: {e}")
+        return {}
+
+
+def get_payment_distribution_fixed(start_date, end_date, branch_filter=None):
+    """
+    VERSIÓN CORREGIDA FINAL de distribución de métodos de pago.
+    """
+    try:
+        query = db.session.query(
+            func.sum(DailyRecord.cash_sales).label('cash'),
+            func.sum(DailyRecord.mercadopago_sales).label('mercadopago'),
+            func.sum(DailyRecord.debit_sales).label('debit'),
+            func.sum(DailyRecord.credit_sales).label('credit')
+        ).filter(
+            DailyRecord.record_date.between(start_date, end_date)
+        )
+        
+        if branch_filter:
+            matching_branches = get_matching_branches_fixed(branch_filter)
+            if matching_branches:
+                query = query.filter(DailyRecord.branch_name.in_(matching_branches))
+        
+        result = query.first()
+        
+        return {
+            'cash': float(result.cash or 0),
+            'mercadopago': float(result.mercadopago or 0),
+            'debit': float(result.debit or 0),
+            'credit': float(result.credit or 0)
+        }
+        
+    except Exception as e:
+        print(f"❌ [PAYMENT FIXED ERROR] Error: {e}")
+        return {
+            'cash': 0,
+            'mercadopago': 0,
+            'debit': 0,
+            'credit': 0
+        }
+
+
+def get_daily_trends_fixed(days, start_date=None, end_date=None, branch_filter=None):
+    """
+    VERSIÓN CORREGIDA FINAL de tendencias diarias.
+    """
+    try:
+        if start_date is None:
+            end_date = date.today()
+            start_date = end_date - timedelta(days=days-1)
+        
+        query = db.session.query(
+            DailyRecord.record_date,
+            func.sum(DailyRecord.total_sales).label('sales'),
+            func.sum(DailyRecord.total_expenses).label('expenses')
+        ).filter(
+            DailyRecord.record_date.between(start_date, end_date)
+        )
+        
+        if branch_filter:
+            matching_branches = get_matching_branches_fixed(branch_filter)
+            if matching_branches:
+                query = query.filter(DailyRecord.branch_name.in_(matching_branches))
+        
+        daily_data = query.group_by(DailyRecord.record_date).order_by(DailyRecord.record_date).all()
+        
+        return [
+            {
+                'date': data.record_date.isoformat(),
+                'sales': float(data.sales or 0),
+                'expenses': float(data.expenses or 0),
+                'net': float(data.sales or 0) - float(data.expenses or 0)
+            }
+            for data in daily_data
+        ]
+        
+    except Exception as e:
+        print(f"❌ [TRENDS FIXED ERROR] Error: {e}")
+        return []
+
+
+@reports_bp.route('/api/daily-sales-chart')
+@login_required
+def api_daily_sales_chart():
+    """
+    API CORREGIDA FINAL para datos del gráfico de ventas diarias.
+    """
+    if not current_user.is_admin_user():
+        abort(403)
+    
+    # Obtener parámetros
+    days = request.args.get('days', 30, type=int)
+    start_date_param = request.args.get('start_date')
+    end_date_param = request.args.get('end_date')
+    branch_filter = request.args.get('branch_filter')
+    
+    print(f"🔍 [API FIXED] daily-sales-chart - branch_filter: '{branch_filter}'")
+    
+    # Calcular fechas
+    if start_date_param and end_date_param:
+        start_date = datetime.datetime.strptime(start_date_param, '%Y-%m-%d').date()
+        end_date = datetime.datetime.strptime(end_date_param, '%Y-%m-%d').date()
+    else:
+        end_date = datetime.date.today()
+        start_date = end_date - timedelta(days=days-1)
+    
+    # Query base
+    query = db.session.query(
+        DailyRecord.record_date,
+        func.sum(DailyRecord.total_sales).label('total_sales'),
+        func.sum(DailyRecord.total_expenses).label('total_expenses'),
+        func.count(DailyRecord.id).label('records_count')
+    ).filter(
+        DailyRecord.record_date.between(start_date, end_date)
+    )
+    
+    # Aplicar filtro por sucursal usando función corregida
+    if branch_filter:
+        matching_branches = get_matching_branches_fixed(branch_filter)
+        if matching_branches:
+            query = query.filter(DailyRecord.branch_name.in_(matching_branches))
+            print(f"🏢 [API FIXED] Filtrado por sucursales: {matching_branches}")
+        else:
+            print(f"⚠️ [API FIXED] Sin coincidencias para: '{branch_filter}'")
+            # Retornar datos vacíos
+            return jsonify({
+                'status': 'success',
+                'data': {
+                    'labels': [],
+                    'datasets': [
+                        {
+                            'label': 'Ventas',
+                            'data': [],
+                            'borderColor': 'rgb(34, 197, 94)',
+                            'backgroundColor': 'rgba(34, 197, 94, 0.1)',
+                            'tension': 0.1
+                        },
+                        {
+                            'label': 'Gastos',
+                            'data': [],
+                            'borderColor': 'rgb(239, 68, 68)',
+                            'backgroundColor': 'rgba(239, 68, 68, 0.1)',
+                            'tension': 0.1
+                        },
+                        {
+                            'label': 'Ganancia Neta',
+                            'data': [],
+                            'borderColor': 'rgb(59, 130, 246)',
+                            'backgroundColor': 'rgba(59, 130, 246, 0.1)',
+                            'tension': 0.1
+                        }
+                    ]
+                },
+                'meta': {
+                    'branch_filter': branch_filter,
+                    'period': f"{start_date} - {end_date}",
+                    'records_found': 0,
+                    'message': f'No se encontraron datos para la sucursal: {branch_filter}'
+                }
+            })
+    
+    # Agrupar por fecha
+    results = query.group_by(DailyRecord.record_date).order_by(DailyRecord.record_date).all()
+    
+    print(f"📊 [API FIXED] Encontrados {len(results)} registros de ventas")
+    
+    # Formatear datos para Chart.js
+    labels = []
+    sales_data = []
+    expenses_data = []
+    net_data = []
+    
+    for result in results:
+        labels.append(result.record_date.strftime('%d/%m'))
+        sales_data.append(float(result.total_sales or 0))
+        expenses_data.append(float(result.total_expenses or 0))
+        net_data.append(float(result.total_sales or 0) - float(result.total_expenses or 0))
+    
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'labels': labels,
+            'datasets': [
+                {
+                    'label': 'Ventas',
+                    'data': sales_data,
+                    'borderColor': 'rgb(34, 197, 94)',
+                    'backgroundColor': 'rgba(34, 197, 94, 0.1)',
+                    'tension': 0.1
+                },
+                {
+                    'label': 'Gastos',
+                    'data': expenses_data,
+                    'borderColor': 'rgb(239, 68, 68)',
+                    'backgroundColor': 'rgba(239, 68, 68, 0.1)',
+                    'tension': 0.1
+                },
+                {
+                    'label': 'Ganancia Neta',
+                    'data': net_data,
+                    'borderColor': 'rgb(59, 130, 246)',
+                    'backgroundColor': 'rgba(59, 130, 246, 0.1)',
+                    'tension': 0.1
+                }
+            ]
+        },
+        'meta': {
+            'branch_filter': branch_filter,
+            'period': f"{start_date} - {end_date}",
+            'records_found': len(results)
+        }
+    })
+
+
+@reports_bp.route('/api/payment-methods-distribution')
+@login_required
+def api_payment_distribution():
+    """
+    API CORREGIDA FINAL para distribución de métodos de pago.
+    """
+    # Obtener parámetros
+    days = request.args.get('days', 30, type=int)
+    start_date_param = request.args.get('start_date')
+    end_date_param = request.args.get('end_date')
+    branch_filter = request.args.get('branch_filter')
+    
+    print(f"🔍 [API PAYMENT FIXED] branch_filter: '{branch_filter}'")
+    
+    # Calcular fechas
+    if start_date_param and end_date_param:
+        start_date = datetime.datetime.strptime(start_date_param, '%Y-%m-%d').date()
+        end_date = datetime.datetime.strptime(end_date_param, '%Y-%m-%d').date()
+    else:
+        end_date = datetime.date.today()
+        start_date = end_date - timedelta(days=days-1)
+    
+    # Query base
+    query = db.session.query(
+        func.sum(DailyRecord.cash_sales).label('cash'),
+        func.sum(DailyRecord.mercadopago_sales).label('mercadopago'),
+        func.sum(DailyRecord.debit_sales).label('debit'),
+        func.sum(DailyRecord.credit_sales).label('credit')
+    ).filter(
+        DailyRecord.record_date.between(start_date, end_date)
+    )
+    
+    # Aplicar filtro por sucursal usando función corregida
+    if branch_filter:
+        matching_branches = get_matching_branches_fixed(branch_filter)
+        if matching_branches:
+            query = query.filter(DailyRecord.branch_name.in_(matching_branches))
+            print(f"🏢 [API PAYMENT FIXED] Filtrado por sucursales: {matching_branches}")
+    elif not current_user.is_admin_user():
+        # Si no es admin y no hay filtro, usar su sucursal
+        query = query.filter(DailyRecord.user_id == current_user.id)
+    
+    result = query.first()
+    
+    # Calcular totales y porcentajes
+    cash = float(result.cash or 0)
+    mercadopago = float(result.mercadopago or 0)
+    debit = float(result.debit or 0)
+    credit = float(result.credit or 0)
+    total = cash + mercadopago + debit + credit
+    
+    if total > 0:
+        percentages = {
+            'cash': round((cash / total) * 100, 1),
+            'mercadopago': round((mercadopago / total) * 100, 1),
+            'debit': round((debit / total) * 100, 1),
+            'credit': round((credit / total) * 100, 1)
+        }
+    else:
+        percentages = {'cash': 0, 'mercadopago': 0, 'debit': 0, 'credit': 0}
+    
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'amounts': {
+                'cash': cash,
+                'mercadopago': mercadopago,
+                'debit': debit,
+                'credit': credit,
+                'total': total
+            },
+            'percentages': percentages,
+            'chart_data': {
+                'labels': ['Efectivo', 'MercadoPago', 'Débito', 'Crédito'],
+                'data': [cash, mercadopago, debit, credit],
+                'backgroundColor': [
+                    '#10b981',  # Verde para efectivo
+                    '#3b82f6',  # Azul para MercadoPago
+                    '#f59e0b',  # Amarillo para débito
+                    '#ef4444'   # Rojo para crédito
+                ]
+            }
+        },
+        'meta': {
+            'branch_filter': branch_filter,
+            'period': f"{start_date} - {end_date}"
+        }
+    })
+
+
+@reports_bp.route('/api/branch-performance')
+@login_required
+def api_branch_performance():
+    """
+    API CORREGIDA FINAL para datos de rendimiento por sucursal.
+    """
+    try:
+        if not current_user.is_admin_user():
+            return jsonify({
+                'status': 'error',
+                'message': 'Acceso denegado',
+                'data': {
+                    'branches': [],
+                    'sales': [],
+                    'expenses': [],
+                    'net_profits': [],
+                    'avg_sales': []
+                }
+            }), 403
+        
+        # Obtener parámetros
+        period = request.args.get('period', 'month')
+        custom_start = request.args.get('start_date')
+        custom_end = request.args.get('end_date')
+        branch_filter = request.args.get('branch_filter')
+        
+        print(f"🔍 [API PERFORMANCE FIXED] period={period}, branch_filter='{branch_filter}'")
+        
+        # Calcular fechas según el período
+        start_date, end_date = get_period_dates(period, custom_start, custom_end)
+        
+        print(f"📅 [API PERFORMANCE FIXED] Fechas: {start_date} - {end_date}")
+        
+        # Query base
+        query = db.session.query(
+            DailyRecord.branch_name,
+            func.sum(DailyRecord.total_sales).label('total_sales'),
+            func.sum(DailyRecord.total_expenses).label('total_expenses'),
+            func.count(DailyRecord.id).label('records_count'),
+            func.avg(DailyRecord.total_sales).label('avg_sales')
+        ).filter(
+            DailyRecord.record_date.between(start_date, end_date)
+        )
+        
+        # Aplicar filtro por sucursal usando función corregida
+        if branch_filter:
+            matching_branches = get_matching_branches_fixed(branch_filter)
+            if matching_branches:
+                query = query.filter(DailyRecord.branch_name.in_(matching_branches))
+                print(f"🏢 [API PERFORMANCE FIXED] Filtrado por: {matching_branches}")
+            else:
+                print(f"⚠️ [API PERFORMANCE FIXED] Sin coincidencias para: '{branch_filter}'")
+                return jsonify({
+                    'status': 'success',
+                    'data': {
+                        'branches': [],
+                        'sales': [],
+                        'expenses': [],
+                        'net_profits': [],
+                        'avg_sales': [],
+                        'period': period,
+                        'start_date': start_date.isoformat(),
+                        'end_date': end_date.isoformat(),
+                        'branch_filter': branch_filter,
+                        'message': f'No se encontraron datos para: {branch_filter}'
+                    }
+                })
+        
+        # Obtener datos por sucursal
+        branch_data = query.group_by(DailyRecord.branch_name).all()
+        
+        print(f"📊 [API PERFORMANCE FIXED] Encontrados {len(branch_data)} sucursales")
+        
+        # Formatear datos
+        branches = []
+        sales = []
+        expenses = []
+        net_profits = []
+        avg_sales = []
+        
+        for data in branch_data:
+            branches.append(data.branch_name)
+            sales.append(float(data.total_sales or 0))
+            expenses.append(float(data.total_expenses or 0))
+            net_profits.append(float(data.total_sales or 0) - float(data.total_expenses or 0))
+            avg_sales.append(float(data.avg_sales or 0))
+        
+        response_data = {
+            'status': 'success',
+            'data': {
+                'branches': branches,
+                'sales': sales,
+                'expenses': expenses,
+                'net_profits': net_profits,
+                'avg_sales': avg_sales,
+                'period': period,
+                'start_date': start_date.isoformat(),
+                'end_date': end_date.isoformat(),
+                'branch_filter': branch_filter
+            }
+        }
+        
+        print(f"✅ [API PERFORMANCE FIXED] Enviando respuesta con {len(branches)} sucursales")
+        return jsonify(response_data)
+        
+    except Exception as e:
+        print(f"❌ [API PERFORMANCE FIXED ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        return jsonify({
+            'status': 'error',
+            'message': f'Error interno: {str(e)}',
+            'data': {
+                'branches': [],
+                'sales': [],
+                'expenses': [],
+                'net_profits': [],
+                'avg_sales': [],
+                'period': request.args.get('period', 'month'),
+                'start_date': '',
+                'end_date': '',
+                'branch_filter': request.args.get('branch_filter')
+            }
+        }), 500
+
+
+# Mantener las funciones originales que no cambian
 @reports_bp.route('/branch/<branch_name>')
 @login_required
 def branch_detail(branch_name):
@@ -159,210 +830,6 @@ def comparison():
     )
 
 
-@reports_bp.route('/api/daily-sales-chart')
-@login_required
-def api_daily_sales_chart():
-    """
-    API para datos del gráfico de ventas diarias.
-    MEJORADO: Con soporte para filtro por sucursal.
-    """
-    if not current_user.is_admin_user():
-        abort(403)
-    
-    # Obtener parámetros
-    days = request.args.get('days', 30, type=int)
-    start_date_param = request.args.get('start_date')
-    end_date_param = request.args.get('end_date')
-    branch_filter = request.args.get('branch_filter')  # NUEVO: Filtro por sucursal
-    
-    print(f"🔍 [API] daily-sales-chart - branch_filter: '{branch_filter}'")
-    
-    # Calcular fechas
-    if start_date_param and end_date_param:
-        start_date = datetime.datetime.strptime(start_date_param, '%Y-%m-%d').date()
-        end_date = datetime.datetime.strptime(end_date_param, '%Y-%m-%d').date()
-    else:
-        end_date = datetime.date.today()
-        start_date = end_date - timedelta(days=days-1)
-    
-    # Query base
-    query = db.session.query(
-        DailyRecord.record_date,
-        func.sum(DailyRecord.total_sales).label('total_sales'),
-        func.sum(DailyRecord.total_expenses).label('total_expenses'),
-        func.count(DailyRecord.id).label('records_count')
-    ).filter(
-        DailyRecord.record_date.between(start_date, end_date)
-    )
-    
-    # NUEVO: Aplicar filtro por sucursal si se especifica
-    if branch_filter:
-        from app.routes.daily_records import normalize_branch_name
-        normalized_filter = normalize_branch_name(branch_filter)
-        
-        all_branches = db.session.query(DailyRecord.branch_name).distinct().all()
-        matching_branches = []
-        
-        for (db_branch_name,) in all_branches:
-            if db_branch_name and normalize_branch_name(db_branch_name) == normalized_filter:
-                matching_branches.append(db_branch_name)
-        
-        if matching_branches:
-            query = query.filter(DailyRecord.branch_name.in_(matching_branches))
-            print(f"🏢 [API] Filtrado por sucursales: {matching_branches}")
-    
-    # Agrupar por fecha
-    results = query.group_by(DailyRecord.record_date).order_by(DailyRecord.record_date).all()
-    
-    # Formatear datos para Chart.js
-    labels = []
-    sales_data = []
-    expenses_data = []
-    net_data = []
-    
-    for result in results:
-        labels.append(result.record_date.strftime('%d/%m'))
-        sales_data.append(float(result.total_sales or 0))
-        expenses_data.append(float(result.total_expenses or 0))
-        net_data.append(float(result.total_sales or 0) - float(result.total_expenses or 0))
-    
-    return jsonify({
-        'status': 'success',
-        'data': {
-            'labels': labels,
-            'datasets': [
-                {
-                    'label': 'Ventas',
-                    'data': sales_data,
-                    'borderColor': 'rgb(34, 197, 94)',
-                    'backgroundColor': 'rgba(34, 197, 94, 0.1)',
-                    'tension': 0.1
-                },
-                {
-                    'label': 'Gastos',
-                    'data': expenses_data,
-                    'borderColor': 'rgb(239, 68, 68)',
-                    'backgroundColor': 'rgba(239, 68, 68, 0.1)',
-                    'tension': 0.1
-                },
-                {
-                    'label': 'Ganancia Neta',
-                    'data': net_data,
-                    'borderColor': 'rgb(59, 130, 246)',
-                    'backgroundColor': 'rgba(59, 130, 246, 0.1)',
-                    'tension': 0.1
-                }
-            ]
-        },
-        'meta': {
-            'branch_filter': branch_filter,
-            'period': f"{start_date} - {end_date}",
-            'records_found': len(results)
-        }
-    })
-
-
-
-@reports_bp.route('/api/payment-methods-distribution')
-@login_required
-def api_payment_distribution():
-    """
-    API para distribución de métodos de pago con filtros de fecha.
-    MEJORADO: Con soporte para filtro por sucursal.
-    """
-    # Obtener parámetros
-    days = request.args.get('days', 30, type=int)
-    start_date_param = request.args.get('start_date')
-    end_date_param = request.args.get('end_date')
-    branch_filter = request.args.get('branch_filter')  # NUEVO: Filtro por sucursal
-    
-    print(f"🔍 [API] payment-distribution - branch_filter: '{branch_filter}'")
-    
-    # Calcular fechas
-    if start_date_param and end_date_param:
-        start_date = datetime.datetime.strptime(start_date_param, '%Y-%m-%d').date()
-        end_date = datetime.datetime.strptime(end_date_param, '%Y-%m-%d').date()
-    else:
-        end_date = datetime.date.today()
-        start_date = end_date - timedelta(days=days-1)
-    
-    # Query base
-    query = db.session.query(
-        func.sum(DailyRecord.cash_sales).label('cash'),
-        func.sum(DailyRecord.mercadopago_sales).label('mercadopago'),
-        func.sum(DailyRecord.debit_sales).label('debit'),
-        func.sum(DailyRecord.credit_sales).label('credit')
-    ).filter(
-        DailyRecord.record_date.between(start_date, end_date)
-    )
-    
-    # NUEVO: Aplicar filtro por sucursal si se especifica
-    if branch_filter:
-        from app.routes.daily_records import normalize_branch_name
-        normalized_filter = normalize_branch_name(branch_filter)
-        
-        all_branches = db.session.query(DailyRecord.branch_name).distinct().all()
-        matching_branches = []
-        
-        for (db_branch_name,) in all_branches:
-            if db_branch_name and normalize_branch_name(db_branch_name) == normalized_filter:
-                matching_branches.append(db_branch_name)
-        
-        if matching_branches:
-            query = query.filter(DailyRecord.branch_name.in_(matching_branches))
-            print(f"🏢 [API] Filtrado por sucursales: {matching_branches}")
-    elif not current_user.is_admin_user():
-        # Si no es admin y no hay filtro, usar su sucursal
-        query = query.filter(DailyRecord.user_id == current_user.id)
-    
-    result = query.first()
-    
-    # Calcular totales y porcentajes
-    cash = float(result.cash or 0)
-    mercadopago = float(result.mercadopago or 0)
-    debit = float(result.debit or 0)
-    credit = float(result.credit or 0)
-    total = cash + mercadopago + debit + credit
-    
-    if total > 0:
-        percentages = {
-            'cash': round((cash / total) * 100, 1),
-            'mercadopago': round((mercadopago / total) * 100, 1),
-            'debit': round((debit / total) * 100, 1),
-            'credit': round((credit / total) * 100, 1)
-        }
-    else:
-        percentages = {'cash': 0, 'mercadopago': 0, 'debit': 0, 'credit': 0}
-    
-    return jsonify({
-        'status': 'success',
-        'data': {
-            'amounts': {
-                'cash': cash,
-                'mercadopago': mercadopago,
-                'debit': debit,
-                'credit': credit,
-                'total': total
-            },
-            'percentages': percentages,
-            'chart_data': {
-                'labels': ['Efectivo', 'MercadoPago', 'Débito', 'Crédito'],
-                'data': [cash, mercadopago, debit, credit],
-                'backgroundColor': [
-                    '#10b981',  # Verde para efectivo
-                    '#3b82f6',  # Azul para MercadoPago
-                    '#f59e0b',  # Amarillo para débito
-                    '#ef4444'   # Rojo para crédito
-                ]
-            }
-        },
-        'meta': {
-            'branch_filter': branch_filter,
-            'period': f"{start_date} - {end_date}"
-        }
-    })
-
-
 @reports_bp.route('/export/csv')
 @login_required
 def export_csv():
@@ -396,7 +863,10 @@ def export_csv():
     )
     
     if branch and current_user.is_admin_user():
-        query = query.filter(DailyRecord.branch_name == branch)
+        # Usar función corregida para filtros
+        matching_branches = get_matching_branches_fixed(branch)
+        if matching_branches:
+            query = query.filter(DailyRecord.branch_name.in_(matching_branches))
     
     records = query.order_by(DailyRecord.record_date.desc()).all()
     
@@ -439,8 +909,6 @@ def export_csv():
     
     return response
 
-
-# Funciones auxiliares para cálculos estadísticos
 
 def get_period_dates(period, custom_start=None, custom_end=None):
     """
@@ -489,296 +957,6 @@ def get_period_dates(period, custom_start=None, custom_end=None):
         # Por defecto: este mes
         start = today.replace(day=1)
         return start, today
-
-def get_general_statistics(start_date, end_date, branch_filter=None):
-    """
-    VERSIÓN CORREGIDA que usa get_matching_branches_reports
-    """
-    try:
-        query = DailyRecord.query.filter(
-            DailyRecord.record_date.between(start_date, end_date)
-        )
-        
-        if branch_filter:
-            matching_branches = get_matching_branches_reports(branch_filter)
-            print(f"📊 [STATS] Aplicando filtro por sucursales: {matching_branches}")
-            
-            if matching_branches:
-                query = query.filter(DailyRecord.branch_name.in_(matching_branches))
-            else:
-                print(f"⚠️ [STATS] Sin coincidencias para: {branch_filter}")
-                return {
-                    'total_records': 0, 'total_sales': 0, 'total_expenses': 0,
-                    'net_profit': 0, 'avg_daily_sales': 0, 'active_branches': 0,
-                    'verified_records': 0, 'verification_rate': 0,
-                    'is_filtered_by_branch': True, 'filtered_branch': branch_filter
-                }
-        
-        records = query.all()
-        print(f"📊 [STATS] Registros encontrados: {len(records)}")
-        
-        if not records:
-            return {
-                'total_records': 0, 'total_sales': 0, 'total_expenses': 0,
-                'net_profit': 0, 'avg_daily_sales': 0, 'active_branches': 0,
-                'verified_records': 0, 'verification_rate': 0,
-                'is_filtered_by_branch': bool(branch_filter), 'filtered_branch': branch_filter
-            }
-        
-        total_sales = sum(float(r.total_sales) for r in records)
-        total_expenses = sum(float(r.total_expenses) for r in records)
-        
-        return {
-            'total_records': len(records),
-            'total_sales': total_sales,
-            'total_expenses': total_expenses,
-            'net_profit': total_sales - total_expenses,
-            'avg_daily_sales': total_sales / ((end_date - start_date).days + 1),
-            'active_branches': len(set(r.branch_name for r in records)),
-            'verified_records': len([r for r in records if r.is_verified]),
-            'verification_rate': len([r for r in records if r.is_verified]) / len(records) * 100 if records else 0,
-            'is_filtered_by_branch': bool(branch_filter),
-            'filtered_branch': branch_filter
-        }
-        
-    except Exception as e:
-        print(f"❌ [STATS ERROR] {e}")
-        import traceback
-        traceback.print_exc()
-        return {
-            'total_records': 0, 'total_sales': 0, 'total_expenses': 0,
-            'net_profit': 0, 'avg_daily_sales': 0, 'active_branches': 0,
-            'verified_records': 0, 'verification_rate': 0,
-            'is_filtered_by_branch': bool(branch_filter), 'filtered_branch': branch_filter
-        }
-
-
-def get_branch_statistics(start_date, end_date, branch_filter=None):
-    """
-    Obtener estadísticas por sucursal.
-    MEJORADO: Con filtro opcional por sucursal.
-    """
-    query = db.session.query(
-        DailyRecord.branch_name,
-        func.count(DailyRecord.id).label('records_count'),
-        func.sum(DailyRecord.total_sales).label('total_sales'),
-        func.sum(DailyRecord.total_expenses).label('total_expenses'),
-        func.avg(DailyRecord.total_sales).label('avg_sales'),
-        func.sum(DailyRecord.cash_sales).label('cash_sales'),
-        func.sum(DailyRecord.mercadopago_sales).label('mercadopago_sales'),
-        func.sum(DailyRecord.debit_sales).label('debit_sales'),
-        func.sum(DailyRecord.credit_sales).label('credit_sales')
-    ).filter(
-        DailyRecord.record_date.between(start_date, end_date)
-    )
-    
-    # NUEVO: Aplicar filtro por sucursal si se especifica
-    if branch_filter:
-        from app.routes.daily_records import normalize_branch_name
-        normalized_filter = normalize_branch_name(branch_filter)
-        
-        all_branches = db.session.query(DailyRecord.branch_name).distinct().all()
-        matching_branches = []
-        
-        for (db_branch_name,) in all_branches:
-            if db_branch_name and normalize_branch_name(db_branch_name) == normalized_filter:
-                matching_branches.append(db_branch_name)
-        
-        if matching_branches:
-            query = query.filter(DailyRecord.branch_name.in_(matching_branches))
-    
-    branch_stats = query.group_by(DailyRecord.branch_name).all()
-    
-    result = {}
-    for stat in branch_stats:
-        result[stat.branch_name] = {
-            'records_count': stat.records_count,
-            'total_sales': float(stat.total_sales or 0),
-            'total_expenses': float(stat.total_expenses or 0),
-            'net_profit': float(stat.total_sales or 0) - float(stat.total_expenses or 0),
-            'avg_sales': float(stat.avg_sales or 0),
-            'payment_breakdown': {
-                'cash': float(stat.cash_sales or 0),
-                'mercadopago': float(stat.mercadopago_sales or 0),
-                'debit': float(stat.debit_sales or 0),
-                'credit': float(stat.credit_sales or 0)
-            }
-        }
-    
-    return result
-
-def normalize_branch_name_reports(branch_name):
-    """
-    Normalización específica para reportes que maneja local vs Railway.
-    """
-    if not branch_name:
-        return branch_name
-    
-    # Limpiar espacios
-    import re
-    normalized = str(branch_name).strip()
-    normalized = re.sub(r'\s+', ' ', normalized)
-    
-    # Mapeo exhaustivo (el mismo que en daily_records.py)
-    branch_mapping = {
-        # Uruguay
-        'uruguay': 'Uruguay', 'Uruguay': 'Uruguay', 'URUGUAY': 'Uruguay',
-        # Villa Cabello  
-        'villa cabello': 'Villa Cabello', 'Villa Cabello': 'Villa Cabello', 
-        'VILLA CABELLO': 'Villa Cabello', 'Villa cabello': 'Villa Cabello',
-        'villa_cabello': 'Villa Cabello', 'villacabello': 'Villa Cabello',
-        # Tacuari
-        'tacuari': 'Tacuari', 'Tacuari': 'Tacuari', 'TACUARI': 'Tacuari',
-        'tacuarí': 'Tacuari', 'Tacuarí': 'Tacuari',
-        # Candelaria
-        'candelaria': 'Candelaria', 'Candelaria': 'Candelaria', 'CANDELARIA': 'Candelaria',
-        # Itaembe Mini
-        'itaembe mini': 'Itaembe Mini', 'Itaembe Mini': 'Itaembe Mini', 
-        'ITAEMBE MINI': 'Itaembe Mini', 'Itaembe mini': 'Itaembe Mini',
-        'itaembe_mini': 'Itaembe Mini', 'itaembemini': 'Itaembe Mini'
-    }
-    
-    # Buscar coincidencia exacta
-    if normalized in branch_mapping:
-        return branch_mapping[normalized]
-    
-    # Buscar insensible a mayúsculas
-    normalized_lower = normalized.lower()
-    for variation, standard in branch_mapping.items():
-        if normalized_lower == variation.lower():
-            return standard
-    
-    return normalized.title()
-
-def get_matching_branches_reports(branch_filter):
-    """
-    Obtener sucursales coincidentes para reportes.
-    MEJORADO para manejar diferencias local vs Railway.
-    """
-    if not branch_filter:
-        return []
-    
-    try:
-        # Obtener todas las sucursales
-        all_branches = db.session.query(DailyRecord.branch_name).distinct().all()
-        all_branch_names = [name[0] for name in all_branches if name[0]]
-        
-        print(f"🔍 [REPORTS] Buscando '{branch_filter}' en: {all_branch_names}")
-        
-        # Normalizar filtro
-        normalized_filter = normalize_branch_name_reports(branch_filter)
-        
-        # Buscar coincidencias con múltiples métodos
-        matching_branches = set()
-        
-        for db_branch_name in all_branch_names:
-            # Método 1: Exacta
-            if db_branch_name == branch_filter:
-                matching_branches.add(db_branch_name)
-            
-            # Método 2: Normalizada
-            elif normalize_branch_name_reports(db_branch_name) == normalized_filter:
-                matching_branches.add(db_branch_name)
-            
-            # Método 3: Insensible a mayúsculas
-            elif db_branch_name.lower() == branch_filter.lower():
-                matching_branches.add(db_branch_name)
-            
-            # Método 4: Normalizada insensible
-            elif normalize_branch_name_reports(db_branch_name).lower() == normalized_filter.lower():
-                matching_branches.add(db_branch_name)
-        
-        result = list(matching_branches)
-        print(f"🔍 [REPORTS] Coincidencias: {result}")
-        return result
-        
-    except Exception as e:
-        print(f"❌ [REPORTS ERROR] {e}")
-        return []
-
-
-def get_daily_trends(days, start_date=None, end_date=None, branch_filter=None):
-    """
-    Obtener tendencias diarias para gráficos con fechas específicas.
-    MEJORADO: Con filtro opcional por sucursal.
-    """
-    if start_date is None or end_date is None:
-        end_date = datetime.date.today()
-        start_date = end_date - timedelta(days=days-1)
-    
-    query = db.session.query(
-        DailyRecord.record_date,
-        func.sum(DailyRecord.total_sales).label('sales'),
-        func.sum(DailyRecord.total_expenses).label('expenses')
-    ).filter(
-        DailyRecord.record_date.between(start_date, end_date)
-    )
-    
-    # NUEVO: Aplicar filtro por sucursal si se especifica
-    if branch_filter:
-        from app.routes.daily_records import normalize_branch_name
-        normalized_filter = normalize_branch_name(branch_filter)
-        
-        all_branches = db.session.query(DailyRecord.branch_name).distinct().all()
-        matching_branches = []
-        
-        for (db_branch_name,) in all_branches:
-            if db_branch_name and normalize_branch_name(db_branch_name) == normalized_filter:
-                matching_branches.append(db_branch_name)
-        
-        if matching_branches:
-            query = query.filter(DailyRecord.branch_name.in_(matching_branches))
-    
-    daily_data = query.group_by(DailyRecord.record_date).order_by(DailyRecord.record_date).all()
-    
-    return [
-        {
-            'date': data.record_date.isoformat(),
-            'sales': float(data.sales or 0),
-            'expenses': float(data.expenses or 0),
-            'net': float(data.sales or 0) - float(data.expenses or 0)
-        }
-        for data in daily_data
-    ]
-
-
-def get_payment_distribution(start_date, end_date, branch_filter=None):
-    """
-    Obtener distribución de métodos de pago.
-    MEJORADO: Con filtro opcional por sucursal.
-    """
-    query = db.session.query(
-        func.sum(DailyRecord.cash_sales).label('cash'),
-        func.sum(DailyRecord.mercadopago_sales).label('mercadopago'),
-        func.sum(DailyRecord.debit_sales).label('debit'),
-        func.sum(DailyRecord.credit_sales).label('credit')
-    ).filter(
-        DailyRecord.record_date.between(start_date, end_date)
-    )
-    
-    # NUEVO: Aplicar filtro por sucursal si se especifica
-    if branch_filter:
-        from app.routes.daily_records import normalize_branch_name
-        normalized_filter = normalize_branch_name(branch_filter)
-        
-        all_branches = db.session.query(DailyRecord.branch_name).distinct().all()
-        matching_branches = []
-        
-        for (db_branch_name,) in all_branches:
-            if db_branch_name and normalize_branch_name(db_branch_name) == normalized_filter:
-                matching_branches.append(db_branch_name)
-        
-        if matching_branches:
-            query = query.filter(DailyRecord.branch_name.in_(matching_branches))
-    
-    result = query.first()
-    
-    return {
-        'cash': float(result.cash or 0),
-        'mercadopago': float(result.mercadopago or 0),
-        'debit': float(result.debit or 0),
-        'credit': float(result.credit or 0)
-    }
 
 
 def get_branch_detailed_stats(branch_name, start_date, end_date):
@@ -860,162 +1038,4 @@ def get_comprehensive_comparison(start_date, end_date):
     """
     Obtener comparativa completa entre todas las sucursales.
     """
-    return get_branch_statistics(start_date, end_date)
-
-@reports_bp.route('/api/branch-performance')
-@login_required
-def api_branch_performance():
-    """
-    API para datos de rendimiento por sucursal con soporte para períodos.
-    MEJORADO: Con soporte para filtro por sucursal específica.
-    """
-    try:
-        if not current_user.is_admin_user():
-            return jsonify({
-                'status': 'error',
-                'message': 'Acceso denegado',
-                'data': {
-                    'branches': [],
-                    'sales': [],
-                    'expenses': [],
-                    'net_profits': [],
-                    'avg_sales': []
-                }
-            }), 403
-        
-        # Obtener parámetros
-        period = request.args.get('period', 'month')
-        custom_start = request.args.get('start_date')
-        custom_end = request.args.get('end_date')
-        branch_filter = request.args.get('branch_filter')  # NUEVO: Filtro por sucursal
-        
-        print(f"🔍 API branch-performance llamada con: period={period}, branch_filter='{branch_filter}'")
-        
-        # Calcular fechas según el período
-        start_date, end_date = get_period_dates(period, custom_start, custom_end)
-        
-        print(f"📅 Fechas calculadas: {start_date} - {end_date}")
-        
-        # Query base
-        query = db.session.query(
-            DailyRecord.branch_name,
-            func.sum(DailyRecord.total_sales).label('total_sales'),
-            func.sum(DailyRecord.total_expenses).label('total_expenses'),
-            func.count(DailyRecord.id).label('records_count'),
-            func.avg(DailyRecord.total_sales).label('avg_sales')
-        ).filter(
-            DailyRecord.record_date.between(start_date, end_date)
-        )
-        
-        # NUEVO: Aplicar filtro por sucursal si se especifica
-        if branch_filter:
-            from app.routes.daily_records import normalize_branch_name
-            normalized_filter = normalize_branch_name(branch_filter)
-            
-            all_branches = db.session.query(DailyRecord.branch_name).distinct().all()
-            matching_branches = []
-            
-            for (db_branch_name,) in all_branches:
-                if db_branch_name and normalize_branch_name(db_branch_name) == normalized_filter:
-                    matching_branches.append(db_branch_name)
-            
-            if matching_branches:
-                query = query.filter(DailyRecord.branch_name.in_(matching_branches))
-                print(f"🏢 Filtrado por sucursales: {matching_branches}")
-        
-        # Obtener datos por sucursal
-        branch_data = query.group_by(DailyRecord.branch_name).all()
-        
-        print(f"📊 Encontrados {len(branch_data)} sucursales con datos")
-        
-        # Formatear datos
-        branches = []
-        sales = []
-        expenses = []
-        net_profits = []
-        avg_sales = []
-        
-        for data in branch_data:
-            branches.append(data.branch_name)
-            sales.append(float(data.total_sales or 0))
-            expenses.append(float(data.total_expenses or 0))
-            net_profits.append(float(data.total_sales or 0) - float(data.total_expenses or 0))
-            avg_sales.append(float(data.avg_sales or 0))
-        
-        response_data = {
-            'status': 'success',
-            'data': {
-                'branches': branches,
-                'sales': sales,
-                'expenses': expenses,
-                'net_profits': net_profits,
-                'avg_sales': avg_sales,
-                'period': period,
-                'start_date': start_date.isoformat(),
-                'end_date': end_date.isoformat(),
-                'branch_filter': branch_filter  # NUEVO: Incluir filtro en respuesta
-            }
-        }
-        
-        print(f"✅ Enviando respuesta exitosa con {len(branches)} sucursales")
-        return jsonify(response_data)
-        
-    except Exception as e:
-        print(f"❌ Error en api_branch_performance: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        
-        return jsonify({
-            'status': 'error',
-            'message': f'Error interno: {str(e)}',
-            'data': {
-                'branches': [],
-                'sales': [],
-                'expenses': [],
-                'net_profits': [],
-                'avg_sales': [],
-                'period': request.args.get('period', 'month'),
-                'start_date': '',
-                'end_date': '',
-                'branch_filter': request.args.get('branch_filter')
-            }
-        }), 500
-
-# También agregar esta función auxiliar mejorada al final del archivo:
-
-def get_comprehensive_comparison(start_date, end_date):
-    """
-    Obtener comparativa completa entre todas las sucursales para un período específico.
-    """
-    # Obtener datos agrupados por sucursal
-    branch_stats = db.session.query(
-        DailyRecord.branch_name,
-        func.count(DailyRecord.id).label('records_count'),
-        func.sum(DailyRecord.total_sales).label('total_sales'),
-        func.sum(DailyRecord.total_expenses).label('total_expenses'),
-        func.avg(DailyRecord.total_sales).label('avg_sales'),
-        func.sum(DailyRecord.cash_sales).label('cash_sales'),
-        func.sum(DailyRecord.mercadopago_sales).label('mercadopago_sales'),
-        func.sum(DailyRecord.debit_sales).label('debit_sales'),
-        func.sum(DailyRecord.credit_sales).label('credit_sales')
-    ).filter(
-        DailyRecord.record_date.between(start_date, end_date)
-    ).group_by(DailyRecord.branch_name).all()
-    
-    result = {}
-    for stat in branch_stats:
-        result[stat.branch_name] = {
-            'records_count': stat.records_count,
-            'total_sales': float(stat.total_sales or 0),
-            'total_expenses': float(stat.total_expenses or 0),
-            'net_profit': float(stat.total_sales or 0) - float(stat.total_expenses or 0),
-            'avg_sales': float(stat.avg_sales or 0),
-            'payment_breakdown': {
-                'cash': float(stat.cash_sales or 0),
-                'mercadopago': float(stat.mercadopago_sales or 0),
-                'debit': float(stat.debit_sales or 0),
-                'credit': float(stat.credit_sales or 0)
-            }
-        }
-    
-    return result
+    return get_branch_statistics_fixed(start_date, end_date)
