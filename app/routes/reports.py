@@ -75,7 +75,12 @@ def normalize_branch_name_fixed(branch_name):
         'Itaembe mini': 'Itaembe Mini',
         'itaembe_mini': 'Itaembe Mini',
         'itaembemini': 'Itaembe Mini',
-        'ItaembeMini': 'Itaembe Mini'
+        'ItaembeMini': 'Itaembe Mini',
+
+        # Candelaria - todas las variaciones posibles
+        'garupa': 'Garupa',
+        'Garupa': 'Garupa',
+        'GARUPA': 'Garupa'
     }
     
     # 1. Buscar coincidencia exacta
