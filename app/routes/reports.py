@@ -164,7 +164,7 @@ def comparison():
 def api_daily_sales_chart():
     """
     API para datos del gráfico de ventas diarias.
-    CORREGIDO: Sin normalize_branch_name que no existe.
+    MEJORADO: Con soporte para filtro por sucursal.
     """
     if not current_user.is_admin_user():
         abort(403)
@@ -173,7 +173,7 @@ def api_daily_sales_chart():
     days = request.args.get('days', 30, type=int)
     start_date_param = request.args.get('start_date')
     end_date_param = request.args.get('end_date')
-    branch_filter = request.args.get('branch_filter')
+    branch_filter = request.args.get('branch_filter')  # NUEVO: Filtro por sucursal
     
     print(f"🔍 [API] daily-sales-chart - branch_filter: '{branch_filter}'")
     
@@ -195,10 +195,21 @@ def api_daily_sales_chart():
         DailyRecord.record_date.between(start_date, end_date)
     )
     
-    # ✅ CORRECCIÓN: Filtro directo sin normalización
+    # NUEVO: Aplicar filtro por sucursal si se especifica
     if branch_filter:
-        query = query.filter(DailyRecord.branch_name == branch_filter)
-        print(f"🏢 [API] Filtrado por sucursal: {branch_filter}")
+        from app.routes.daily_records import normalize_branch_name
+        normalized_filter = normalize_branch_name(branch_filter)
+        
+        all_branches = db.session.query(DailyRecord.branch_name).distinct().all()
+        matching_branches = []
+        
+        for (db_branch_name,) in all_branches:
+            if db_branch_name and normalize_branch_name(db_branch_name) == normalized_filter:
+                matching_branches.append(db_branch_name)
+        
+        if matching_branches:
+            query = query.filter(DailyRecord.branch_name.in_(matching_branches))
+            print(f"🏢 [API] Filtrado por sucursales: {matching_branches}")
     
     # Agrupar por fecha
     results = query.group_by(DailyRecord.record_date).order_by(DailyRecord.record_date).all()
@@ -257,13 +268,13 @@ def api_daily_sales_chart():
 def api_payment_distribution():
     """
     API para distribución de métodos de pago con filtros de fecha.
-    CORREGIDO: Sin normalize_branch_name que no existe.
+    MEJORADO: Con soporte para filtro por sucursal.
     """
     # Obtener parámetros
     days = request.args.get('days', 30, type=int)
     start_date_param = request.args.get('start_date')
     end_date_param = request.args.get('end_date')
-    branch_filter = request.args.get('branch_filter')
+    branch_filter = request.args.get('branch_filter')  # NUEVO: Filtro por sucursal
     
     print(f"🔍 [API] payment-distribution - branch_filter: '{branch_filter}'")
     
@@ -285,10 +296,21 @@ def api_payment_distribution():
         DailyRecord.record_date.between(start_date, end_date)
     )
     
-    # ✅ CORRECCIÓN: Filtro directo sin normalización
+    # NUEVO: Aplicar filtro por sucursal si se especifica
     if branch_filter:
-        query = query.filter(DailyRecord.branch_name == branch_filter)
-        print(f"🏢 [API] Filtrado por sucursal: {branch_filter}")
+        from app.routes.daily_records import normalize_branch_name
+        normalized_filter = normalize_branch_name(branch_filter)
+        
+        all_branches = db.session.query(DailyRecord.branch_name).distinct().all()
+        matching_branches = []
+        
+        for (db_branch_name,) in all_branches:
+            if db_branch_name and normalize_branch_name(db_branch_name) == normalized_filter:
+                matching_branches.append(db_branch_name)
+        
+        if matching_branches:
+            query = query.filter(DailyRecord.branch_name.in_(matching_branches))
+            print(f"🏢 [API] Filtrado por sucursales: {matching_branches}")
     elif not current_user.is_admin_user():
         # Si no es admin y no hay filtro, usar su sucursal
         query = query.filter(DailyRecord.user_id == current_user.id)
@@ -471,16 +493,31 @@ def get_period_dates(period, custom_start=None, custom_end=None):
 def get_general_statistics(start_date, end_date, branch_filter=None):
     """
     Obtener estadísticas generales del sistema.
-    CORREGIDO: Sin normalize_branch_name que no existe.
+    MEJORADO: Con filtro opcional por sucursal.
     """
     query = DailyRecord.query.filter(
         DailyRecord.record_date.between(start_date, end_date)
     )
     
-    # ✅ CORRECCIÓN: Filtro directo sin normalización
+    # NUEVO: Aplicar filtro por sucursal si se especifica
     if branch_filter:
-        query = query.filter(DailyRecord.branch_name == branch_filter)
-        print(f"📊 Aplicando filtro de sucursal en general_stats: {branch_filter}")
+        # Usar normalización para manejar variaciones de nombres
+        from app.routes.daily_records import normalize_branch_name
+        normalized_filter = normalize_branch_name(branch_filter)
+        
+        # Buscar todas las variaciones que coincidan
+        all_branches = db.session.query(DailyRecord.branch_name).distinct().all()
+        matching_branches = []
+        
+        for (db_branch_name,) in all_branches:
+            if db_branch_name and normalize_branch_name(db_branch_name) == normalized_filter:
+                matching_branches.append(db_branch_name)
+        
+        if matching_branches:
+            query = query.filter(DailyRecord.branch_name.in_(matching_branches))
+        else:
+            # Si no hay coincidencias, retornar estadísticas vacías
+            return None
     
     records = query.all()
     
@@ -499,15 +536,15 @@ def get_general_statistics(start_date, end_date, branch_filter=None):
         'active_branches': len(set(r.branch_name for r in records)),
         'verified_records': len([r for r in records if r.is_verified]),
         'verification_rate': len([r for r in records if r.is_verified]) / len(records) * 100 if records else 0,
-        'is_filtered_by_branch': bool(branch_filter),
-        'filtered_branch': branch_filter
+        'is_filtered_by_branch': bool(branch_filter),  # NUEVO: Indicador de filtro
+        'filtered_branch': branch_filter  # NUEVO: Nombre de la sucursal filtrada
     }
 
 
 def get_branch_statistics(start_date, end_date, branch_filter=None):
     """
     Obtener estadísticas por sucursal.
-    CORREGIDO: Sin normalize_branch_name que no existe.
+    MEJORADO: Con filtro opcional por sucursal.
     """
     query = db.session.query(
         DailyRecord.branch_name,
@@ -523,10 +560,20 @@ def get_branch_statistics(start_date, end_date, branch_filter=None):
         DailyRecord.record_date.between(start_date, end_date)
     )
     
-    # ✅ CORRECCIÓN: Filtro directo sin normalización
+    # NUEVO: Aplicar filtro por sucursal si se especifica
     if branch_filter:
-        query = query.filter(DailyRecord.branch_name == branch_filter)
-        print(f"📊 Aplicando filtro de sucursal en branch_stats: {branch_filter}")
+        from app.routes.daily_records import normalize_branch_name
+        normalized_filter = normalize_branch_name(branch_filter)
+        
+        all_branches = db.session.query(DailyRecord.branch_name).distinct().all()
+        matching_branches = []
+        
+        for (db_branch_name,) in all_branches:
+            if db_branch_name and normalize_branch_name(db_branch_name) == normalized_filter:
+                matching_branches.append(db_branch_name)
+        
+        if matching_branches:
+            query = query.filter(DailyRecord.branch_name.in_(matching_branches))
     
     branch_stats = query.group_by(DailyRecord.branch_name).all()
     
@@ -552,7 +599,7 @@ def get_branch_statistics(start_date, end_date, branch_filter=None):
 def get_daily_trends(days, start_date=None, end_date=None, branch_filter=None):
     """
     Obtener tendencias diarias para gráficos con fechas específicas.
-    CORREGIDO: Sin normalize_branch_name que no existe.
+    MEJORADO: Con filtro opcional por sucursal.
     """
     if start_date is None or end_date is None:
         end_date = datetime.date.today()
@@ -566,10 +613,20 @@ def get_daily_trends(days, start_date=None, end_date=None, branch_filter=None):
         DailyRecord.record_date.between(start_date, end_date)
     )
     
-    # ✅ CORRECCIÓN: Filtro directo sin normalización
+    # NUEVO: Aplicar filtro por sucursal si se especifica
     if branch_filter:
-        query = query.filter(DailyRecord.branch_name == branch_filter)
-        print(f"📊 Aplicando filtro de sucursal en daily_trends: {branch_filter}")
+        from app.routes.daily_records import normalize_branch_name
+        normalized_filter = normalize_branch_name(branch_filter)
+        
+        all_branches = db.session.query(DailyRecord.branch_name).distinct().all()
+        matching_branches = []
+        
+        for (db_branch_name,) in all_branches:
+            if db_branch_name and normalize_branch_name(db_branch_name) == normalized_filter:
+                matching_branches.append(db_branch_name)
+        
+        if matching_branches:
+            query = query.filter(DailyRecord.branch_name.in_(matching_branches))
     
     daily_data = query.group_by(DailyRecord.record_date).order_by(DailyRecord.record_date).all()
     
@@ -587,7 +644,7 @@ def get_daily_trends(days, start_date=None, end_date=None, branch_filter=None):
 def get_payment_distribution(start_date, end_date, branch_filter=None):
     """
     Obtener distribución de métodos de pago.
-    CORREGIDO: Sin normalize_branch_name que no existe.
+    MEJORADO: Con filtro opcional por sucursal.
     """
     query = db.session.query(
         func.sum(DailyRecord.cash_sales).label('cash'),
@@ -598,10 +655,20 @@ def get_payment_distribution(start_date, end_date, branch_filter=None):
         DailyRecord.record_date.between(start_date, end_date)
     )
     
-    # ✅ CORRECCIÓN: Filtro directo sin normalización
+    # NUEVO: Aplicar filtro por sucursal si se especifica
     if branch_filter:
-        query = query.filter(DailyRecord.branch_name == branch_filter)
-        print(f"📊 Aplicando filtro de sucursal en payment_distribution: {branch_filter}")
+        from app.routes.daily_records import normalize_branch_name
+        normalized_filter = normalize_branch_name(branch_filter)
+        
+        all_branches = db.session.query(DailyRecord.branch_name).distinct().all()
+        matching_branches = []
+        
+        for (db_branch_name,) in all_branches:
+            if db_branch_name and normalize_branch_name(db_branch_name) == normalized_filter:
+                matching_branches.append(db_branch_name)
+        
+        if matching_branches:
+            query = query.filter(DailyRecord.branch_name.in_(matching_branches))
     
     result = query.first()
     
@@ -699,7 +766,7 @@ def get_comprehensive_comparison(start_date, end_date):
 def api_branch_performance():
     """
     API para datos de rendimiento por sucursal con soporte para períodos.
-    CORREGIDO: Sin normalize_branch_name que no existe.
+    MEJORADO: Con soporte para filtro por sucursal específica.
     """
     try:
         if not current_user.is_admin_user():
@@ -719,14 +786,16 @@ def api_branch_performance():
         period = request.args.get('period', 'month')
         custom_start = request.args.get('start_date')
         custom_end = request.args.get('end_date')
-        branch_filter = request.args.get('branch_filter')
+        branch_filter = request.args.get('branch_filter')  # NUEVO: Filtro por sucursal
         
-        print(f"🔍 API branch-performance - branch_filter: '{branch_filter}'")
+        print(f"🔍 API branch-performance llamada con: period={period}, branch_filter='{branch_filter}'")
         
         # Calcular fechas según el período
         start_date, end_date = get_period_dates(period, custom_start, custom_end)
         
-        # Query base para obtener datos por sucursal
+        print(f"📅 Fechas calculadas: {start_date} - {end_date}")
+        
+        # Query base
         query = db.session.query(
             DailyRecord.branch_name,
             func.sum(DailyRecord.total_sales).label('total_sales'),
@@ -737,14 +806,28 @@ def api_branch_performance():
             DailyRecord.record_date.between(start_date, end_date)
         )
         
-        # ✅ CORRECCIÓN: Filtro directo sin normalización
+        # NUEVO: Aplicar filtro por sucursal si se especifica
         if branch_filter:
-            query = query.filter(DailyRecord.branch_name == branch_filter)
-            print(f"🏢 Filtrado por sucursal: {branch_filter}")
+            from app.routes.daily_records import normalize_branch_name
+            normalized_filter = normalize_branch_name(branch_filter)
+            
+            all_branches = db.session.query(DailyRecord.branch_name).distinct().all()
+            matching_branches = []
+            
+            for (db_branch_name,) in all_branches:
+                if db_branch_name and normalize_branch_name(db_branch_name) == normalized_filter:
+                    matching_branches.append(db_branch_name)
+            
+            if matching_branches:
+                query = query.filter(DailyRecord.branch_name.in_(matching_branches))
+                print(f"🏢 Filtrado por sucursales: {matching_branches}")
         
+        # Obtener datos por sucursal
         branch_data = query.group_by(DailyRecord.branch_name).all()
         
-        # Formatear datos para gráficos
+        print(f"📊 Encontrados {len(branch_data)} sucursales con datos")
+        
+        # Formatear datos
         branches = []
         sales = []
         expenses = []
@@ -758,7 +841,7 @@ def api_branch_performance():
             net_profits.append(float(data.total_sales or 0) - float(data.total_expenses or 0))
             avg_sales.append(float(data.avg_sales or 0))
         
-        return jsonify({
+        response_data = {
             'status': 'success',
             'data': {
                 'branches': branches,
@@ -766,22 +849,34 @@ def api_branch_performance():
                 'expenses': expenses,
                 'net_profits': net_profits,
                 'avg_sales': avg_sales,
-                'branch_filter': branch_filter
+                'period': period,
+                'start_date': start_date.isoformat(),
+                'end_date': end_date.isoformat(),
+                'branch_filter': branch_filter  # NUEVO: Incluir filtro en respuesta
             }
-        })
+        }
+        
+        print(f"✅ Enviando respuesta exitosa con {len(branches)} sucursales")
+        return jsonify(response_data)
         
     except Exception as e:
-        print(f"❌ Error en API branch-performance: {str(e)}")
+        print(f"❌ Error en api_branch_performance: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
         return jsonify({
             'status': 'error',
-            'message': str(e),
+            'message': f'Error interno: {str(e)}',
             'data': {
                 'branches': [],
                 'sales': [],
                 'expenses': [],
                 'net_profits': [],
                 'avg_sales': [],
-                'branch_filter': branch_filter
+                'period': request.args.get('period', 'month'),
+                'start_date': '',
+                'end_date': '',
+                'branch_filter': request.args.get('branch_filter')
             }
         }), 500
 
