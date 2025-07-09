@@ -354,10 +354,8 @@
                                     <th>Ventas Totales</th>
                                     <th>Gastos Totales</th>
                                     <th>Ganancia Neta</th>
-                                    <th>Margen (%)</th>
                                     <th>Registros</th>
                                     <th>Promedio/Registro</th>
-                                    <th>Eficiencia</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -387,20 +385,10 @@
                                         </span>
                                     </td>
                                     <td>
-                                        <span class="fw-bold {{ 'text-success' if margin > 15 else 'text-warning' if margin > 5 else 'text-danger' }}">
-                                            {{ "{:,.1f}".format(margin).replace(".", ",") }}%
-                                        </span>
-                                    </td>
-                                    <td>
                                         <span class="badge bg-info">{{ data.records_count }}</span>
                                     </td>
                                     <td>
                                         ${{ "{:,.2f}".format(data.avg_sales).replace(",", "X").replace(".", ",").replace("X", ".") }}
-                                    </td>
-                                    <td>
-                                        <span class="fw-bold {{ 'text-success' if efficiency > 2 else 'text-warning' if efficiency > 1.5 else 'text-danger' }}">
-                                            {{ "{:,.1f}".format(efficiency).replace(".", ",") }}x
-                                        </span>
                                     </td>
                                 </tr>
                                 {% endfor %}
