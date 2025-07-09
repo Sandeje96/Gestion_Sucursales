@@ -232,7 +232,7 @@
     .cash-tray-card.total { border-left-color: #8b5cf6; }
 
     .tray-amount {
-        font-size: 2rem;
+        font-size: 1.5rem;
         font-weight: 700;
         margin-bottom: 0.5rem;
     }
@@ -435,25 +435,6 @@
                 </div>
             </div>
         </div>
-        
-        {% if current_user.is_admin_user() %}
-        <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
-            <div class="card cash-tray-card bg-danger text-white">
-                <div class="card-body tt text-center">
-                    <div class="tray-icon bg-white bg-opacity-20 mx-auto">
-                        <i class="fas fa-broom text-white"></i>
-                    </div>
-                    <h6 class="card-title mb-3">Acciones</h6>
-                    <button class="btn btn-light btn-sm w-100 mb-2" onclick="emptyAllTrays()">
-                        <i class="fas fa-trash me-1"></i>Vaciar Todo
-                    </button>
-                    <button class="btn btn-outline-light btn-sm w-100" onclick="recalculateTrays()">
-                        <i class="fas fa-sync me-1"></i>Recalcular
-                    </button>
-                </div>
-            </div>
-        </div>
-        {% endif %}
     </div>
     <!-- Bandejas por sucursal -->
     <div class="row mb-4">
