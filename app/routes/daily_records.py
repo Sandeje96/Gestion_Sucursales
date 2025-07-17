@@ -1113,14 +1113,20 @@ def get_accumulated_dashboard_data():
                 totals = {'cash': 0, 'mercadopago': 0, 'debit': 0, 'credit': 0, 'total': 0}
                 print(f"💰 [DEBUG] No hay registros disponibles")
             else:
+                # NUEVO: Calcular efectivo disponible (ventas - gastos)
+                total_cash_sales = sum(float(r.cash_sales or 0) for r in all_available_records)
+                total_cash_expenses = sum(float(r.total_expenses or 0) for r in all_available_records)
+                available_cash = total_cash_sales - total_cash_expenses
+                
                 totals = {
-                    'cash': sum(float(r.cash_sales or 0) for r in all_available_records),
+                    'cash': available_cash,  # CAMBIADO: Usar efectivo disponible
                     'mercadopago': sum(float(r.mercadopago_sales or 0) for r in all_available_records),
                     'debit': sum(float(r.debit_sales or 0) for r in all_available_records),
                     'credit': sum(float(r.credit_sales or 0) for r in all_available_records),
                 }
                 totals['total'] = sum(totals.values())
                 print(f"💰 [DEBUG] Dinero total: ${totals['total']:,.2f}")
+                print(f"💸 [DEBUG] Efectivo disponible: ${available_cash:,.2f} (Ventas: ${total_cash_sales:,.2f} - Gastos: ${total_cash_expenses:,.2f})")
         except Exception as e:
             print(f"❌ [DEBUG] Error calculando totales: {e}")
             totals = {'cash': 0, 'mercadopago': 0, 'debit': 0, 'credit': 0, 'total': 0}
@@ -1191,7 +1197,7 @@ def get_accumulated_dashboard_data():
 # FUNCIÓN CORREGIDA: Procesar datos de sucursales simplificado
 def get_simple_branch_data(records):
     """
-    CORREGIDA: Función simplificada con normalización de nombres de sucursales.
+    ACTUALIZADA: Incluye cálculo de gastos en efectivo para efectivo disponible.
     """
     try:
         print(f"🔄 [DEBUG] Procesando {len(records)} registros para bandejas...")
@@ -1211,6 +1217,8 @@ def get_simple_branch_data(records):
                         'accumulated_mercadopago': 0,
                         'accumulated_debit': 0,
                         'accumulated_credit': 0,
+                        'accumulated_cash_expenses': 0,  # NUEVO: Gastos en efectivo
+                        'available_cash': 0,  # NUEVO: Efectivo disponible
                         'total_accumulated': 0,
                         'today_sales': 0,
                         'today_expenses': 0,
@@ -1223,6 +1231,8 @@ def get_simple_branch_data(records):
                     branches[normalized_branch]['accumulated_mercadopago'] += float(record.mercadopago_sales or 0)
                     branches[normalized_branch]['accumulated_debit'] += float(record.debit_sales or 0)
                     branches[normalized_branch]['accumulated_credit'] += float(record.credit_sales or 0)
+                    # NUEVO: Acumular gastos en efectivo
+                    branches[normalized_branch]['accumulated_cash_expenses'] += float(record.total_expenses or 0)
                 
                 print(f"🔄 [DEBUG] Registro procesado: {original_branch} -> {normalized_branch}")
                 
@@ -1233,19 +1243,26 @@ def get_simple_branch_data(records):
         # Calcular totales
         for branch_data in branches.values():
             try:
+                # NUEVO: Calcular efectivo disponible (ventas - gastos)
+                branch_data['available_cash'] = branch_data['accumulated_cash'] - branch_data['accumulated_cash_expenses']
+                
+                # NUEVO: Total acumulado usa efectivo disponible en lugar de efectivo bruto
                 branch_data['total_accumulated'] = (
-                    branch_data['accumulated_cash'] +
+                    branch_data['available_cash'] +  # Efectivo disponible
                     branch_data['accumulated_mercadopago'] +
                     branch_data['accumulated_debit'] +
                     branch_data['accumulated_credit']
                 )
-                print(f"💰 [DEBUG] {branch_data['branch_name']}: ${branch_data['total_accumulated']:,.2f}")
+                
+                print(f"💰 [DEBUG] {branch_data['branch_name']}: Total ${branch_data['total_accumulated']:,.2f}")
+                print(f"💸 [DEBUG] {branch_data['branch_name']}: Efectivo disponible ${branch_data['available_cash']:,.2f}")
             except Exception as e:
                 print(f"❌ [DEBUG] Error calculando total para {branch_data['branch_name']}: {e}")
                 branch_data['total_accumulated'] = 0
+                branch_data['available_cash'] = 0
         
         result = list(branches.values())
-        print(f"✅ [DEBUG] {len(result)} bandejas procesadas y normalizadas")
+        print(f"✅ [DEBUG] {len(result)} bandejas procesadas con gastos incluidos")
         return result
         
     except Exception as e:
@@ -1524,7 +1541,7 @@ def get_available_branches():
 
 def update_trays_from_records():
     """
-    MEJORADA: Actualizar todas las bandejas basándose en los registros NO retirados.
+    ACTUALIZADA: Incluye gastos en efectivo en el cálculo de bandejas.
     """
     from app.models.cash_tray import CashTray
     
@@ -1557,15 +1574,21 @@ def update_trays_from_records():
             # Resetear y recalcular
             old_total = tray.get_total_accumulated()
             
+            # Calcular ventas
             tray.accumulated_cash = sum(float(r.cash_sales or 0) for r in records)
             tray.accumulated_mercadopago = sum(float(r.mercadopago_sales or 0) for r in records)
             tray.accumulated_debit = sum(float(r.debit_sales or 0) for r in records)
             tray.accumulated_credit = sum(float(r.credit_sales or 0) for r in records)
+            
+            # NUEVO: Calcular gastos en efectivo acumulados
+            tray.accumulated_cash_expenses = sum(float(r.total_expenses or 0) for r in records)
+            
             tray.last_updated = datetime.datetime.now()
             
             new_total = tray.get_total_accumulated()
             
             print(f"💰 [DEBUG] {branch_name}: ${old_total:.2f} -> ${new_total:.2f}")
+            print(f"💸 [DEBUG] {branch_name}: Gastos en efectivo: ${tray.accumulated_cash_expenses:.2f}")
         
         db.session.commit()
         print("✅ [DEBUG] Actualización de bandejas completada")

@@ -382,9 +382,14 @@
                     <div class="tray-icon efectivo mx-auto">
                         <i class="fas fa-money-bill-wave"></i>
                     </div>
-                    <h6 class="card-title text-muted mb-2">Efectivo</h6>
+                    <h6 class="card-title text-muted mb-2">Efectivo Disponible</h6>
                     <div class="tray-amount text-success" id="totalCashTray">$0,00</div>
-                    <small class="text-muted">En todas las sucursales</small>
+                    <small class="text-muted">Ventas - Gastos</small>
+                    <div class="mt-1">
+                        <small class="text-info" id="cashBreakdown" style="font-size: 0.8em;">
+                            <i class="fas fa-info-circle"></i> Ver desglose
+                        </small>
+                    </div>
                 </div>
             </div>
         </div>
@@ -848,6 +853,58 @@ window.debugFilterData = function() {
     console.log('Parámetros URL:', new URLSearchParams(window.location.search));
 };
 
+function updateCashBreakdown(data) {
+    const cashBreakdown = document.getElementById('cashBreakdown');
+    if (cashBreakdown && data && data.totals) {
+        // Calcular valores para el desglose
+        let totalCashSales = 0;
+        let totalCashExpenses = 0;
+        
+        if (data.branch_trays) {
+            data.branch_trays.forEach(tray => {
+                totalCashSales += tray.accumulated_cash || 0;
+                totalCashExpenses += tray.accumulated_cash_expenses || 0;
+            });
+        }
+        
+        const availableCash = totalCashSales - totalCashExpenses;
+        
+        // Actualizar tooltip
+        const formattedSales = formatCurrencyArgentino(totalCashSales);
+        const formattedExpenses = formatCurrencyArgentino(totalCashExpenses);
+        const formattedAvailable = formatCurrencyArgentino(availableCash);
+        
+        cashBreakdown.title = `Ventas en efectivo: $${formattedSales}\nGastos en efectivo: $${formattedExpenses}\nDisponible: $${formattedAvailable}`;
+        cashBreakdown.style.cursor = 'help';
+    }
+}
+
+// Modificar la función updateDashboardTotals existente
+function updateDashboardTotals(data) {
+    console.log('📊 Actualizando totales del dashboard...', data);
+    
+    if (!data || !data.totals) {
+        console.warn('⚠️ No hay datos de totales para mostrar');
+        return;
+    }
+    
+    try {
+        // Actualizar las tarjetas principales
+        updateElementText('totalCashTray', data.totals.cash);
+        updateElementText('totalMercadoPagoTray', data.totals.mercadopago);
+        updateElementText('totalDebitoTray', data.totals.debit);
+        updateElementText('totalCreditoTray', data.totals.credit);
+        updateElementText('totalGeneralTray', data.totals.total);
+        
+        // NUEVO: Actualizar desglose de efectivo
+        updateCashBreakdown(data);
+        
+        console.log('✅ Totales actualizados correctamente');
+    } catch (error) {
+        console.error('❌ Error actualizando totales:', error);
+    }
+}
+
 function validateFilterData(data) {
     const filterType = getFilterType();
     
@@ -927,11 +984,17 @@ function updateBranchTraysSection(branchTrays) {
                         
                         <hr class="my-3">
                         
-                        <!-- Total acumulado en efectivo -->
+                        <!-- Efectivo disponible (después de gastos) -->
                         <div class="text-center mb-3">
-                            <small class="text-muted">Total Acumulado en Efectivo:</small>
-                            <div class="h4 text-warning mb-0">
-                                $${formatCurrencyArgentino(tray.accumulated_cash)}
+                            <small class="text-muted">Efectivo Disponible:</small>
+                            <div class="h4 text-success mb-0">
+                                $${formatCurrencyArgentino(tray.available_cash || (tray.accumulated_cash - (tray.accumulated_cash_expenses || 0)))}
+                            </div>
+                            <div class="small text-muted mt-1">
+                                <span title="Ventas: $${formatCurrencyArgentino(tray.accumulated_cash || 0)} - Gastos: $${formatCurrencyArgentino(tray.accumulated_cash_expenses || 0)}">
+                                    <i class="fas fa-info-circle"></i> 
+                                    $${formatCurrencyArgentino(tray.accumulated_cash || 0)} - $${formatCurrencyArgentino(tray.accumulated_cash_expenses || 0)}
+                                </span>
                             </div>
                         </div>
                         
@@ -961,6 +1024,12 @@ function updateBranchTraysSection(branchTrays) {
                                     <i class="fas fa-hand-holding-usd me-2"></i>
                                     Vaciar Bandeja ($${formatCurrencyArgentino(tray.total_accumulated)})
                                 </button>
+                                ${(tray.accumulated_cash_expenses || 0) > 0 ? `
+                                    <div class="mt-2 small text-info">
+                                        <i class="fas fa-receipt me-1"></i>
+                                        Gastos descontados: $${formatCurrencyArgentino(tray.accumulated_cash_expenses || 0)}
+                                    </div>
+                                ` : ''}
                             ` : `
                                 <div class="text-center text-muted">
                                     <i class="fas fa-check-circle me-1"></i>Bandeja vacía
