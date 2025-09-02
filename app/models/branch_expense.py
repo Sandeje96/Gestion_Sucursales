@@ -58,11 +58,35 @@ class BranchExpense(db.Model):
             raise ValueError('Descripción requerida para OTROS')
 
     def mark_paid(self, user_id):
+        """Marcar como pagado y actualizar bandeja si es usuario de sucursal."""
+        from app.models.user import User
+        from app.models.cash_tray import CashTray
+        
         self.is_paid = True
         self.paid_at = datetime.datetime.now()
         self.paid_by = user_id
+        
+        # Solo descontar del efectivo si es un usuario de sucursal quien lo pagó
+        if user_id:
+            user = User.query.get(user_id)
+            if user and user.is_branch_user() and user.branch_name == self.branch_name:
+                # Es usuario de sucursal pagando un gasto de su propia sucursal
+                tray = CashTray.get_or_create_for_branch(self.branch_name)
+                tray.add_expense_amount(float(self.amount or 0))
 
     def unmark_paid(self):
+        """Desmarcar como pagado y revertir efectivo si corresponde."""
+        from app.models.user import User
+        from app.models.cash_tray import CashTray
+        
+        # Verificar si hay que revertir el descuento de efectivo
+        if self.paid_by:
+            user = User.query.get(self.paid_by)
+            if user and user.is_branch_user() and user.branch_name == self.branch_name:
+                # Era usuario de sucursal, revertir descuento
+                tray = CashTray.get_or_create_for_branch(self.branch_name)
+                tray.subtract_expense_amount(float(self.amount or 0))
+        
         self.is_paid = False
         self.paid_at = None
         self.paid_by = None

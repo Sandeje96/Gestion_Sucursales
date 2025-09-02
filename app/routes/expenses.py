@@ -8,6 +8,7 @@ from app.forms.expense_forms import ExpenseForm
 import calendar
 from datetime import datetime, date
 import pytz
+from app.models.cash_tray import CashTray
 
 expenses_bp = Blueprint('expenses', __name__, url_prefix='/expenses')
 
@@ -47,12 +48,20 @@ def _months_for_year(year: int, today: date):
     last = today.month if year >= today.year else 12
     if year > today.year:
         last = today.month
-    return [{"value": m, "label": calendar.month_name[m]} for m in range(1, last + 1)]
+    return [{"value": m, "label": _month_name_spanish(m)} for m in range(1, last + 1)]
+
 
 def _all_branches():
-    """Lista de sucursales conocidas (de usuarios y de gastos)."""
-    users_branches = {u.branch_name for u in User.query.filter(User.branch_name.isnot(None)).all()}
+    """Lista de sucursales conocidas (solo de usuarios branch_user y de gastos)."""
+    # Solo usuarios con rol branch_user
+    users_branches = {u.branch_name for u in User.query.filter(
+        User.branch_name.isnot(None),
+        User.role == 'branch_user'
+    ).all()}
+    
+    # Sucursales que tienen gastos registrados
     expenses_branches = {b for (b,) in db.session.query(BranchExpense.branch_name).distinct().all()}
+    
     return sorted({b for b in (users_branches | expenses_branches) if b})
 
 
@@ -234,6 +243,15 @@ def save():
         params["branch"] = form.branch_name.data
     return redirect(url_for("expenses.index", **params))
 
+def _month_name_spanish(month_number):
+    """Devuelve el nombre del mes en español."""
+    months = {
+        1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril",
+        5: "Mayo", 6: "Junio", 7: "Julio", 8: "Agosto", 
+        9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+    }
+    return months.get(month_number, "")
+
 
 @expenses_bp.route("/toggle/<int:expense_id>", methods=["POST"])
 @login_required
@@ -246,15 +264,9 @@ def toggle_paid(expense_id: int):
 
     try:
         if row.is_paid:
-            if hasattr(row, "unmark_paid"):
-                row.unmark_paid()
-            else:
-                row.is_paid = False
+            row.unmark_paid()
         else:
-            if hasattr(row, "mark_paid"):
-                row.mark_paid(getattr(current_user, "id", None))
-            else:
-                row.is_paid = True
+            row.mark_paid(getattr(current_user, "id", None))
 
         db.session.commit()
         return jsonify({"status": "ok", "is_paid": row.is_paid})
