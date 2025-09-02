@@ -72,7 +72,9 @@ class BranchExpense(db.Model):
             if user and user.is_branch_user() and user.branch_name == self.branch_name:
                 # Es usuario de sucursal pagando un gasto de su propia sucursal
                 tray = CashTray.get_or_create_for_branch(self.branch_name)
-                tray.add_expense_amount(float(self.amount or 0))
+                # Convertir amount a float antes de pasarlo
+                amount_float = float(self.amount or 0)
+                tray.add_expense_amount(amount_float)
 
     def unmark_paid(self):
         """Desmarcar como pagado y revertir efectivo si corresponde."""
@@ -85,7 +87,9 @@ class BranchExpense(db.Model):
             if user and user.is_branch_user() and user.branch_name == self.branch_name:
                 # Era usuario de sucursal, revertir descuento
                 tray = CashTray.get_or_create_for_branch(self.branch_name)
-                tray.subtract_expense_amount(float(self.amount or 0))
+                # Convertir amount a float antes de pasarlo
+                amount_float = float(self.amount or 0)
+                tray.subtract_expense_amount(amount_float)
         
         self.is_paid = False
         self.paid_at = None

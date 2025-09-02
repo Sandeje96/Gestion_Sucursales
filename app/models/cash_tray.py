@@ -208,17 +208,24 @@ class CashTray(db.Model):
     def add_expense_amount(self, expense_amount=0):
         """Agregar monto de gastos en efectivo a la bandeja."""
         if expense_amount > 0:
+            from decimal import Decimal
             if self.accumulated_cash_expenses is None:
-                self.accumulated_cash_expenses = 0
-            self.accumulated_cash_expenses += float(expense_amount)
+                self.accumulated_cash_expenses = Decimal('0.00')
+            # Convertir a Decimal antes de sumar
+            self.accumulated_cash_expenses += Decimal(str(expense_amount))
             self.last_updated = datetime.datetime.now()
 
     def subtract_expense_amount(self, expense_amount=0):
         """Restar monto de gastos en efectivo de la bandeja (para reversiones)."""
         if expense_amount > 0:
+            from decimal import Decimal
             if self.accumulated_cash_expenses is None:
-                self.accumulated_cash_expenses = 0
-            self.accumulated_cash_expenses = max(0, self.accumulated_cash_expenses - float(expense_amount))
+                self.accumulated_cash_expenses = Decimal('0.00')
+            # Convertir a Decimal y usar max para evitar negativos
+            self.accumulated_cash_expenses = max(
+                Decimal('0.00'), 
+                self.accumulated_cash_expenses - Decimal(str(expense_amount))
+            )
             self.last_updated = datetime.datetime.now()
 
 
