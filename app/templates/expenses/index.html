@@ -1,0 +1,419 @@
+{# app/templates/expenses/index.html #}
+{% extends "layout/base.html" %}
+{% block title %}Gastos Mensuales{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ====== Paleta y helpers ====== */
+  :root{
+    --primary-600: var(--primary-color, #3445a1);
+    --primary-500: #4b5bd1;
+    --primary-100: #eef1ff;
+    --primary-050: #f6f7ff;
+    --success-100:#e9f8ef;
+    --danger-100:#fdecec;
+  }
+
+  .mb-0 {
+    margin-bottom: 0 !important;
+    color: dodgerblue;
+  }
+
+  .form-label {
+    font-weight: 600;
+    color: #36429f;
+    margin-bottom: 0.5rem;
+  }
+
+  .period-card { 
+    border-radius: 16px; 
+    border: 2px solid transparent; 
+    overflow: hidden;
+  }
+  .period-card.ok { border-color: #3445a122; background: #5351c011; }
+  .period-card.fail { border-color: #dc354522; background: #dc354511; }
+
+  /* Encabezado de card */
+  .card-header{
+    background: linear-gradient(180deg, var(--primary-100), var(--primary-050));
+    border-bottom: 1px solid #e9ecf6;
+  }
+  .card-header .badge{
+    font-weight: 600;
+    letter-spacing: .2px;
+  }
+
+  /* Tabla */
+  .table {
+    --bs-table-bg: #fff;
+    --bs-table-striped-bg: #fafbff;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  .table thead th{
+    background: linear-gradient(180deg, var(--primary-500), var(--primary-600));
+    color: #fff;
+    border: none !important;
+    font-weight: 600;
+    letter-spacing: .3px;
+    text-transform: uppercase;
+    font-size: .8rem;
+  }
+  .table thead th:first-child{
+    border-top-left-radius: 12px;
+  }
+  .table thead th:last-child{
+    border-top-right-radius: 12px;
+  }
+  .table tbody tr{
+    transition: background .15s ease, box-shadow .15s ease;
+  }
+  .table tbody tr:hover{
+    background: #f7f9ff;
+  }
+  .table td{
+    vertical-align: middle;
+  }
+
+  /* Badges y chips */
+  .badge-required { 
+    background: var(--primary-500);
+  }
+  .chip-muted{
+    display:inline-flex; 
+    align-items:center;
+    gap:.4rem;
+    padding:.15rem .5rem;
+    border-radius: 999px;
+    background:#eef2ff;
+    color:#334;
+    font-size:.75rem;
+  }
+
+  /* Inputs y botones */
+  .input-amount { max-width: 160px; text-align: right; }
+  .row-actions { white-space: nowrap; }
+
+  .btn-outline-primary {
+    border: 2px solid var(--primary-500);
+    color: var(--primary-500);
+    background: transparent;
+    display: inline-flex;
+    align-items:center;
+    justify-content: center;
+    gap:.35rem;
+  }
+  .btn-outline-primary:hover{
+    background: var(--primary-500);
+    color: #fff;
+  }
+
+  /* Bloques dentro de la primera celda (categoría + descripción) */
+  .cell-stack{
+    display:flex; 
+    flex-direction:column; 
+    gap:.35rem;
+  }
+  .desc-text{
+    color:#5b647a; 
+    font-size:.85rem;
+  }
+  .desc-input{
+    max-width: 420px;
+  }
+
+  /* Estado pagado/pending visual */
+  .state-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:.4rem;
+    padding:.25rem .5rem;
+    border-radius: 999px;
+    font-size:.8rem;
+    font-weight:600;
+  }
+  .state-paid{ background: var(--success-100); color:#137a3a; border:1px solid #bfe7cd; }
+  .state-unpaid{ background: var(--danger-100); color:#a5161f; border:1px solid #f7b7bb; }
+
+  /* Contenedor del filtro */
+  .filters-card{
+    border:1px solid #e9ecf6; 
+    border-radius: 12px; 
+    background:#fff;
+    padding: 1rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h3 class="mb-0"><i class="fas fa-file-invoice-dollar me-2"></i>Gastos Mensuales</h3>
+  </div>
+
+  <div class="filters-card mb-4">
+    <form method="get" class="row g-2 align-items-end">
+      {% if is_admin %}
+        <div class="col-md-4">
+          <label class="form-label">Sucursal</label>
+          <select class="form-select" name="branch" required>
+            <option value="" disabled {{ 'selected' if not branch }}>Seleccioná una sucursal</option>
+            {% for b in branches %}
+              <option value="{{ b }}" {{ 'selected' if branch == b else '' }}>{{ b }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      {% else %}
+        {# Usuario de sucursal: no elige, pero mandamos el dato por GET igual #}
+        <input type="hidden" name="branch" value="{{ current_user.branch_name }}">
+      {% endif %}
+
+      <div class="col-md-3">
+        <label class="form-label">Mes</label>
+        <select class="form-select" name="month">
+          {% for m in months %}
+            <option value="{{ m.value }}" {{ 'selected' if m.value == month else '' }}>{{ m.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-md-2">
+        <label class="form-label">Año</label>
+        <input type="number" class="form-control" name="year" min="2000" max="2100" value="{{ year }}" />
+      </div>
+
+      <div class="col-md-auto">
+        <button class="btn btn-primary"><i class="fas fa-filter me-1"></i>Ver</button>
+      </div>
+    </form>
+  </div>
+
+  {# Si el admin no eligió sucursal aún, mostramos aviso y salimos #}
+  {% if is_admin and not branch %}
+    <div class="alert alert-info">
+      Seleccioná una <strong>sucursal</strong> para ver o cargar gastos.
+    </div>
+  {% endif %}
+
+  {% for p in periods %}
+  <div class="card period-card mb-4 {{ 'ok' if p.is_complete else 'fail' }}">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div class="d-flex align-items-center gap-2">
+        <strong class="me-2">{{ p.branch_name }}</strong> — {{ p.month_label }} {{ year }}
+        <span class="badge {{ 'bg-success' if p.is_complete else 'bg-danger' }} ms-2">
+          {{ 'Completo' if p.is_complete else 'Pendiente' }}
+        </span>
+      </div>
+      <div class="text-muted">
+        Total mes: <strong>${{ '%.2f'|format(p.total_amount) }}</strong>
+      </div>
+    </div>
+
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table align-middle table-striped">
+          <thead>
+            <tr>
+              <th style="width: 360px">Categoría</th>
+              <th style="width: 320px">Monto / Estado</th>
+              <th style="width: 120px">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {# 1) Categorías fijas requeridas #}
+            {% for cat in p.required_categories %}
+              {% set row = ((p['items']|default([])) | selectattr('category','equalto',cat) | list) | first %}
+              <tr>
+                <td>
+                  <div class="cell-stack">
+                    <div>
+                      <span class="badge badge-required">{{ cat|title }}</span>
+                      {% if row and row.is_paid %}
+                        <span class="state-pill state-paid ms-2"><i class="fas fa-check-circle"></i> Pagado</span>
+                      {% elif row %}
+                        <span class="state-pill state-unpaid ms-2"><i class="fas fa-exclamation-circle"></i> Pendiente</span>
+                      {% endif %}
+                    </div>
+                    {# Para requeridas no hay descripción, así que mostramos un chip informativo #}
+                    <span class="chip-muted"><i class="fas fa-info-circle"></i> Gasto requerido</span>
+                  </div>
+                </td>
+                <td>
+                  <form method="post" action="{{ url_for('expenses.save') }}" class="d-flex align-items-center gap-2 flex-wrap">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="branch_name" value="{{ p.branch_name }}">
+                    <input type="hidden" name="year" value="{{ year }}">
+                    <input type="hidden" name="month" value="{{ p.month }}">
+                    <input type="hidden" name="category" value="{{ cat }}">
+                    <input type="hidden" name="description" value="">
+                    <input name="amount" class="form-control input-amount" type="number" step="0.01" min="0"
+                           value="{{ row.amount if row else '' }}"
+                           {% if not is_admin and p.branch_name != current_user.branch_name
+                                 and cat not in ['LUZ','AGUA','INTERNET']
+                                 and not (cat=='SERENO' and p.branch_name|lower=='tacuari') %}disabled{% endif %}/>
+                    <div class="form-check ms-1">
+                      <input class="form-check-input" type="checkbox" name="is_paid" value="y"
+                             {% if row and row.is_paid %}checked{% endif %}
+                             {% if not is_admin and p.branch_name != current_user.branch_name
+                                   and cat not in ['LUZ','AGUA','INTERNET']
+                                   and not (cat=='SERENO' and p.branch_name|lower=='tacuari') %}disabled{% endif %}/>
+                      <label class="form-check-label">Pagado</label>
+                    </div>
+                    <button class="btn btn-sm btn-outline-primary"
+                            {% if not is_admin and p.branch_name != current_user.branch_name
+                                  and cat not in ['LUZ','AGUA','INTERNET']
+                                  and not (cat=='SERENO' and p.branch_name|lower=='tacuari') %}disabled{% endif %}>
+                      <i class="fas fa-save"></i> Guardar
+                    </button>
+                  </form>
+                </td>
+                <td class="row-actions">
+                  {% if row %}
+                    <form method="post" action="{{ url_for('expenses.toggle_paid', expense_id=row.id) }}"
+                          onsubmit="return togglePaid(this, event)">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <button class="btn btn-sm {{ 'btn-success' if row.is_paid else 'btn-outline-secondary' }}">
+                        <i class="fas {{ 'fa-check' if row.is_paid else 'fa-circle' }}"></i>
+                      </button>
+                    </form>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+
+            {# 2) Filas OTROS existentes (descripción debajo de la categoría) #}
+            {% for row in p['items'] if row.category == 'OTROS' %}
+              <tr>
+                <td>
+                  <div class="cell-stack">
+                    <div>
+                      <span class="badge text-bg-secondary">OTROS</span>
+                      {% if row.is_paid %}
+                        <span class="state-pill state-paid ms-2"><i class="fas fa-check-circle"></i> Pagado</span>
+                      {% else %}
+                        <span class="state-pill state-unpaid ms-2"><i class="fas fa-exclamation-circle"></i> Pendiente</span>
+                      {% endif %}
+                    </div>
+                    {% if row.description %}
+                      <div class="desc-text"><i class="fas fa-align-left me-1"></i>{{ row.description }}</div>
+                    {% endif %}
+                  </div>
+                </td>
+                <td>
+                  <form method="post" action="{{ url_for('expenses.save') }}" class="d-flex align-items-center gap-2 flex-wrap">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="branch_name" value="{{ p.branch_name }}">
+                    <input type="hidden" name="year" value="{{ year }}">
+                    <input type="hidden" name="month" value="{{ p.month }}">
+                    <input type="hidden" name="category" value="OTROS">
+                    <input type="hidden" name="description" value="{{ row.description }}">
+                    <input name="amount" class="form-control input-amount" type="number" step="0.01" min="0"
+                           value="{{ row.amount }}"
+                           {% if not is_admin and p.branch_name != current_user.branch_name %}disabled{% endif %}/>
+                    <div class="form-check ms-1">
+                      <input class="form-check-input" type="checkbox" name="is_paid" value="y"
+                             {% if row.is_paid %}checked{% endif %}
+                             {% if not is_admin and p.branch_name != current_user.branch_name %}disabled{% endif %}/>
+                      <label class="form-check-label">Pagado</label>
+                    </div>
+                    <button class="btn btn-sm btn-outline-primary"
+                            {% if not is_admin and p.branch_name != current_user.branch_name %}disabled{% endif %}>
+                      <i class="fas fa-save"></i> Guardar
+                    </button>
+                  </form>
+                </td>
+                <td class="row-actions">
+                  <form method="post" action="{{ url_for('expenses.toggle_paid', expense_id=row.id) }}"
+                        onsubmit="return togglePaid(this, event)">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm {{ 'btn-success' if row.is_paid else 'btn-outline-secondary' }}">
+                      <i class="fas {{ 'fa-check' if row.is_paid else 'fa-circle' }}"></i>
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+
+            {# 3) Agregar NUEVO OTROS (inputs apilados en la primera celda) #}
+            <tr>
+              <td>
+                <div class="cell-stack">
+                  <span class="badge text-bg-secondary">OTROS</span>
+                  <form method="post" action="{{ url_for('expenses.save') }}" class="row g-2 align-items-center">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="branch_name" value="{{ p.branch_name }}">
+                    <input type="hidden" name="year" value="{{ year }}">
+                    <input type="hidden" name="month" value="{{ p.month }}">
+                    <input type="hidden" name="category" value="OTROS">
+
+                    <div class="col-12">
+                      <input class="form-control desc-input" name="description" placeholder="Descripción del gasto" required>
+                    </div>
+
+                    <div class="col-12 col-md-auto mt-1">
+                      <input class="form-control input-amount" name="amount" type="number" step="0.01" min="0" placeholder="0,00" required>
+                    </div>
+
+                    <div class="col-md-auto mt-1">
+                      <div class="form-check">
+                        <input type="checkbox" class="form-check-input" name="is_paid" value="y" id="paid_{{ p.branch_name }}_{{ p.month }}">
+                        <label class="form-check-label" for="paid_{{ p.branch_name }}_{{ p.month }}">Pagado</label>
+                      </div>
+                    </div>
+
+                    <div class="col-md-auto mt-1">
+                      <button class="btn btn-sm btn-primary">
+                        <i class="fas fa-plus"></i> Agregar
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </td>
+              <td></td>
+              <td></td>
+            </tr>
+
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function togglePaid(form, ev) {
+  ev.preventDefault();
+
+  // Tomamos el token del propio form (campo oculto)
+  const formData = new FormData(form);
+  const token = formData.get('csrf_token');
+
+  const res = await fetch(form.action, {
+    method: 'POST',
+    headers: {
+      'X-Requested-With': 'XMLHttpRequest',
+      // Pasar también el token por header ayuda a Flask-WTF en llamadas AJAX
+      'X-CSRFToken': token
+    },
+    body: formData,
+    credentials: 'same-origin' // asegura que se envíe la cookie de sesión
+  });
+
+  if (res.ok) {
+    location.reload();
+  } else {
+    let msg = 'No se pudo cambiar el estado.';
+    try {
+      const data = await res.json();
+      if (data && data.message) msg = data.message;
+    } catch(_) {}
+    alert(msg);
+  }
+}
+</script>
+{% endblock %}

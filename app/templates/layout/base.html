@@ -24,28 +24,10 @@
     <!-- Fix para dropdown z-index -->
     <style>
         /* Arreglar z-index del navbar y dropdown */
-        .navbar {
-            z-index: 1030 !important;
-            position: relative;
-        }
-        
-        .navbar .dropdown-menu {
-            z-index: 9999 !important;
-            position: absolute !important;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.15) !important;
-        }
-        
-        .navbar-nav .dropdown {
-            position: relative;
-        }
-        
-        /* Asegurar que el contenido principal no interfiera */
-        main {
-            position: relative;
-            z-index: 1;
-        }
-        
-        /* Mejorar el dropdown en móviles */
+        .navbar { z-index: 1030 !important; position: relative; }
+        .navbar .dropdown-menu { z-index: 9999 !important; position: absolute !important; box-shadow: 0 10px 25px rgba(0,0,0,0.15) !important; }
+        .navbar-nav .dropdown { position: relative; }
+        main { position: relative; z-index: 1; }
         @media (max-width: 991.98px) {
             .navbar-collapse {
                 background: rgba(13, 110, 253, 0.95);
@@ -82,8 +64,10 @@
                     <!-- Enlaces principales -->
                     <ul class="navbar-nav me-auto">
                         {% if current_user.is_authenticated %}
-                            <!-- Enlaces para usuarios autenticados -->
-                            {% if current_user.role == 'admin' %}
+                            {% set is_admin = (current_user.role == 'admin') %}
+                            {% set is_branch_user = (current_user.role == 'branch_user') %}
+
+                            {% if is_admin %}
                                 <li class="nav-item">
                                     <a class="nav-link" href="{{ url_for('main.admin_dashboard') }}">
                                         <i class="fas fa-tachometer-alt me-1"></i>Ventas de HOY
@@ -104,8 +88,17 @@
                                         <i class="fas fa-chart-bar me-1"></i>Comparación Sucursales
                                     </a>
                                 </li>
-                                
-                            {% else %}
+                            {% endif %}
+
+                            {% if is_admin or is_branch_user %}
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('expenses.index') }}">
+                                        <i class="fas fa-file-invoice-dollar me-1"></i>Gastos
+                                    </a>
+                                </li>
+                            {% endif %}
+
+                            {% if is_branch_user %}
                                 <li class="nav-item">
                                     <a class="nav-link" href="{{ url_for('main.branch_dashboard') }}">
                                         <i class="fas fa-building me-1"></i>Mi Sucursal
@@ -118,14 +111,12 @@
                     <!-- Enlaces de usuario -->
                     <ul class="navbar-nav">
                         {% if current_user.is_anonymous %}
-                            <!-- Enlaces para usuarios no autenticados -->
                             <li class="nav-item">
                                 <a class="nav-link" href="{{ url_for('auth.login') }}">
                                     <i class="fas fa-sign-in-alt me-1"></i>Iniciar Sesión
                                 </a>
                             </li>
                         {% else %}
-                            <!-- Menú desplegable para usuarios autenticados -->
                             <li class="nav-item dropdown position-relative">
                                 <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                     <i class="fas fa-user-circle me-1"></i>
@@ -192,7 +183,6 @@
 
         <!-- Contenido específico de cada página -->
         {% block content %}
-            <!-- Contenido por defecto si no se define en la página hija -->
             <div class="container my-5">
                 <div class="row justify-content-center">
                     <div class="col-md-8 text-center">
@@ -293,13 +283,10 @@
                 anchor.addEventListener('click', function (e) {
                     e.preventDefault();
                     const href = this.getAttribute('href');
-                    // Ignorar si es solo "#"
                     if (!href || href === '#') return;
                     const target = document.querySelector(href);
                     if (target) {
-                        target.scrollIntoView({
-                            behavior: 'smooth'
-                        });
+                        target.scrollIntoView({ behavior: 'smooth' });
                     }
                 });
             });
@@ -320,13 +307,11 @@
                 const dropdownMenu = dropdown.querySelector('.dropdown-menu');
                 
                 if (dropdownToggle && dropdownMenu) {
-                    dropdownToggle.addEventListener('click', function(e) {
-                        // Asegurar que el dropdown esté por encima de todo
+                    dropdownToggle.addEventListener('click', function() {
                         dropdownMenu.style.zIndex = '9999';
                         dropdown.style.zIndex = '9999';
                     });
                     
-                    // Cuando se cierre el dropdown, restaurar z-index
                     dropdown.addEventListener('hide.bs.dropdown', function() {
                         setTimeout(() => {
                             dropdownMenu.style.zIndex = '';
