@@ -2,8 +2,10 @@
 from app import db
 import datetime
 from sqlalchemy.orm import validates
+from sqlalchemy import event
 
 CATEGORIES = ('ALQUILER', 'SUELDO', 'LUZ', 'AGUA', 'INTERNET', 'SERENO', 'OTROS')
+
 
 class BranchExpense(db.Model):
     __tablename__ = 'branch_expenses'
@@ -25,12 +27,20 @@ class BranchExpense(db.Model):
     paid_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.datetime.now)
-    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.datetime.now, onupdate=datetime.datetime.now)
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.datetime.now,
+        onupdate=datetime.datetime.now
+    )
 
     __table_args__ = (
         # Para únicas: una fila por (sucursal, año, mes, categoría, descripción)
-        # Para categorías fijas usamos description='-' (ver @validates) así queda 1 solo registro por mes.
-        db.UniqueConstraint('branch_name', 'year', 'month', 'category', 'description', name='uq_branch_month_cat_desc'),
+        # Para categorías fijas usamos description='-' (ver ensure_fixed_desc) así queda 1 solo registro por mes.
+        db.UniqueConstraint(
+            'branch_name', 'year', 'month', 'category', 'description',
+            name='uq_branch_month_cat_desc'
+        ),
         db.CheckConstraint('month BETWEEN 1 AND 12', name='check_month_valid'),
         db.CheckConstraint('amount >= 0', name='check_amount_nonnegative'),
     )
@@ -40,9 +50,7 @@ class BranchExpense(db.Model):
         if key == 'category':
             if value not in CATEGORIES:
                 raise ValueError('Categoría inválida')
-        if key == 'description':
-            # Para categorías fijas, forzamos '-' para cumplir unicidad
-            pass
+        # La normalización de description para categorías fijas se hace en ensure_fixed_desc
         return value
 
     @validates('month')
@@ -52,80 +60,98 @@ class BranchExpense(db.Model):
         return int(value)
 
     def ensure_fixed_desc(self):
+        """
+        - Para categorías fijas (!= OTROS): si no hay descripción, forzamos '-'
+        - Para OTROS: la descripción es obligatoria y no puede ser vacía
+        """
         if self.category != 'OTROS' and not self.description:
             self.description = '-'
         if self.category == 'OTROS' and (self.description is None or not self.description.strip()):
             raise ValueError('Descripción requerida para OTROS')
 
-    def mark_paid(self, user_id):
-        """Marcar como pagado y crear registro diario del gasto para HOY."""
+    # -----------------------------
+    # Reglas de pago / gasto del día
+    # -----------------------------
+
+    def mark_paid_for_today(self, user_id):
+        """
+        Marcar como pagado y registrar el gasto como GASTO DEL DÍA (hoy) de la sucursal,
+        descontándolo del efectivo (bandeja) de esa sucursal.
+        """
+        from datetime import date
         from app.models.user import User
         from app.models.daily_record import DailyRecord
-        from datetime import date
-        
+        from app.models.cash_tray import CashTray
+
         self.is_paid = True
         self.paid_at = datetime.datetime.now()
         self.paid_by = user_id
-        
-        # Solo crear registro diario si es un usuario de sucursal quien lo pagó
+
+        amount_float = float(self.amount or 0)
+
+        # Solo crear registro diario y descontar efectivo si lo paga un usuario de sucursal de la misma sucursal
         if user_id:
             user = User.query.get(user_id)
-            if user and user.is_branch_user() and user.branch_name == self.branch_name:
-                # Crear/actualizar registro diario de HOY con este gasto
+            if user and getattr(user, 'is_branch_user', lambda: False)() and user.branch_name == self.branch_name:
                 today = date.today()
-                daily_record = DailyRecord.query.filter_by(
-                    branch_name=self.branch_name,
-                    record_date=today,
-                    user_id=user_id
-                ).first()
-                
-                amount_float = float(self.amount or 0)
-                
+
+                # Buscar/crear el registro diario por (sucursal, fecha) — NO filtrar por user_id
+                daily_record = DailyRecord.get_by_branch_and_date(self.branch_name, today)
+
                 if daily_record:
-                    # Sumar al gasto existente
                     current_expense = float(daily_record.total_expenses or 0)
                     daily_record.total_expenses = current_expense + amount_float
-                    # CORREGIDO: Solo llamar calculate_total_sales() que SÍ existe
-                    daily_record.calculate_total_sales()
                 else:
-                    # Crear nuevo registro diario solo con el gasto
                     daily_record = DailyRecord(
                         branch_name=self.branch_name,
                         record_date=today,
-                        user_id=user_id,
+                        user_id=user_id,  # quien lo crea
                         cash_sales=0,
                         mercadopago_sales=0,
                         debit_sales=0,
                         credit_sales=0,
                         total_expenses=amount_float
                     )
-                    # CORREGIDO: Solo llamar calculate_total_sales() que SÍ existe
-                    daily_record.calculate_total_sales()
-                    from app import db
                     db.session.add(daily_record)
-                
-                # Hacer commit parcial para asegurar que se guarda
-                from app import db
-                db.session.flush()
+
+                # Recalcular totales del registro diario (método existente)
+                daily_record.calculate_total_sales()
+
+                # Impactar la bandeja de efectivo inmediatamente (gasto en EFECTIVO)
+                tray = CashTray.get_or_create_for_branch(self.branch_name)
+                tray.add_expense_amount(amount_float)
+
+        # Persistir en la transacción actual (el commit lo hace la vista/controlador)
+        db.session.flush()
+
+    # Alias si alguna parte del código llama a mark_paid
+    def mark_paid(self, user_id):
+        return self.mark_paid_for_today(user_id)
 
     def unmark_paid(self):
-        """Desmarcar como pagado y revertir efectivo si corresponde."""
+        """
+        Desmarcar como pagado y revertir el descuento de efectivo (si correspondía a usuario de sucursal).
+        NOTA: No deducimos automáticamente del DailyRecord aquí porque puede requerir lógica de auditoría
+        (quién y cuándo eliminó). La bandeja sí se revierte para mantener disponibilidad correcta.
+        """
         from app.models.user import User
         from app.models.cash_tray import CashTray
-        
-        # Verificar si hay que revertir el descuento de efectivo
+
+        # Si lo había pagado un usuario de sucursal de la misma sucursal, revertimos el descuento en bandeja
         if self.paid_by:
             user = User.query.get(self.paid_by)
-            if user and user.is_branch_user() and user.branch_name == self.branch_name:
-                # Era usuario de sucursal, revertir descuento
+            if user and getattr(user, 'is_branch_user', lambda: False)() and user.branch_name == self.branch_name:
                 tray = CashTray.get_or_create_for_branch(self.branch_name)
-                # Convertir amount a float antes de pasarlo
-                amount_float = float(self.amount or 0)
-                tray.subtract_expense_amount(amount_float)
-        
+                tray.subtract_expense_amount(float(self.amount or 0))
+
         self.is_paid = False
         self.paid_at = None
         self.paid_by = None
+        db.session.flush()
+
+    # -----------------------------
+    # Utilidades / permisos
+    # -----------------------------
 
     @staticmethod
     def required_categories_for_branch(branch_name: str):
@@ -161,52 +187,8 @@ class BranchExpense(db.Model):
     def __repr__(self):
         return f'<BranchExpense {self.branch_name} {self.year}-{self.month:02d} {self.category} ${self.amount}>'
 
+
 # Hook simple para asegurar description en insert/update
-from sqlalchemy import event
-
-def mark_paid_for_today(self, user_id):
-    """Marcar como pagado para todo el mes, pero descontar solo hoy."""
-    from app.models.user import User
-    from app.models.daily_record import DailyRecord
-    from datetime import date
-    
-    self.is_paid = True
-    self.paid_at = datetime.datetime.now()
-    self.paid_by = user_id
-    
-    # Solo descontar del efectivo si es un usuario de sucursal quien lo pagó
-    if user_id:
-        user = User.query.get(user_id)
-        if user and user.is_branch_user() and user.branch_name == self.branch_name:
-            # Crear/actualizar registro diario de HOY con este gasto
-            today = date.today()
-            daily_record = DailyRecord.query.filter_by(
-                branch_name=self.branch_name,
-                record_date=today,
-                user_id=user_id
-            ).first()
-            
-            if daily_record:
-                # Sumar al gasto existente
-                current_expense = float(daily_record.total_expenses or 0)
-                daily_record.total_expenses = current_expense + float(self.amount or 0)
-                daily_record.recalculate_totals()
-            else:
-                # Crear nuevo registro diario solo con el gasto
-                daily_record = DailyRecord(
-                    branch_name=self.branch_name,
-                    record_date=today,
-                    user_id=user_id,
-                    cash_sales=0,
-                    mercadopago_sales=0,
-                    debit_sales=0,
-                    credit_sales=0,
-                    total_expenses=float(self.amount or 0)
-                )
-                daily_record.recalculate_totals()
-                from app import db
-                db.session.add(daily_record)
-
 @event.listens_for(BranchExpense, 'before_insert')
 @event.listens_for(BranchExpense, 'before_update')
 def _before_save(mapper, connection, target: BranchExpense):
