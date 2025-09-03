@@ -217,16 +217,16 @@ def save():
                 is_paid=is_paid,
                 created_by=getattr(current_user, "id", None)
             )
-            if is_paid and hasattr(row, "mark_paid"):
-                row.mark_paid(getattr(current_user, "id", None))
+            if is_paid and hasattr(row, "mark_paid_for_today"):
+                row.mark_paid_for_today(getattr(current_user, "id", None))
             db.session.add(row)
         else:
             row.amount = amount
             row.is_paid = is_paid
             # usar UTC para evitar problemas de TZ en DB
             row.updated_at = datetime.utcnow()
-            if is_paid and not getattr(row, "paid_at", None) and hasattr(row, "mark_paid"):
-                row.mark_paid(getattr(current_user, "id", None))
+            if is_paid and not getattr(row, "paid_at", None) and hasattr(row, "mark_paid_for_today"):
+                row.mark_paid_for_today(getattr(current_user, "id", None))
             if (not is_paid) and getattr(row, "paid_at", None) and hasattr(row, "unmark_paid"):
                 row.unmark_paid()
 
@@ -266,7 +266,7 @@ def toggle_paid(expense_id: int):
         if row.is_paid:
             row.unmark_paid()
         else:
-            row.mark_paid(getattr(current_user, "id", None))
+            row.mark_paid_for_today(getattr(current_user, "id", None))
 
         db.session.commit()
         return jsonify({"status": "ok", "is_paid": row.is_paid})

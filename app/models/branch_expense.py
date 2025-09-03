@@ -58,23 +58,55 @@ class BranchExpense(db.Model):
             raise ValueError('Descripción requerida para OTROS')
 
     def mark_paid(self, user_id):
-        """Marcar como pagado y actualizar bandeja si es usuario de sucursal."""
+        """Marcar como pagado y crear registro diario del gasto para HOY."""
         from app.models.user import User
-        from app.models.cash_tray import CashTray
+        from app.models.daily_record import DailyRecord
+        from datetime import date
         
         self.is_paid = True
         self.paid_at = datetime.datetime.now()
         self.paid_by = user_id
         
-        # Solo descontar del efectivo si es un usuario de sucursal quien lo pagó
+        # Solo crear registro diario si es un usuario de sucursal quien lo pagó
         if user_id:
             user = User.query.get(user_id)
             if user and user.is_branch_user() and user.branch_name == self.branch_name:
-                # Es usuario de sucursal pagando un gasto de su propia sucursal
-                tray = CashTray.get_or_create_for_branch(self.branch_name)
-                # Convertir amount a float antes de pasarlo
+                # Crear/actualizar registro diario de HOY con este gasto
+                today = date.today()
+                daily_record = DailyRecord.query.filter_by(
+                    branch_name=self.branch_name,
+                    record_date=today,
+                    user_id=user_id
+                ).first()
+                
                 amount_float = float(self.amount or 0)
-                tray.add_expense_amount(amount_float)
+                
+                if daily_record:
+                    # Sumar al gasto existente
+                    current_expense = float(daily_record.total_expenses or 0)
+                    daily_record.total_expenses = current_expense + amount_float
+                    # CORREGIDO: Solo llamar calculate_total_sales() que SÍ existe
+                    daily_record.calculate_total_sales()
+                else:
+                    # Crear nuevo registro diario solo con el gasto
+                    daily_record = DailyRecord(
+                        branch_name=self.branch_name,
+                        record_date=today,
+                        user_id=user_id,
+                        cash_sales=0,
+                        mercadopago_sales=0,
+                        debit_sales=0,
+                        credit_sales=0,
+                        total_expenses=amount_float
+                    )
+                    # CORREGIDO: Solo llamar calculate_total_sales() que SÍ existe
+                    daily_record.calculate_total_sales()
+                    from app import db
+                    db.session.add(daily_record)
+                
+                # Hacer commit parcial para asegurar que se guarda
+                from app import db
+                db.session.flush()
 
     def unmark_paid(self):
         """Desmarcar como pagado y revertir efectivo si corresponde."""
@@ -131,6 +163,49 @@ class BranchExpense(db.Model):
 
 # Hook simple para asegurar description en insert/update
 from sqlalchemy import event
+
+def mark_paid_for_today(self, user_id):
+    """Marcar como pagado para todo el mes, pero descontar solo hoy."""
+    from app.models.user import User
+    from app.models.daily_record import DailyRecord
+    from datetime import date
+    
+    self.is_paid = True
+    self.paid_at = datetime.datetime.now()
+    self.paid_by = user_id
+    
+    # Solo descontar del efectivo si es un usuario de sucursal quien lo pagó
+    if user_id:
+        user = User.query.get(user_id)
+        if user and user.is_branch_user() and user.branch_name == self.branch_name:
+            # Crear/actualizar registro diario de HOY con este gasto
+            today = date.today()
+            daily_record = DailyRecord.query.filter_by(
+                branch_name=self.branch_name,
+                record_date=today,
+                user_id=user_id
+            ).first()
+            
+            if daily_record:
+                # Sumar al gasto existente
+                current_expense = float(daily_record.total_expenses or 0)
+                daily_record.total_expenses = current_expense + float(self.amount or 0)
+                daily_record.recalculate_totals()
+            else:
+                # Crear nuevo registro diario solo con el gasto
+                daily_record = DailyRecord(
+                    branch_name=self.branch_name,
+                    record_date=today,
+                    user_id=user_id,
+                    cash_sales=0,
+                    mercadopago_sales=0,
+                    debit_sales=0,
+                    credit_sales=0,
+                    total_expenses=float(self.amount or 0)
+                )
+                daily_record.recalculate_totals()
+                from app import db
+                db.session.add(daily_record)
 
 @event.listens_for(BranchExpense, 'before_insert')
 @event.listens_for(BranchExpense, 'before_update')
