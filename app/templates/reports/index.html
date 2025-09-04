@@ -704,6 +704,79 @@ function initializePaymentMethodsChart() {
     }
 }
 
+// Función que se ejecuta cuando se cambia el período en el filtro
+function handlePeriodChange() {
+    const periodSelect = document.querySelector('select[name="period"]');
+    if (!periodSelect) return;
+    
+    const customStart = document.getElementById('customStart');
+    const customEnd = document.getElementById('customEnd');
+    
+    if (periodSelect.value === 'custom') {
+        customStart.style.display = 'block';
+        customEnd.style.display = 'block';
+    } else {
+        customStart.style.display = 'none';
+        customEnd.style.display = 'none';
+    }
+}
+
+// Función para envío inteligente de filtros con actualización de gráficos
+function showLoadingAndSubmitReports() {
+    // Mostrar loading
+    if (typeof showToast === 'function') {
+        showToast('Actualizando reportes...', 'info');
+    }
+    
+    // Enviar formulario para actualizar la página
+    const form = document.querySelector('form');
+    if (form) {
+        form.submit();
+    }
+}
+
+// Inicialización cuando se carga la página
+document.addEventListener('DOMContentLoaded', function() {
+    // Actualizar estado de botones al cargar
+    setTimeout(() => {
+        updateButtonStates();
+    }, 100);
+    
+    // Configurar event listener para cambio de período
+    const periodSelect = document.querySelector('select[name="period"]');
+    if (periodSelect) {
+        periodSelect.addEventListener('change', handlePeriodChange);
+    }
+    
+    // Configurar auto-submit para filtro de sucursal
+    const branchSelect = document.querySelector('select[name="branch_filter"]');
+    if (branchSelect) {
+        branchSelect.addEventListener('change', function() {
+            showLoadingAndSubmitReports();
+        });
+    }
+    
+    // Configurar auto-submit para fechas personalizadas (con debounce)
+    const startDateInput = document.querySelector('input[name="start_date"]');
+    const endDateInput = document.querySelector('input[name="end_date"]');
+    
+    if (startDateInput && endDateInput) {
+        let timeout;
+        
+        function handleDateChange() {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => {
+                if (startDateInput.value && endDateInput.value) {
+                    showLoadingAndSubmitReports();
+                }
+            }, 500); // Esperar 500ms después del último cambio
+        }
+        
+        startDateInput.addEventListener('change', handleDateChange);
+        endDateInput.addEventListener('change', handleDateChange);
+    }
+});
+
 function initializeBranchPerformanceChart() {
     try {
         const canvas = document.getElementById('branchPerformanceChart');
@@ -776,7 +849,21 @@ async function loadDashboardData() {
         const promises = [];
         
         if (salesTrendChart) {
-            promises.push(updateSalesChart(30));
+            // NUEVA LÓGICA: Determinar qué datos cargar inicialmente
+            const urlParams = new URLSearchParams(window.location.search);
+            const startDate = urlParams.get('start_date');
+            const endDate = urlParams.get('end_date');
+            const currentPeriod = urlParams.get('period') || 'month';
+            
+            if (startDate && endDate && currentPeriod === 'custom') {
+                // Si hay rango personalizado, usarlo
+                promises.push(updateSalesChart(null)); // null indica usar rango personalizado
+                console.log('🎯 Cargando gráfico con rango personalizado');
+            } else {
+                // Si no hay rango personalizado, usar 30 días por defecto
+                promises.push(updateSalesChart(30));
+                console.log('🎯 Cargando gráfico con 30 días por defecto');
+            }
         }
         
         if (paymentMethodsChart) {
@@ -815,18 +902,36 @@ async function updateSalesChart(days, targetElement = null) {
         const currentPeriod = urlParams.get('period') || 'month';
         const startDate = urlParams.get('start_date');
         const endDate = urlParams.get('end_date');
-        const branchFilter = urlParams.get('branch_filter');  // NUEVO: Obtener filtro de sucursal
+        const branchFilter = urlParams.get('branch_filter');
         
-        // Construir URL de la API con los filtros
-        let apiUrl = `{{ url_for('reports.api_daily_sales_chart') }}?days=${days}`;
+        // NUEVA LÓGICA: Determinar si usar rango personalizado o botones
+        let apiUrl;
+        let chartTitle = 'Tendencia de Ventas';
         
-        if (startDate && endDate) {
-            apiUrl += `&start_date=${startDate}&end_date=${endDate}`;
+        if (startDate && endDate && currentPeriod === 'custom') {
+            // CASO 1: Hay rango personalizado - ignorar parámetro days y usar el rango completo
+            apiUrl = `{{ url_for('reports.api_daily_sales_chart') }}?start_date=${startDate}&end_date=${endDate}`;
+            
+            // Calcular días en el rango para el título
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+            chartTitle = `Tendencia de Ventas (${daysDiff} días - ${formatDate(start)} a ${formatDate(end)})`;
+            
+            console.log('📊 Usando rango personalizado:', startDate, 'a', endDate, `(${daysDiff} días)`);
+            
+        } else {
+            // CASO 2: No hay rango personalizado - usar botones (comportamiento original)
+            apiUrl = `{{ url_for('reports.api_daily_sales_chart') }}?days=${days}`;
+            chartTitle = `Tendencia de Ventas (Últimos ${days} días)`;
+            
+            console.log('📊 Usando botón de días:', days);
         }
         
-        // NUEVO: Agregar filtro de sucursal si existe
+        // Agregar filtro de sucursal si existe
         if (branchFilter) {
             apiUrl += `&branch_filter=${encodeURIComponent(branchFilter)}`;
+            chartTitle += ` - ${branchFilter}`;
         }
         
         console.log('📡 Llamando a API de ventas:', apiUrl);
@@ -838,16 +943,16 @@ async function updateSalesChart(days, targetElement = null) {
             salesTrendChart.data = data.data;
             salesTrendChart.update();
             
-            // Actualizar título del gráfico si hay filtro de sucursal
-            updateChartTitles(branchFilter);
+            // Actualizar título del gráfico dinámicamente
+            updateSalesChartTitle(chartTitle);
             
-            // Actualizar botones activos SOLO si se proporciona targetElement
-            if (targetElement) {
+            // Actualizar botones activos SOLO si se proporciona targetElement (clicks de botones)
+            if (targetElement && (!startDate || !endDate || currentPeriod !== 'custom')) {
                 document.querySelectorAll('.btn-group .btn').forEach(btn => btn.classList.remove('active'));
                 targetElement.classList.add('active');
             }
             
-            console.log('✅ Gráfico de ventas actualizado con filtro:', branchFilter || 'Todas');
+            console.log('✅ Gráfico de ventas actualizado:', chartTitle);
         }
     } catch (error) {
         console.error('❌ Error actualizando gráfico de ventas:', error);
@@ -855,6 +960,21 @@ async function updateSalesChart(days, targetElement = null) {
             showToast('Error actualizando gráfico de ventas', 'error');
         }
     }
+}
+
+function updateSalesChartTitle(title) {
+    const salesChartTitle = document.querySelector('.card-header h6 .fa-chart-area').closest('h6');
+    if (salesChartTitle) {
+        salesChartTitle.innerHTML = `<i class="fas fa-chart-area me-2"></i>${title}`;
+    }
+}
+
+function formatDate(date) {
+    return date.toLocaleDateString('es-AR', { 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: 'numeric' 
+    });
 }
 
 async function loadPaymentMethodsData() {
@@ -997,16 +1117,8 @@ async function loadBranchPerformanceData() {
 }
 
 function updateChartTitles(branchFilter) {
-    // Actualizar título del gráfico de tendencia de ventas
-    const salesChartTitle = document.querySelector('.card-header h6 .fa-chart-area').closest('h6');
-    if (salesChartTitle) {
-        const baseTitle = 'Tendencia de Ventas (Últimos 30 días)';
-        if (branchFilter) {
-            salesChartTitle.innerHTML = `<i class="fas fa-chart-area me-2"></i>${baseTitle} - ${branchFilter}`;
-        } else {
-            salesChartTitle.innerHTML = `<i class="fas fa-chart-area me-2"></i>${baseTitle}`;
-        }
-    }
+    // Esta función ahora se mantiene para compatibilidad pero el título de ventas 
+    // se actualiza directamente en updateSalesChart para mayor precisión
     
     // Actualizar título del gráfico de métodos de pago
     const paymentChartTitle = document.querySelector('.card-header h6 .fa-credit-card').closest('h6');
