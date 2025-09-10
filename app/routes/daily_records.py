@@ -818,8 +818,7 @@ def empty_record(record_id):
                 cash=record.cash_sales or 0,
                 mercadopago=record.mercadopago_sales or 0,
                 debit=record.debit_sales or 0,
-                credit=record.credit_sales or 0,
-                cash_expenses=record.total_expenses or 0  # ✅ AGREGADO: Incluir gastos
+                credit=record.credit_sales or 0
             )
         
         db.session.commit()
