@@ -103,12 +103,19 @@ class CashTray(db.Model):
         self.accumulated_credit = float(self.accumulated_credit or 0) + float(credit)
         self.last_updated = datetime.datetime.now()
     
-    def subtract_amounts(self, cash=0, mercadopago=0, debit=0, credit=0):
-        """Restar montos de la bandeja (para cuando se modifica/elimina un registro)."""
+    def subtract_amounts(self, cash=0, mercadopago=0, debit=0, credit=0, cash_expenses=0):
+        """
+        Restar montos de la bandeja (para cuando se modifica/elimina un registro).
+        CORREGIDO: Ahora incluye gastos en efectivo.
+        """
         self.accumulated_cash = max(0, float(self.accumulated_cash or 0) - float(cash))
         self.accumulated_mercadopago = max(0, float(self.accumulated_mercadopago or 0) - float(mercadopago))
         self.accumulated_debit = max(0, float(self.accumulated_debit or 0) - float(debit))
         self.accumulated_credit = max(0, float(self.accumulated_credit or 0) - float(credit))
+        
+        # ✅ CORRECCIÓN: También restar gastos en efectivo
+        self.accumulated_cash_expenses = max(0, float(self.accumulated_cash_expenses or 0) - float(cash_expenses))
+        
         self.last_updated = datetime.datetime.now()
     
     def empty_tray(self):
@@ -284,10 +291,9 @@ def update_cash_trays_on_commit(session):
                 cash=obj.cash_sales or 0,
                 mercadopago=obj.mercadopago_sales or 0,
                 debit=obj.debit_sales or 0,
-                credit=obj.credit_sales or 0
+                credit=obj.credit_sales or 0,
+                cash_expenses=obj.total_expenses or 0  # ✅ CORRECCIÓN: Usar el parámetro nuevo
             )
-            # Restar gastos en efectivo
-            tray.subtract_expense_amount(obj.total_expenses or 0)
     
     if has_daily_record_changes:
         db.session.commit()
