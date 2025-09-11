@@ -112,7 +112,26 @@ class CashTray(db.Model):
         self.last_updated = datetime.datetime.now()
     
     def empty_tray(self):
-        """Vaciar completamente la bandeja."""
+        """
+        Vaciar completamente la bandeja.
+        CORREGIDO: También marca todos los registros NO retirados como retirados.
+        """
+        from app.models.daily_record import DailyRecord
+        
+        # 1. Marcar TODOS los registros NO retirados de esta sucursal como retirados
+        non_withdrawn_records = DailyRecord.query.filter_by(
+            branch_name=self.branch_name,
+            is_withdrawn=False
+        ).all()
+        
+        # Marcar cada registro como retirado
+        for record in non_withdrawn_records:
+            record.is_withdrawn = True
+            record.withdrawn_at = datetime.datetime.now()
+            # Si no hay usuario actual disponible, dejar withdrawn_by como None
+            # (esto puede pasar cuando se llama desde funciones automáticas)
+        
+        # 2. Vaciar los montos acumulados en la bandeja
         self.accumulated_cash = 0.00
         self.accumulated_mercadopago = 0.00
         self.accumulated_debit = 0.00

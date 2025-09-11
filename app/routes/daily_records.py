@@ -591,7 +591,7 @@ def empty_all_trays():
             if tray.get_total_accumulated() > 0:
                 total_emptied += tray.get_total_accumulated()
                 branches_emptied.append(tray.branch_name)
-                tray.empty_tray()
+                tray.empty_tray_with_user(current_user)
         
         db.session.commit()
         
@@ -729,7 +729,7 @@ def empty_branch_tray(branch_name):
             tray = CashTray.query.filter_by(branch_name=db_branch_name).first()
             if tray:
                 print(f"🔄 [DEBUG] Vaciando bandeja física: {db_branch_name}")
-                tray.empty_tray()
+                tray.empty_tray_with_user(current_user)  # ← CORREGIDO
         
         # Confirmar cambios
         db.session.commit()
