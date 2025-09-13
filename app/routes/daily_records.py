@@ -630,30 +630,24 @@ def empty_all_trays():
 def empty_branch_tray(branch_name):
     """
     Vaciar la bandeja de una sucursal específica.
-    CORREGIDO: Con normalización de nombres de sucursales.
+    CORREGIDO: Con normalización de nombres de sucursales y cálculo correcto del total.
     """
     # Log para debug
     print(f"🗑️ [DEBUG] Intentando vaciar bandeja de: '{branch_name}'")
     print(f"📧 Usuario actual: {current_user.username}, Admin: {current_user.is_admin_user()}")
     print(f"🏢 Sucursal del usuario: {current_user.branch_name}")
     
-    # CORRECCIÓN: Normalizar el nombre de la sucursal recibida
+    # Normalizar el nombre de la sucursal recibida
     normalized_branch_name = normalize_branch_name(branch_name)
     print(f"🏢 [DEBUG] Nombre normalizado: '{normalized_branch_name}'")
     
-    # Verificar permisos: admins pueden vaciar cualquier bandeja,
-    # usuarios de sucursal solo pueden vaciar la suya
+    # Verificar permisos
     user_branch_normalized = normalize_branch_name(current_user.branch_name) if current_user.branch_name else None
-    
     if not current_user.is_admin_user() and user_branch_normalized != normalized_branch_name:
         error_message = 'No tienes permisos para vaciar esa bandeja.'
         print(f"❌ [DEBUG] {error_message}")
-        
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return jsonify({
-                'status': 'error',
-                'message': error_message
-            }), 403
+            return jsonify({'status': 'error', 'message': error_message}), 403
         else:
             flash(error_message, 'error')
             return redirect(url_for('daily_records.index'))
@@ -661,75 +655,59 @@ def empty_branch_tray(branch_name):
     try:
         from app.models.cash_tray import CashTray
         
-        # CORRECCIÓN: Buscar registros que coincidan con el nombre normalizado
+        # Buscar sucursales coincidentes en BD (variaciones de nombre)
         all_branches = db.session.query(DailyRecord.branch_name).distinct().all()
-        matching_db_branches = []
-        
-        for (db_branch_name,) in all_branches:
-            if db_branch_name and normalize_branch_name(db_branch_name) == normalized_branch_name:
-                matching_db_branches.append(db_branch_name)
-        
+        matching_db_branches = [
+            db_branch_name for (db_branch_name,) in all_branches
+            if db_branch_name and normalize_branch_name(db_branch_name) == normalized_branch_name
+        ]
         print(f"🏢 [DEBUG] Sucursales coincidentes en BD: {matching_db_branches}")
         
         if not matching_db_branches:
             error_message = f'No se encontraron registros para la sucursal {normalized_branch_name}.'
             print(f"❌ [DEBUG] {error_message}")
-            
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return jsonify({
-                    'status': 'error',
-                    'message': error_message
-                }), 404
+                return jsonify({'status': 'error', 'message': error_message}), 404
             else:
                 flash(error_message, 'warning')
                 return redirect(url_for('daily_records.index'))
         
-        # CORRECCIÓN: Buscar registros NO retirados de todas las variaciones
+        # Buscar registros NO retirados
         records_to_withdraw = DailyRecord.query.filter(
             DailyRecord.branch_name.in_(matching_db_branches),
             DailyRecord.is_withdrawn == False
         ).all()
-        
         print(f"📊 [DEBUG] Registros NO retirados encontrados: {len(records_to_withdraw)}")
         
         if not records_to_withdraw:
             warning_message = f'La bandeja de {normalized_branch_name} ya está vacía.'
             print(f"⚠️ [DEBUG] {warning_message}")
-            
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return jsonify({
-                    'status': 'warning',
-                    'message': warning_message
-                })
+                return jsonify({'status': 'warning', 'message': warning_message})
             else:
                 flash(warning_message, 'warning')
                 return redirect(url_for('daily_records.index'))
         
-        # CORRECCIÓN: Calcular total antes de vaciar
-        total_emptied = 0
-        for record in records_to_withdraw:
-            total_emptied += (
-                float(record.cash_sales or 0) +
-                float(record.mercadopago_sales or 0) +
-                float(record.debit_sales or 0) +
-                float(record.credit_sales or 0)
-            )
+        # Calcular total a retirar usando las bandejas (ya descuentan gastos)
+        total_emptied = 0.0
+        for db_branch_name in matching_db_branches:
+            tray = CashTray.query.filter_by(branch_name=db_branch_name).first()
+            if tray:
+                total_emptied += float(tray.get_total_accumulated() or 0)
+        print(f"💰 [DEBUG] Total a vaciar (según bandejas): ${total_emptied:.2f}")
         
-        print(f"💰 [DEBUG] Total a vaciar: ${total_emptied:.2f}")
-        
-        # PASO CRÍTICO: Marcar registros como retirados
+        # Marcar registros como retirados
         print(f"🔄 [DEBUG] Marcando {len(records_to_withdraw)} registros como retirados...")
-        
         for record in records_to_withdraw:
             record.mark_as_withdrawn(current_user)
             print(f"✅ [DEBUG] Registro {record.id} del {record.record_date} ({record.branch_name}) marcado como retirado")
         
-        # CORRECCIÓN: Actualizar bandejas de todas las variaciones encontradas
+        # Vaciar bandejas físicas
         for db_branch_name in matching_db_branches:
             tray = CashTray.query.filter_by(branch_name=db_branch_name).first()
             if tray:
                 print(f"🔄 [DEBUG] Vaciando bandeja física: {db_branch_name}")
-                tray.empty_tray_with_user(current_user)  # ← CORREGIDO
+                tray.empty_tray()
         
         # Confirmar cambios
         db.session.commit()
@@ -756,18 +734,14 @@ def empty_branch_tray(branch_name):
         else:
             flash(success_message, 'success')
             return redirect(url_for('daily_records.index'))
-        
+    
     except Exception as e:
         db.session.rollback()
         error_message = f'Error vaciando la bandeja de {normalized_branch_name}: {str(e)}'
         print(f"❌ [DEBUG] {error_message}")
         print(f"🐛 [DEBUG] Traceback: {traceback.format_exc()}")
-        
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return jsonify({
-                'status': 'error',
-                'message': error_message
-            }), 500
+            return jsonify({'status': 'error', 'message': error_message}), 500
         else:
             flash(error_message, 'error')
             return redirect(url_for('daily_records.index'))
@@ -782,7 +756,7 @@ def empty_record(record_id):
     record = DailyRecord.query.get_or_404(record_id)
     
     # Verificar permisos
-    if not current_user.can_edit_record(record):
+    if not current_user.can_withdraw_record(record):
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({
                 'status': 'error',

@@ -7,7 +7,6 @@
 
 {% block extra_css %}
 <style>
-
     .row.mb-4.lm45 {
         display: flex;
         justify-content: center;
@@ -724,6 +723,19 @@
 
 {% block scripts %}
 <script>
+// ==========================================================
+// 🔐 CSRF helpers (token por header) — NECESARIO para evitar 400
+// ==========================================================
+const __CSRF_FALLBACK__ = "{{ csrf_token() }}";
+function getCsrfToken() {
+    // 1) Si la base incluye <meta name="csrf-token" content="..."> lo usamos
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    if (meta && meta.getAttribute('content')) return meta.getAttribute('content');
+    // 2) Fallback inyectado por Jinja
+    return __CSRF_FALLBACK__;
+}
+const CSRF_HEADER_NAME = 'X-CSRFToken'; // típico en Flask-WTF
+
 // Variables globales optimizadas
 let isLoading = false;
 let filterTimeout = null;
@@ -741,8 +753,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // ✅ EXTRAER FILTROS DE LA URL
     extractFiltersFromURL();
-    
-    
     
     // ✅ CARGAR DASHBOARD INICIAL
     loadIntegratedDashboard();
@@ -872,9 +882,9 @@ function updateCashBreakdown(data) {
         // Actualizar tooltip
         const formattedSales = formatCurrencyArgentino(totalCashSales);
         const formattedExpenses = formatCurrencyArgentino(totalCashExpenses);
-        const formattedAvailable = formatCurrencyArgentino(availableCash);
+        theFormattedAvailable = formatCurrencyArgentino(availableCash);
         
-        cashBreakdown.title = `Ventas en efectivo: $${formattedSales}\nGastos en efectivo: $${formattedExpenses}\nDisponible: $${formattedAvailable}`;
+        cashBreakdown.title = `Ventas en efectivo: $${formattedSales}\nGastos en efectivo: $${formattedExpenses}\nDisponible: $${theFormattedAvailable}`;
         cashBreakdown.style.cursor = 'help';
     }
 }
@@ -1152,7 +1162,6 @@ function setupIntegratedFilters() {
     }
 }
 
-
 function hasTableColumn(tableId, columnText) {
     const headers = document.querySelectorAll(`${tableId} th`);
     return Array.from(headers).some(th => th.textContent.trim().includes(columnText));
@@ -1192,7 +1201,6 @@ function applyIntegratedFilters() {
         loadIntegratedDashboard();
     }, 300); // Esperar 300ms antes de ejecutar
 }
-
 
 function setupFilterEventListeners() {
     // Event listeners para inputs de fecha
@@ -1468,13 +1476,16 @@ async function emptyBranchTray(branchName) {
     try {
         showDashboardLoading();
         
-        // 🔧 CORRECCIÓN: URL correcta con template Flask
-        const response = await fetch(`{{ url_for('daily_records.empty_branch_tray', branch_name='PLACEHOLDER') }}`.replace('PLACEHOLDER', encodeURIComponent(branchName)), {
+        // 🔒 Incluir CSRF y cookies de sesión
+        const response = await fetch(`/daily-records/empty-branch-tray/${encodeURIComponent(branchName)}`, {
             method: 'POST',
+            credentials: 'same-origin',
             headers: {
                 'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            }
+                'X-Requested-With': 'XMLHttpRequest',
+                [CSRF_HEADER_NAME]: getCsrfToken()
+            },
+            body: JSON.stringify({})
         });
         
         console.log(`📡 Respuesta vaciar bandeja: ${response.status}`);
@@ -1501,7 +1512,6 @@ async function emptyBranchTray(branchName) {
     }
 }
 
-
 async function emptyAllTrays() {
     console.log('🗑️ Intentando vaciar todas las bandejas');
     
@@ -1519,13 +1529,16 @@ async function emptyAllTrays() {
     try {
         showDashboardLoading();
         
-        // 🔧 CORREGIR LA URL - usar la ruta correcta del Blueprint
+        // 🔒 CSRF + cookies
         const response = await fetch('/daily-records/empty-all-trays', {
             method: 'POST',
+            credentials: 'same-origin',
             headers: {
                 'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            }
+                'X-Requested-With': 'XMLHttpRequest',
+                [CSRF_HEADER_NAME]: getCsrfToken()
+            },
+            body: JSON.stringify({})
         });
         
         console.log(`📡 Respuesta vaciar todas: ${response.status}`);
@@ -1559,10 +1572,13 @@ async function recalculateTrays() {
         
         const response = await fetch('/daily-records/recalculate-trays', {
             method: 'POST',
+            credentials: 'same-origin',
             headers: {
                 'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            }
+                'X-Requested-With': 'XMLHttpRequest',
+                [CSRF_HEADER_NAME]: getCsrfToken()
+            },
+            body: JSON.stringify({})
         });
         
         if (response.ok) {
@@ -1582,7 +1598,6 @@ async function recalculateTrays() {
 }
 
 // 🔧 FUNCIÓN DE DEBUG para probar los endpoints:
-
 window.testEmptyEndpoints = async function() {
     console.log('🧪 Probando endpoints de vaciar bandejas...');
     
@@ -1590,10 +1605,13 @@ window.testEmptyEndpoints = async function() {
     try {
         const response1 = await fetch('/daily-records/empty-all-trays', {
             method: 'POST',
+            credentials: 'same-origin',
             headers: {
                 'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            }
+                'X-Requested-With': 'XMLHttpRequest',
+                [CSRF_HEADER_NAME]: getCsrfToken()
+            },
+            body: JSON.stringify({})
         });
         console.log('✅ Endpoint empty-all-trays responde:', response1.status);
     } catch (error) {
@@ -1606,10 +1624,13 @@ window.testEmptyEndpoints = async function() {
         try {
             const response2 = await fetch(`/daily-records/empty-branch-tray/${encodeURIComponent(branchName)}`, {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
+                    'X-Requested-With': 'XMLHttpRequest',
+                    [CSRF_HEADER_NAME]: getCsrfToken()
+                },
+                body: JSON.stringify({})
             });
             console.log(`✅ Endpoint empty-branch-tray responde para ${branchName}:`, response2.status);
         } catch (error) {
@@ -1629,16 +1650,24 @@ async function emptyRecord(recordId, recordDate, branchName) {
     try {
         showDashboardLoading();
         
-        const response = await fetch(`{{ url_for('daily_records.empty_record', record_id=0) }}`.replace('0', recordId), {
+        // 🔒 CSRF + cookies
+        const response = await fetch(`/daily-records/empty-record/${recordId}`, {
             method: 'POST',
+            credentials: 'same-origin',
             headers: {
                 'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            }
+                'X-Requested-With': 'XMLHttpRequest',
+                [CSRF_HEADER_NAME]: getCsrfToken()
+            },
+            body: JSON.stringify({})
         });
+        
+        console.log(`📡 Respuesta empty-record: ${response.status}`);
         
         if (response.ok) {
             const result = await response.json();
+            console.log('📦 Resultado:', result);
+            
             showToast(`Registro del ${recordDate} retirado de la bandeja`, 'success');
             
             // ✅ ACTUALIZAR TODO EL DASHBOARD INMEDIATAMENTE
@@ -1646,11 +1675,12 @@ async function emptyRecord(recordId, recordDate, branchName) {
             
         } else {
             const errorData = await response.json().catch(() => ({}));
+            console.error('❌ Error response:', errorData);
             showToast(errorData.message || 'Error al retirar el registro', 'error');
         }
     } catch (error) {
-        console.error('Error:', error);
-        showToast('Error de conexión', 'error');
+        console.error('❌ Error retirando registro:', error);
+        showToast('Error de conexión al retirar el registro', 'error');
     } finally {
         hideDashboardLoading();
     }
@@ -1700,7 +1730,6 @@ function showDashboardLoading() {
         }
     }, 5000); // Reducido a 5 segundos
 }
-
 
 function hideDashboardLoading() {
     // ✅ LIMPIAR TIMEOUT
@@ -1752,28 +1781,6 @@ function formatCurrencyArgentino(amount) {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
     });
-}
-
-function showDashboardError(message) {
-    showToast(message || 'Error al cargar el dashboard', 'error');
-    
-    // ✅ MOSTRAR BOTÓN DE RETRY
-    const errorHtml = `
-        <div class="text-center py-4">
-            <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
-            <h5 class="text-danger">Error al cargar datos</h5>
-            <p class="text-muted">${message}</p>
-            <button class="btn btn-outline-primary" onclick="loadIntegratedDashboard()">
-                <i class="fas fa-redo me-1"></i> Reintentar
-            </button>
-        </div>
-    `;
-    
-    // Mostrar error en secciones principales
-    const mainContent = document.querySelector('.main-content');
-    if (mainContent) {
-        mainContent.innerHTML = errorHtml;
-    }
 }
 
 function showToast(message, type = 'info') {

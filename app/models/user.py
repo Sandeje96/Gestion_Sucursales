@@ -157,6 +157,14 @@ class User(UserMixin, db.Model):
             str: ID del usuario como string
         """
         return str(self.id)
+    def can_withdraw_record(self, daily_record):
+        # Admin puede todo
+        if self.is_admin_user():
+            return True
+        # Sucursal: puede retirar cualquiera de su sucursal
+        if self.is_branch_user():
+            return daily_record.branch_name == self.branch_name
+        return False
 
     def is_admin_user(self):
         """
