@@ -52,8 +52,9 @@
             <div class="container">
                 <!-- Logo y nombre de la aplicación -->
                 <a class="navbar-brand fw-bold" href="{{ url_for('main.index') }}">
-                    <i class="fas fa-store-alt me-2"></i>
-                    <span>MundoLimp</span>
+                    <img src="{{ url_for('static', filename='images/logo-mundolimp.png') }}" 
+                        alt="MundoLimp" 
+                        class="navbar-logo me-2">
                 </a>
 
                 <!-- Botón de toggle para móviles -->
