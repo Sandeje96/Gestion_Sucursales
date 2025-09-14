@@ -266,34 +266,7 @@
                         </div>
                     </div>
                 </div>
-                <!-- Gastos -->
-                <div class="form-section">
-                    <h6>
-                        <i class="fas fa-receipt me-2"></i>Gastos del Día
-                    </h6>
-                    <div class="row">
-                        <div class="col-md-6">
-                            {{ form.total_expenses.label(class="form-label") }}
-                            <div class="input-group">
-                                <span class="input-group-text">
-                                    <i class="fas fa-minus-circle text-danger"></i>
-                                </span>
-                                {{ form.total_expenses(class="form-control currency-input" + (' is-invalid' if form.total_expenses.errors else ''), type="text", **{'data-currency': 'true'}) }}
-                            </div>
-                            {% if form.total_expenses.errors %}
-                                <div class="invalid-feedback d-block">
-                                    {% for error in form.total_expenses.errors %}
-                                        {{ error }}
-                                    {% endfor %}
-                                </div>
-                            {% endif %}
-                            <div class="form-text">
-                                <i class="fas fa-info-circle me-1"></i>
-                                Incluye todos los gastos operativos del día
-                            </div>
-                        </div>
-                    </div>
-                </div>
+
                 <!-- Notas adicionales -->
                 <div class="form-section">
                     <h6>
