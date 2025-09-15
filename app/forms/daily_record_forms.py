@@ -15,16 +15,132 @@ from datetime import date, datetime
 def currency_to_decimal(value):
     """
     Convierte un string de moneda en formato argentino a float.
-    Ej: "1.234,56" -> 1234.56
+    MEJORADO: Manejo más robusto de diferentes formatos.
+    
+    Formatos soportados:
+    - "1.234,56" -> 1234.56
+    - "1234,56" -> 1234.56
+    - "1234.56" -> 1234.56
+    - "1,234.56" -> 1234.56 (formato US)
+    - "0,00" -> 0.0
+    - "" -> 0.0
+    - None -> 0.0
     """
     if value is None or value == "":
         return 0.0
+    
     try:
-        value = str(value)
-        value = value.replace('.', '').replace(',', '.')
-        return float(value)
-    except Exception:
+        # Convertir a string y limpiar espacios
+        value_str = str(value).strip()
+        
+        # Si está vacío después de limpiar
+        if not value_str:
+            return 0.0
+        
+        # Remover símbolos de moneda y espacios
+        value_str = value_str.replace('$', '').replace(' ', '')
+        
+        # Si contiene tanto punto como coma, determinar cuál es el separador decimal
+        if '.' in value_str and ',' in value_str:
+            # Si el punto está después de la coma, es formato argentino: 1.234,56
+            if value_str.rindex('.') < value_str.rindex(','):
+                value_str = value_str.replace('.', '').replace(',', '.')
+            # Si la coma está después del punto, es formato US: 1,234.56
+            else:
+                value_str = value_str.replace(',', '')
+        
+        # Si solo tiene coma, es separador decimal argentino
+        elif ',' in value_str and '.' not in value_str:
+            value_str = value_str.replace(',', '.')
+        
+        # Si solo tiene punto, ya está en formato correcto
+        # (o es separador de miles, pero sin coma asumimos decimal)
+        
+        # Convertir a float
+        result = float(value_str)
+        
+        # Validar que sea un número positivo o cero
+        if result < 0:
+            raise ValidationError("El valor no puede ser negativo.")
+        
+        return result
+        
+    except ValueError as e:
+        print(f"Error convirtiendo '{value}' a decimal: {e}")
+        raise ValidationError(f"Formato de moneda inválido: '{value}'. Use formato como 1.234,56 o 1234,56")
+    except Exception as e:
+        print(f"Error inesperado convirtiendo '{value}': {e}")
         raise ValidationError("Formato de moneda inválido.")
+
+
+# Agregar este método mejorado a la clase DailyRecordForm
+def validate(self, extra_validators=None):
+    """
+    Validación personalizada del formulario.
+    MEJORADO: Mejor manejo de errores y debug.
+    """
+    if not super().validate(extra_validators):
+        return False
+
+    validation_errors = []
+    
+    # Parsear los valores de los campos monetarios
+    try:
+        self.cash_sales_float = currency_to_decimal(self.cash_sales.data)
+        print(f"✅ cash_sales convertido: '{self.cash_sales.data}' -> {self.cash_sales_float}")
+    except ValidationError as e:
+        self.cash_sales.errors.append(str(e))
+        validation_errors.append(f"Ventas en efectivo: {str(e)}")
+    
+    try:
+        self.mercadopago_sales_float = currency_to_decimal(self.mercadopago_sales.data)
+        print(f"✅ mercadopago_sales convertido: '{self.mercadopago_sales.data}' -> {self.mercadopago_sales_float}")
+    except ValidationError as e:
+        self.mercadopago_sales.errors.append(str(e))
+        validation_errors.append(f"Ventas MercadoPago: {str(e)}")
+    
+    try:
+        self.debit_sales_float = currency_to_decimal(self.debit_sales.data)
+        print(f"✅ debit_sales convertido: '{self.debit_sales.data}' -> {self.debit_sales_float}")
+    except ValidationError as e:
+        self.debit_sales.errors.append(str(e))
+        validation_errors.append(f"Ventas con débito: {str(e)}")
+    
+    try:
+        self.credit_sales_float = currency_to_decimal(self.credit_sales.data)
+        print(f"✅ credit_sales convertido: '{self.credit_sales.data}' -> {self.credit_sales_float}")
+    except ValidationError as e:
+        self.credit_sales.errors.append(str(e))
+        validation_errors.append(f"Ventas con crédito: {str(e)}")
+    
+    try:
+        self.total_expenses_float = currency_to_decimal(self.total_expenses.data)
+        print(f"✅ total_expenses convertido: '{self.total_expenses.data}' -> {self.total_expenses_float}")
+    except ValidationError as e:
+        self.total_expenses.errors.append(str(e))
+        validation_errors.append(f"Gastos totales: {str(e)}")
+    
+    # Si hubo errores de conversión, mostrar resumen
+    if validation_errors:
+        print(f"❌ Errores de validación:")
+        for error in validation_errors:
+            print(f"   - {error}")
+        return False
+    
+    # Validación adicional: verificar que al menos uno de los valores sea mayor que 0
+    total_sales = (
+        self.cash_sales_float + 
+        self.mercadopago_sales_float + 
+        self.debit_sales_float + 
+        self.credit_sales_float
+    )
+    
+    if total_sales == 0 and self.total_expenses_float == 0:
+        self.cash_sales.errors.append("Debe ingresar al menos un valor mayor que cero.")
+        return False
+    
+    print(f"✅ Validación exitosa. Total ventas: {total_sales}, Gastos: {self.total_expenses_float}")
+    return True
 
 class DailyRecordForm(FlaskForm):
     """

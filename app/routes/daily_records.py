@@ -220,6 +220,7 @@ def index():
 def create():
     """
     Crear un nuevo registro diario.
+    CORREGIDO: Conversión adecuada de formato argentino.
     """
     form = DailyRecordForm()
 
@@ -249,16 +250,17 @@ def create():
             return redirect(url_for('daily_records.edit', id=existing_record.id))
         
         try:
-            # Crear nuevo registro
+            # CORRECCIÓN: Usar los valores float convertidos del formulario
+            # que ya fueron procesados en form.validate_on_submit()
             record = DailyRecord(
                 user_id=current_user.id,
                 branch_name=current_user.branch_name,
                 record_date=record_date,
-                cash_sales=form.cash_sales.data,
-                mercadopago_sales=form.mercadopago_sales.data,
-                debit_sales=form.debit_sales.data,
-                credit_sales=form.credit_sales.data,
-                total_expenses=form.total_expenses.data,
+                cash_sales=form.cash_sales_float,           # Usar valor convertido
+                mercadopago_sales=form.mercadopago_sales_float,  # Usar valor convertido
+                debit_sales=form.debit_sales_float,         # Usar valor convertido
+                credit_sales=form.credit_sales_float,       # Usar valor convertido
+                total_expenses=form.total_expenses_float,   # Usar valor convertido
                 notes=form.notes.data
             )
             
@@ -278,6 +280,14 @@ def create():
             
         except Exception as e:
             db.session.rollback()
+            # Agregar más información de debug en el error
+            print(f"ERROR DETALLADO: {str(e)}")
+            print(f"Valores del formulario:")
+            print(f"  - cash_sales_float: {getattr(form, 'cash_sales_float', 'NO DISPONIBLE')}")
+            print(f"  - mercadopago_sales_float: {getattr(form, 'mercadopago_sales_float', 'NO DISPONIBLE')}")
+            print(f"  - debit_sales_float: {getattr(form, 'debit_sales_float', 'NO DISPONIBLE')}")
+            print(f"  - credit_sales_float: {getattr(form, 'credit_sales_float', 'NO DISPONIBLE')}")
+            print(f"  - total_expenses_float: {getattr(form, 'total_expenses_float', 'NO DISPONIBLE')}")
             flash(f'Error al crear el registro: {str(e)}', 'error')
     
     return render_template(
@@ -292,6 +302,7 @@ def create():
 def edit(id):
     """
     Editar un registro diario existente.
+    CORREGIDO: Conversión adecuada de formato argentino.
     """
     record = DailyRecord.query.get_or_404(id)
     
@@ -301,15 +312,24 @@ def edit(id):
     
     form = DailyRecordForm(obj=record)
     
+    # En GET, formatear los valores para mostrar en formato argentino
+    if request.method == 'GET':
+        # Formatear los valores monetarios para el formulario
+        form.cash_sales.data = f"{float(record.cash_sales or 0):.2f}".replace('.', ',')
+        form.mercadopago_sales.data = f"{float(record.mercadopago_sales or 0):.2f}".replace('.', ',')
+        form.debit_sales.data = f"{float(record.debit_sales or 0):.2f}".replace('.', ',')
+        form.credit_sales.data = f"{float(record.credit_sales or 0):.2f}".replace('.', ',')
+        form.total_expenses.data = f"{float(record.total_expenses or 0):.2f}".replace('.', ',')
+    
     if form.validate_on_submit():
         try:
-            # Actualizar campos
+            # CORRECCIÓN: Usar los valores float convertidos del formulario
             record.record_date = form.record_date.data
-            record.cash_sales = form.cash_sales.data
-            record.mercadopago_sales = form.mercadopago_sales.data
-            record.debit_sales = form.debit_sales.data
-            record.credit_sales = form.credit_sales.data
-            record.total_expenses = form.total_expenses.data
+            record.cash_sales = form.cash_sales_float           # Usar valor convertido
+            record.mercadopago_sales = form.mercadopago_sales_float  # Usar valor convertido
+            record.debit_sales = form.debit_sales_float         # Usar valor convertido
+            record.credit_sales = form.credit_sales_float       # Usar valor convertido
+            record.total_expenses = form.total_expenses_float   # Usar valor convertido
             record.notes = form.notes.data
             
             # Recalcular total
@@ -336,6 +356,14 @@ def edit(id):
             
         except Exception as e:
             db.session.rollback()
+            # Agregar más información de debug en el error
+            print(f"ERROR DETALLADO al editar: {str(e)}")
+            print(f"Valores del formulario:")
+            print(f"  - cash_sales_float: {getattr(form, 'cash_sales_float', 'NO DISPONIBLE')}")
+            print(f"  - mercadopago_sales_float: {getattr(form, 'mercadopago_sales_float', 'NO DISPONIBLE')}")
+            print(f"  - debit_sales_float: {getattr(form, 'debit_sales_float', 'NO DISPONIBLE')}")
+            print(f"  - credit_sales_float: {getattr(form, 'credit_sales_float', 'NO DISPONIBLE')}")
+            print(f"  - total_expenses_float: {getattr(form, 'total_expenses_float', 'NO DISPONIBLE')}")
             flash(f'Error al actualizar el registro: {str(e)}', 'error')
     
     return render_template(
