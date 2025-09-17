@@ -263,8 +263,16 @@ def _month_name_spanish(month_number):
 @expenses_bp.post('/<int:expense_id>/mark-paid')
 @login_required
 def mark_paid(expense_id):
+    """
+    Marcar un gasto como pagado.
+    VERSIÓN MEJORADA: Requiere que exista el registro diario primero.
+    """
+    from app.models.daily_record import DailyRecord
+    from datetime import date
+    
     row = BranchExpense.query.get_or_404(expense_id)
 
+    # Verificar permisos
     if _is_admin():
         can = True
     elif _is_branch() and getattr(current_user, "branch_name", None) == row.branch_name:
@@ -278,6 +286,21 @@ def mark_paid(expense_id):
     if row.is_paid:
         return jsonify({"status": "error", "message": "El gasto ya está pagado."}), 400
 
+    # NUEVA VALIDACIÓN: Verificar si existe el registro diario de hoy
+    if _is_branch():  # Solo aplicar esta validación a usuarios de sucursal
+        today = date.today()
+        daily_record_exists = DailyRecord.query.filter_by(
+            branch_name=current_user.branch_name,
+            record_date=today
+        ).first()
+        
+        if not daily_record_exists:
+            return jsonify({
+                "status": "error", 
+                "message": "⚠️ Debes crear el registro diario de hoy antes de marcar gastos como pagados. Por favor, carga primero las ventas del día.",
+                "redirect": "/daily-records/create"  # Opcional: para redirigir
+            }), 400
+
     try:
         row.mark_paid_for_today(getattr(current_user, "id", None))
         db.session.commit()
@@ -290,12 +313,19 @@ def mark_paid(expense_id):
         db.session.rollback()
         return jsonify({"status": "error", "message": str(e)}), 400
 
-
 @expenses_bp.route("/toggle/<int:expense_id>", methods=["POST"])
 @login_required
 def toggle_paid(expense_id: int):
+    """
+    Toggle del estado pagado de un gasto.
+    VERSIÓN MEJORADA: Requiere que exista el registro diario primero.
+    """
+    from app.models.daily_record import DailyRecord
+    from datetime import date
+    
     row = BranchExpense.query.get_or_404(expense_id)
 
+    # Verificar permisos
     if _is_admin():
         can = True
     elif _is_branch() and getattr(current_user, "branch_name", None) == row.branch_name:
@@ -310,6 +340,21 @@ def toggle_paid(expense_id: int):
         if row.is_paid:
             return jsonify({"status": "error", "message": "El gasto ya está pagado y no se puede desmarcar."}), 400
         else:
+            # NUEVA VALIDACIÓN: Verificar si existe el registro diario de hoy
+            if _is_branch():  # Solo aplicar esta validación a usuarios de sucursal
+                today = date.today()
+                daily_record_exists = DailyRecord.query.filter_by(
+                    branch_name=current_user.branch_name,
+                    record_date=today
+                ).first()
+                
+                if not daily_record_exists:
+                    return jsonify({
+                        "status": "error", 
+                        "message": "⚠️ Debes crear el registro diario de hoy antes de marcar gastos como pagados. Por favor, carga primero las ventas del día.",
+                        "redirect": "/daily-records/create"
+                    }), 400
+            
             row.mark_paid_for_today(getattr(current_user, "id", None))
             db.session.commit()
             return jsonify({"status": "ok", "is_paid": True})

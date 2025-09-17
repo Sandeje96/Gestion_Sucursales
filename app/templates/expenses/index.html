@@ -79,6 +79,18 @@
     <h3 class="mb-0"><i class="fas fa-file-invoice-dollar me-2"></i>Gastos Mensuales</h3>
   </div>
 
+  <!-- NUEVO: Aviso para usuarios de sucursal -->
+  {% if not is_admin %}
+  <div class="alert alert-info alert-dismissible fade show mb-3" role="alert">
+    <i class="fas fa-info-circle me-2"></i>
+    <strong>Importante:</strong> Debes crear el registro de ventas del día antes de poder marcar gastos como pagados.
+    <a href="{{ url_for('daily_records.create') }}" class="btn btn-sm btn-primary ms-3">
+      <i class="fas fa-plus me-1"></i>Crear Registro del Día
+    </a>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endif %}
+
   <div class="filters-card mb-4">
     <form method="get" class="row g-2 align-items-end">
       {% if is_admin %}
@@ -314,6 +326,7 @@
 
 {% block scripts %}
 <script>
+// FUNCIÓN MEJORADA: Validación de registro diario antes de marcar como pagado
 async function markPaid(form, ev) {
   ev.preventDefault();
 
@@ -334,11 +347,21 @@ async function markPaid(form, ev) {
     const data = await res.json().catch(() => ({}));
 
     if (res.ok && data.status === 'ok') {
+      // Éxito: recargar la página
       location.reload();
     } else {
+      // Mostrar el mensaje de error
       alert(data.message || 'No se pudo marcar como pagado.');
+      
+      // Si el error es porque falta el registro diario, ofrecer redirigir
+      if (data.message && data.message.includes('registro diario')) {
+        if (confirm('¿Deseas ir a crear el registro diario ahora?')) {
+          window.location.href = data.redirect || '/daily-records/create';
+        }
+      }
     }
   } catch (err) {
+    console.error('Error:', err);
     alert('Error de red o servidor.');
   }
 }
