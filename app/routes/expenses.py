@@ -61,7 +61,7 @@ def index():
     Reglas:
     - Admin: debe elegir sucursal para ver/cargar.
     - Usuario de sucursal: sucursal forzada a current_user.branch_name.
-    - Puede ver todos los meses del año seleccionado.
+    - Muestra todos los 12 meses del año seleccionado (incluyendo meses pasados).
     - Un único periodo (branch + mes) cuando hay sucursal.
     - month_status colorea el desplegable (verde completo / rojo pendiente).
     """
@@ -71,18 +71,17 @@ def index():
     year_arg = request.args.get("year", type=int)
     year = year_arg if year_arg else today.year
 
-    # Si estamos en el año actual, mes mínimo es el actual
-    # Si es un año anterior, podemos ver todos los meses
+    # Permitir ver TODOS los meses del año seleccionado (incluyendo pasados)
     month_arg = request.args.get("month", type=int)
     
-    if year == today.year:
-        # Año actual: solo desde mes actual en adelante
-        month = month_arg if month_arg and month_arg >= today.month else today.month
-        months = _months_from_current_to_year_end(today)
+    # Siempre mostrar todos los 12 meses del año
+    months = [{"value": m, "label": _month_name_spanish(m)} for m in range(1, 13)]
+    
+    # Si no hay mes seleccionado, usar el mes actual si estamos en el año actual
+    if not month_arg:
+        month = today.month if year == today.year else 1
     else:
-        # Año diferente: todos los meses del año
-        month = month_arg if month_arg and 1 <= month_arg <= 12 else 1
-        months = [{"value": m, "label": _month_name_spanish(m)} for m in range(1, 13)]
+        month = month_arg
     
     # clamp por si pasaran valores inválidos
     if month > 12:
@@ -100,17 +99,10 @@ def index():
     # -------- Estado por mes (para colorear opciones) --------
     month_status = {}  # {mes:int -> 'ok'|'pending'}
     if branch:
-        # Si es año actual, solo desde mes actual en adelante
-        # Si es año anterior, todos los meses
-        if year == today.year:
-            all_items_year = (BranchExpense.query
-                              .filter_by(branch_name=branch, year=year)
-                              .filter(BranchExpense.month >= today.month)
-                              .all())
-        else:
-            all_items_year = (BranchExpense.query
-                              .filter_by(branch_name=branch, year=year)
-                              .all())
+        # Cargar TODOS los gastos del año seleccionado (sin filtrar por mes)
+        all_items_year = (BranchExpense.query
+                          .filter_by(branch_name=branch, year=year)
+                          .all())
         
         by_month = {}
         for it in all_items_year:
