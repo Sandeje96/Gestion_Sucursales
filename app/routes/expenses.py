@@ -61,21 +61,34 @@ def index():
     Reglas:
     - Admin: debe elegir sucursal para ver/cargar.
     - Usuario de sucursal: sucursal forzada a current_user.branch_name.
-    - SOLO meses desde el mes actual en adelante (del año en curso).
+    - Puede ver todos los meses del año seleccionado.
     - Un único periodo (branch + mes) cuando hay sucursal.
     - month_status colorea el desplegable (verde completo / rojo pendiente).
     """
     today = _today_ar()
 
-    # Año forzado al actual (meses anteriores ya no importan)
-    year = today.year
+    # Permitir seleccionar año (por defecto el actual)
+    year_arg = request.args.get("year", type=int)
+    year = year_arg if year_arg else today.year
 
-    # Mes seleccionado: si viene menor al actual, lo llevamos al actual
+    # Si estamos en el año actual, mes mínimo es el actual
+    # Si es un año anterior, podemos ver todos los meses
     month_arg = request.args.get("month", type=int)
-    month = month_arg if month_arg and month_arg >= today.month else today.month
+    
+    if year == today.year:
+        # Año actual: solo desde mes actual en adelante
+        month = month_arg if month_arg and month_arg >= today.month else today.month
+        months = _months_from_current_to_year_end(today)
+    else:
+        # Año diferente: todos los meses del año
+        month = month_arg if month_arg and 1 <= month_arg <= 12 else 1
+        months = [{"value": m, "label": _month_name_spanish(m)} for m in range(1, 13)]
+    
     # clamp por si pasaran valores inválidos
     if month > 12:
         month = 12
+    if month < 1:
+        month = 1
 
     # Sucursal
     branch = request.args.get("branch")
@@ -83,15 +96,22 @@ def index():
         branch = getattr(current_user, "branch_name", None)
 
     branches = _all_branches() if _is_admin() else None
-    months = _months_from_current_to_year_end(today)  # << solo actual..diciembre
 
     # -------- Estado por mes (para colorear opciones) --------
     month_status = {}  # {mes:int -> 'ok'|'pending'}
     if branch:
-        all_items_year = (BranchExpense.query
-                          .filter_by(branch_name=branch, year=year)
-                          .filter(BranchExpense.month >= today.month)  # no miramos meses pasados
-                          .all())
+        # Si es año actual, solo desde mes actual en adelante
+        # Si es año anterior, todos los meses
+        if year == today.year:
+            all_items_year = (BranchExpense.query
+                              .filter_by(branch_name=branch, year=year)
+                              .filter(BranchExpense.month >= today.month)
+                              .all())
+        else:
+            all_items_year = (BranchExpense.query
+                              .filter_by(branch_name=branch, year=year)
+                              .all())
+        
         by_month = {}
         for it in all_items_year:
             by_month.setdefault(int(it.month), []).append(it)
@@ -122,7 +142,8 @@ def index():
             is_admin=True,
             periods=[],
             categories=CATEGORIES,
-            month_status=month_status
+            month_status=month_status,
+            today=today  # Pasar today al template
         )
 
     # Sin sucursal (borde)
@@ -138,7 +159,8 @@ def index():
             is_admin=_is_admin(),
             periods=[],
             categories=CATEGORIES,
-            month_status=month_status
+            month_status=month_status,
+            today=today  # Pasar today al template
         )
 
     # Cargar items del (branch, year, month) seleccionado
@@ -176,7 +198,8 @@ def index():
         is_admin=_is_admin(),
         periods=[period],
         categories=CATEGORIES,
-        month_status=month_status
+        month_status=month_status,
+        today=today  # Pasar today al template
     )
 
 
@@ -190,7 +213,7 @@ def save():
     Importante:
     - NO se permite setear 'pagado' desde el form.
     - Si el gasto ya está pagado, NO se permite modificar.
-    - Año forzado al actual, mes < actual no se usa.
+    - Permite guardar en cualquier año y mes (respetando reglas de año actual).
     """
     form = ExpenseForm()
 
@@ -200,9 +223,21 @@ def save():
         if not branch_name:
             raise ValueError("Debe seleccionar una sucursal.")
 
-        year = today.year
-        # si postean un mes menor al actual, lo traemos al actual
-        month = max(int(form.month.data), today.month)
+        # Permitir guardar en el año seleccionado del formulario
+        year = int(request.form.get('year', today.year))
+        
+        # Si es año actual, mes mínimo es el actual
+        # Si es año anterior, permitir cualquier mes
+        month_input = int(form.month.data)
+        if year == today.year:
+            month = max(month_input, today.month)
+        elif year > today.year:
+            # Años futuros: usar el mes ingresado (validar que sea válido)
+            month = month_input if 1 <= month_input <= 12 else 1
+        else:
+            # Años anteriores: permitir cualquier mes válido
+            month = month_input if 1 <= month_input <= 12 else 1
+        
         category = (form.category.data or "").strip()
         description = (form.description.data or "").strip()
         amount = float(form.amount.data or 0)
@@ -244,8 +279,12 @@ def save():
     except Exception as e:
         db.session.rollback()
         flash(f"Error guardando el gasto: {e}", "error")
+        # En caso de error, volver al mismo contexto
+        year = int(request.form.get('year', today.year))
+        month = int(form.month.data) if form.month.data else today.month
 
-    params = {"year": _today_ar().year, "month": max(int(form.month.data), _today_ar().month)}
+    # Redirigir al mismo año y mes donde se estaba trabajando
+    params = {"year": year, "month": month}
     if _is_admin() and form.branch_name.data:
         params["branch"] = form.branch_name.data
     return redirect(url_for("expenses.index", **params))

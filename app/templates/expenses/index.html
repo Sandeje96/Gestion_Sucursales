@@ -128,7 +128,11 @@
 
       <div class="col-md-2">
         <label class="form-label">Año</label>
-        <input type="number" class="form-control" name="year" min="2000" max="2100" value="{{ year }}" readonly />
+        <select class="form-select" name="year">
+          {% for y in range(2024, today.year + 2) %}
+            <option value="{{ y }}" {{ 'selected' if y == year else '' }}>{{ y }}</option>
+          {% endfor %}
+        </select>
       </div>
 
       <div class="col-md-auto">
