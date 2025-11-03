@@ -197,6 +197,35 @@ def branch_dashboard():
             DailyRecord.record_date <= today
         ).order_by(DailyRecord.record_date.asc()).all()
         
+        # ===== NUEVO: Obtener información de efectivo disponible en caja =====
+        from app.models.cash_tray import CashTray
+        
+        # Obtener la bandeja de efectivo de esta sucursal
+        cash_tray = CashTray.query.filter_by(branch_name=current_user.branch_name).first()
+        
+        # Calcular efectivo disponible (ventas - gastos)
+        cash_info = {
+            'accumulated_cash': 0.0,
+            'accumulated_mercadopago': 0.0,
+            'accumulated_debit': 0.0,
+            'accumulated_credit': 0.0,
+            'accumulated_cash_expenses': 0.0,
+            'available_cash': 0.0,
+            'total_accumulated': 0.0
+        }
+        
+        if cash_tray:
+            cash_info = {
+                'accumulated_cash': float(cash_tray.accumulated_cash or 0),
+                'accumulated_mercadopago': float(cash_tray.accumulated_mercadopago or 0),
+                'accumulated_debit': float(cash_tray.accumulated_debit or 0),
+                'accumulated_credit': float(cash_tray.accumulated_credit or 0),
+                'accumulated_cash_expenses': float(cash_tray.accumulated_cash_expenses or 0),
+                'available_cash': float(cash_tray.get_available_cash()),
+                'total_accumulated': float(cash_tray.get_total_accumulated())
+            }
+        # ======================================================================
+        
         stats = {
             'branch_name': current_user.branch_name,
             'recent_records': [record.to_dict() for record in user_records],
@@ -207,7 +236,8 @@ def branch_dashboard():
                 'total_expenses': monthly_expenses,
                 'net_amount': monthly_net
             },
-            'weekly_records': [record.to_dict() for record in weekly_records]
+            'weekly_records': [record.to_dict() for record in weekly_records],
+            'cash_info': cash_info  # NUEVO: Información de efectivo disponible
         }
 
         # ==== AGREGADO PARA LA PLANTILLA: FECHA Y HORA EN ARGENTINA ====
