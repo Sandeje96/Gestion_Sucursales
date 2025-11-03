@@ -59,6 +59,13 @@
         transform: translateY(-2px);
         text-decoration: none;
     }
+    .info-detail {
+        font-size: 0.9rem;
+        padding: 0.5rem;
+        background: #f8f9fa;
+        border-radius: 0.25rem;
+        margin-bottom: 0.5rem;
+    }
 </style>
 {% endblock %}
 
@@ -127,135 +134,180 @@
         {% endif %}
     {% endwith %}
 
-    <!-- ==================== NUEVO: Tarjeta de Efectivo Disponible en Caja ==================== -->
+    <!-- ==================== EFECTIVO QUE DEBES TENER EN CAJA ==================== -->
     <div class="row mb-4">
         <div class="col-12">
-            <div class="card dashboard-card border-success">
+            <div class="card dashboard-card border-success shadow-sm">
                 <div class="card-header bg-success text-white">
-                    <h5 class="mb-0">
-                        <i class="fas fa-wallet me-2"></i>
-                        Efectivo Disponible en Caja
-                        <small class="float-end opacity-75">Mismo dato que ve el administrador</small>
-                    </h5>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-wallet me-2"></i>
+                            💵 Efectivo que Debes Tener en Caja
+                        </h5>
+                        <span class="badge bg-light text-success">
+                            <i class="fas fa-check-circle me-1"></i>Mismo dato del Admin
+                        </span>
+                    </div>
                 </div>
                 <div class="card-body">
                     {% if stats and stats.cash_info %}
-                    <div class="row text-center">
-                        <!-- Efectivo Disponible (destacado) -->
-                        <div class="col-md-3">
-                            <div class="card border-0 bg-light h-100">
-                                <div class="card-body">
-                                    <div class="metric-icon bg-success bg-opacity-10 mx-auto mb-3">
-                                        <i class="fas fa-money-bill-wave text-success"></i>
-                                    </div>
-                                    <h6 class="text-muted mb-2">Efectivo Disponible</h6>
-                                    <h3 class="text-success mb-1">${{ "{:,.2f}".format(stats.cash_info.available_cash).replace(',', 'X').replace('.', ',').replace('X', '.') }}</h3>
-                                    <small class="text-muted">
-                                        <i class="fas fa-info-circle"></i> 
-                                        Ventas - Gastos
-                                    </small>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Detalle de Efectivo -->
-                        <div class="col-md-3">
-                            <div class="card border-0 bg-light h-100">
-                                <div class="card-body">
-                                    <h6 class="text-muted mb-3">Desglose de Efectivo</h6>
-                                    <div class="d-flex justify-content-between mb-2">
-                                        <span class="text-muted">Ventas:</span>
-                                        <span class="text-success fw-bold">
-                                            +${{ "{:,.2f}".format(stats.cash_info.accumulated_cash).replace(',', 'X').replace('.', ',').replace('X', '.') }}
-                                        </span>
-                                    </div>
-                                    <div class="d-flex justify-content-between mb-2">
-                                        <span class="text-muted">Gastos:</span>
-                                        <span class="text-danger fw-bold">
-                                            -${{ "{:,.2f}".format(stats.cash_info.accumulated_cash_expenses).replace(',', 'X').replace('.', ',').replace('X', '.') }}
-                                        </span>
-                                    </div>
-                                    <hr>
-                                    <div class="d-flex justify-content-between">
-                                        <span class="fw-bold">Disponible:</span>
-                                        <span class="text-success fw-bold">
-                                            ${{ "{:,.2f}".format(stats.cash_info.available_cash).replace(',', 'X').replace('.', ',').replace('X', '.') }}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- MercadoPago -->
-                        <div class="col-md-2">
-                            <div class="card border-0 bg-light h-100">
-                                <div class="card-body">
-                                    <div class="metric-icon bg-primary bg-opacity-10 mx-auto mb-3">
-                                        <i class="fas fa-mobile-alt text-primary"></i>
-                                    </div>
-                                    <h6 class="text-muted mb-2">MercadoPago</h6>
-                                    <h5 class="mb-0">${{ "{:,.2f}".format(stats.cash_info.accumulated_mercadopago).replace(',', 'X').replace('.', ',').replace('X', '.') }}</h5>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Débito -->
-                        <div class="col-md-2">
-                            <div class="card border-0 bg-light h-100">
-                                <div class="card-body">
-                                    <div class="metric-icon bg-info bg-opacity-10 mx-auto mb-3">
-                                        <i class="fas fa-credit-card text-info"></i>
-                                    </div>
-                                    <h6 class="text-muted mb-2">Débito</h6>
-                                    <h5 class="mb-0">${{ "{:,.2f}".format(stats.cash_info.accumulated_debit).replace(',', 'X').replace('.', ',').replace('X', '.') }}</h5>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Crédito -->
-                        <div class="col-md-2">
-                            <div class="card border-0 bg-light h-100">
-                                <div class="card-body">
-                                    <div class="metric-icon bg-warning bg-opacity-10 mx-auto mb-3">
-                                        <i class="fas fa-credit-card text-warning"></i>
-                                    </div>
-                                    <h6 class="text-muted mb-2">Crédito</h6>
-                                    <h5 class="mb-0">${{ "{:,.2f}".format(stats.cash_info.accumulated_credit).replace(',', 'X').replace('.', ',').replace('X', '.') }}</h5>
+                    
+                    <!-- EFECTIVO PRINCIPAL - GRANDE Y DESTACADO -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="card bg-light border-0">
+                                <div class="card-body text-center py-4">
+                                    <p class="text-muted mb-2">
+                                        <i class="fas fa-hand-holding-usd me-2"></i>
+                                        <strong>Efectivo Disponible en tu Bandeja</strong>
+                                    </p>
+                                    <h1 class="display-3 text-success mb-2" style="font-weight: bold;">
+                                        ${{ "{:,.2f}".format(stats.cash_info.available_cash).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                                    </h1>
+                                    <p class="text-muted mb-0">
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        Esta es la cantidad de dinero en efectivo que debe estar físicamente en tu caja
+                                    </p>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    
-                    <!-- Total Acumulado -->
-                    <div class="row mt-3">
+
+                    <!-- EXPLICACIÓN DE CÓMO SE CALCULA -->
+                    <div class="row mb-3">
                         <div class="col-12">
                             <div class="alert alert-info mb-0">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <i class="fas fa-calculator me-2"></i>
-                                        <strong>Total Acumulado en Sucursal:</strong>
-                                        <span class="ms-2">
-                                            (Incluye todos los métodos de pago menos los gastos en efectivo)
-                                        </span>
+                                <h6 class="alert-heading">
+                                    <i class="fas fa-calculator me-2"></i>
+                                    ¿Cómo se calcula este número?
+                                </h6>
+                                <hr>
+                                <div class="row text-center">
+                                    <div class="col-md-4">
+                                        <div class="info-detail">
+                                            <div class="text-success fw-bold mb-1">Ventas en Efectivo</div>
+                                            <div class="h4 text-success mb-0">
+                                                +${{ "{:,.2f}".format(stats.cash_info.accumulated_cash).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                                            </div>
+                                            <small class="text-muted">Todo lo cobrado en efectivo</small>
+                                        </div>
                                     </div>
-                                    <h4 class="mb-0 text-primary">
-                                        ${{ "{:,.2f}".format(stats.cash_info.total_accumulated).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                                    <div class="col-md-1 d-flex align-items-center justify-content-center">
+                                        <h2 class="mb-0 text-muted">-</h2>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="info-detail">
+                                            <div class="text-danger fw-bold mb-1">Gastos en Efectivo</div>
+                                            <div class="h4 text-danger mb-0">
+                                                ${{ "{:,.2f}".format(stats.cash_info.accumulated_cash_expenses).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                                            </div>
+                                            <small class="text-muted">Todo lo pagado en efectivo</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-1 d-flex align-items-center justify-content-center">
+                                        <h2 class="mb-0 text-muted">=</h2>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="info-detail border border-success">
+                                            <div class="text-success fw-bold mb-1">Efectivo Disponible</div>
+                                            <div class="h4 text-success mb-0">
+                                                ${{ "{:,.2f}".format(stats.cash_info.available_cash).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                                            </div>
+                                            <small class="text-muted">Lo que debe haber en caja</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- OTROS MÉTODOS DE PAGO -->
+                    <div class="row">
+                        <div class="col-12">
+                            <h6 class="text-muted mb-3">
+                                <i class="fas fa-credit-card me-2"></i>
+                                Otros Métodos de Pago Acumulados
+                            </h6>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card border-primary">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-mobile-alt fa-2x text-primary mb-2"></i>
+                                    <h6 class="text-muted">MercadoPago</h6>
+                                    <h4 class="text-primary mb-0">
+                                        ${{ "{:,.2f}".format(stats.cash_info.accumulated_mercadopago).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                                    </h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card border-info">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-credit-card fa-2x text-info mb-2"></i>
+                                    <h6 class="text-muted">Tarjeta de Débito</h6>
+                                    <h4 class="text-info mb-0">
+                                        ${{ "{:,.2f}".format(stats.cash_info.accumulated_debit).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                                    </h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card border-warning">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-credit-card fa-2x text-warning mb-2"></i>
+                                    <h6 class="text-muted">Tarjeta de Crédito</h6>
+                                    <h4 class="text-warning mb-0">
+                                        ${{ "{:,.2f}".format(stats.cash_info.accumulated_credit).replace(',', 'X').replace('.', ',').replace('X', '.') }}
                                     </h4>
                                 </div>
                             </div>
                         </div>
                     </div>
+
+                    <!-- TOTAL GENERAL -->
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <div class="card bg-primary text-white">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h6 class="mb-0">
+                                                <i class="fas fa-calculator me-2"></i>
+                                                TOTAL ACUMULADO EN LA SUCURSAL
+                                            </h6>
+                                            <small class="opacity-75">
+                                                (Efectivo disponible + Todos los medios de pago)
+                                            </small>
+                                        </div>
+                                        <h2 class="mb-0">
+                                            ${{ "{:,.2f}".format(stats.cash_info.total_accumulated).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                                        </h2>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     {% else %}
-                    <div class="text-center py-4">
-                        <i class="fas fa-exclamation-triangle text-warning fa-3x mb-3"></i>
-                        <p class="text-muted">No hay información de efectivo disponible en este momento.</p>
+                    <!-- NO HAY DATOS -->
+                    <div class="text-center py-5">
+                        <i class="fas fa-inbox fa-4x text-muted mb-3"></i>
+                        <h5 class="text-muted">No hay información disponible</h5>
+                        <p class="text-muted">
+                            Esto puede suceder porque:<br>
+                            • No se han cargado registros todavía<br>
+                            • No hay datos acumulados en la bandeja
+                        </p>
+                        <a href="{{ url_for('daily_records.create') }}" class="btn btn-primary mt-2">
+                            <i class="fas fa-plus me-2"></i>Cargar Primer Registro
+                        </a>
                     </div>
                     {% endif %}
                 </div>
             </div>
         </div>
     </div>
-    <!-- ==================== FIN: Tarjeta de Efectivo Disponible ==================== -->
+    <!-- ==================== FIN: EFECTIVO EN CAJA ==================== -->
 
     <!-- Acciones rápidas -->
     <div class="row mb-4">
