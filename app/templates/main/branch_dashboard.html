@@ -29,42 +29,18 @@
         justify-content: center;
         font-size: 1.5rem;
     }
-    .trend-indicator {
-        font-size: 0.85rem;
-        display: flex;
-        align-items: center;
-        margin-top: 0.25rem;
+    .cash-info-card {
+        border: 2px solid #28a745;
+        border-radius: 15px;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     }
-    .chart-container {
-        height: 250px;
-        position: relative;
+    .loading-spinner {
+        display: none;
+        text-align: center;
+        padding: 2rem;
     }
-    .status-badge {
-        position: absolute;
-        top: 15px;
-        right: 15px;
-        padding: 5px 10px;
-        border-radius: 20px;
-        font-size: 0.75rem;
-        font-weight: 600;
-    }
-    .quick-action-btn {
-        border-radius: 12px;
-        padding: 1rem;
-        text-decoration: none;
+    .loading-spinner.active {
         display: block;
-        transition: all 0.2s ease;
-    }
-    .quick-action-btn:hover {
-        transform: translateY(-2px);
-        text-decoration: none;
-    }
-    .info-detail {
-        font-size: 0.9rem;
-        padding: 0.5rem;
-        background: #f8f9fa;
-        border-radius: 0.25rem;
-        margin-bottom: 0.5rem;
     }
 </style>
 {% endblock %}
@@ -104,11 +80,11 @@
                     </div>
                 </div>
                 {% if stats and stats.today_record %}
-                <div class="status-badge bg-success text-white">
+                <div class="status-badge bg-success text-white" style="position: absolute; top: 15px; right: 15px; padding: 5px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 600;">
                     <i class="fas fa-check-circle me-1"></i>Registro de hoy completado
                 </div>
                 {% else %}
-                <div class="status-badge bg-warning text-dark">
+                <div class="status-badge bg-warning text-dark" style="position: absolute; top: 15px; right: 15px; padding: 5px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 600;">
                     <i class="fas fa-exclamation-triangle me-1"></i>Registro pendiente
                 </div>
                 {% endif %}
@@ -134,10 +110,10 @@
         {% endif %}
     {% endwith %}
 
-    <!-- ==================== EFECTIVO QUE DEBES TENER EN CAJA ==================== -->
+    <!-- ==================== EFECTIVO EN CAJA (DESDE API) ==================== -->
     <div class="row mb-4">
         <div class="col-12">
-            <div class="card dashboard-card border-success shadow-sm">
+            <div class="card cash-info-card">
                 <div class="card-header bg-success text-white">
                     <div class="d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">
@@ -145,75 +121,137 @@
                             💵 Efectivo que Debes Tener en Caja
                         </h5>
                         <span class="badge bg-light text-success">
-                            <i class="fas fa-check-circle me-1"></i>Mismo dato del Admin
+                            <i class="fas fa-sync-alt me-1"></i>Mismo dato del Admin
                         </span>
                     </div>
                 </div>
                 <div class="card-body">
-                    {% if stats and stats.cash_info %}
-                    
-                    <!-- EFECTIVO PRINCIPAL - GRANDE Y DESTACADO -->
-                    <div class="row mb-4">
-                        <div class="col-12">
-                            <div class="card bg-light border-0">
-                                <div class="card-body text-center py-4">
-                                    <p class="text-muted mb-2">
-                                        <i class="fas fa-hand-holding-usd me-2"></i>
-                                        <strong>Efectivo Disponible en tu Bandeja</strong>
-                                    </p>
-                                    <h1 class="display-3 text-success mb-2" style="font-weight: bold;">
-                                        ${{ "{:,.2f}".format(stats.cash_info.available_cash).replace(',', 'X').replace('.', ',').replace('X', '.') }}
-                                    </h1>
-                                    <p class="text-muted mb-0">
-                                        <i class="fas fa-info-circle me-1"></i>
-                                        Esta es la cantidad de dinero en efectivo que debe estar físicamente en tu caja
-                                    </p>
+                    <!-- Loading spinner -->
+                    <div class="loading-spinner active" id="cashLoading">
+                        <div class="spinner-border text-success" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                        <p class="text-muted mt-2">Cargando información de la bandeja...</p>
+                    </div>
+
+                    <!-- Contenido de efectivo (se llena con JS) -->
+                    <div id="cashContent" style="display: none;">
+                        <!-- EFECTIVO PRINCIPAL -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <div class="card bg-light border-0">
+                                    <div class="card-body text-center py-4">
+                                        <p class="text-muted mb-2">
+                                            <i class="fas fa-hand-holding-usd me-2"></i>
+                                            <strong>Efectivo Disponible en tu Bandeja</strong>
+                                        </p>
+                                        <h1 class="display-3 text-success mb-2" id="efectivoDisponible" style="font-weight: bold;">
+                                            $0,00
+                                        </h1>
+                                        <p class="text-muted mb-0">
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            Esta es la cantidad de dinero en efectivo que debe estar físicamente en tu caja
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- EXPLICACIÓN DE CÓMO SE CALCULA -->
-                    <div class="row mb-3">
-                        <div class="col-12">
-                            <div class="alert alert-info mb-0">
-                                <h6 class="alert-heading">
-                                    <i class="fas fa-calculator me-2"></i>
-                                    ¿Cómo se calcula este número?
+                        <!-- EXPLICACIÓN DEL CÁLCULO -->
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <div class="alert alert-info mb-0">
+                                    <h6 class="alert-heading">
+                                        <i class="fas fa-calculator me-2"></i>
+                                        ¿Cómo se calcula este número?
+                                    </h6>
+                                    <hr>
+                                    <div class="row text-center">
+                                        <div class="col-md-4">
+                                            <div class="info-detail" style="font-size: 0.9rem; padding: 0.5rem; background: #f8f9fa; border-radius: 0.25rem;">
+                                                <div class="text-success fw-bold mb-1">Ventas en Efectivo</div>
+                                                <div class="h4 text-success mb-0" id="ventasEfectivo">+$0,00</div>
+                                                <small class="text-muted">Todo lo cobrado en efectivo</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-1 d-flex align-items-center justify-content-center">
+                                            <h2 class="mb-0 text-muted">-</h2>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="info-detail" style="font-size: 0.9rem; padding: 0.5rem; background: #f8f9fa; border-radius: 0.25rem;">
+                                                <div class="text-danger fw-bold mb-1">Gastos en Efectivo</div>
+                                                <div class="h4 text-danger mb-0" id="gastosEfectivo">$0,00</div>
+                                                <small class="text-muted">Todo lo pagado en efectivo</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-1 d-flex align-items-center justify-content-center">
+                                            <h2 class="mb-0 text-muted">=</h2>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="info-detail border border-success" style="font-size: 0.9rem; padding: 0.5rem; background: #f8f9fa; border-radius: 0.25rem;">
+                                                <div class="text-success fw-bold mb-1">Efectivo Disponible</div>
+                                                <div class="h4 text-success mb-0" id="resultadoEfectivo">$0,00</div>
+                                                <small class="text-muted">Lo que debe haber</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- OTROS MÉTODOS DE PAGO -->
+                        <div class="row">
+                            <div class="col-12">
+                                <h6 class="text-muted mb-3">
+                                    <i class="fas fa-credit-card me-2"></i>
+                                    Otros Métodos de Pago Acumulados
                                 </h6>
-                                <hr>
-                                <div class="row text-center">
-                                    <div class="col-md-4">
-                                        <div class="info-detail">
-                                            <div class="text-success fw-bold mb-1">Ventas en Efectivo</div>
-                                            <div class="h4 text-success mb-0">
-                                                +${{ "{:,.2f}".format(stats.cash_info.accumulated_cash).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card border-primary">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-mobile-alt fa-2x text-primary mb-2"></i>
+                                        <h6 class="text-muted">MercadoPago</h6>
+                                        <h4 class="text-primary mb-0" id="mercadoPago">$0,00</h4>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card border-info">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-credit-card fa-2x text-info mb-2"></i>
+                                        <h6 class="text-muted">Tarjeta de Débito</h6>
+                                        <h4 class="text-info mb-0" id="debito">$0,00</h4>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card border-warning">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-credit-card fa-2x text-warning mb-2"></i>
+                                        <h6 class="text-muted">Tarjeta de Crédito</h6>
+                                        <h4 class="text-warning mb-0" id="credito">$0,00</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TOTAL ACUMULADO -->
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <div class="card bg-primary text-white">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <h6 class="mb-0">
+                                                    <i class="fas fa-calculator me-2"></i>
+                                                    TOTAL ACUMULADO EN LA SUCURSAL
+                                                </h6>
+                                                <small class="opacity-75">
+                                                    (Efectivo disponible + Todos los medios de pago)
+                                                </small>
                                             </div>
-                                            <small class="text-muted">Todo lo cobrado en efectivo</small>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-1 d-flex align-items-center justify-content-center">
-                                        <h2 class="mb-0 text-muted">-</h2>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <div class="info-detail">
-                                            <div class="text-danger fw-bold mb-1">Gastos en Efectivo</div>
-                                            <div class="h4 text-danger mb-0">
-                                                ${{ "{:,.2f}".format(stats.cash_info.accumulated_cash_expenses).replace(',', 'X').replace('.', ',').replace('X', '.') }}
-                                            </div>
-                                            <small class="text-muted">Todo lo pagado en efectivo</small>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-1 d-flex align-items-center justify-content-center">
-                                        <h2 class="mb-0 text-muted">=</h2>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <div class="info-detail border border-success">
-                                            <div class="text-success fw-bold mb-1">Efectivo Disponible</div>
-                                            <div class="h4 text-success mb-0">
-                                                ${{ "{:,.2f}".format(stats.cash_info.available_cash).replace(',', 'X').replace('.', ',').replace('X', '.') }}
-                                            </div>
-                                            <small class="text-muted">Lo que debe haber en caja</small>
+                                            <h2 class="mb-0" id="totalAcumulado">$0,00</h2>
                                         </div>
                                     </div>
                                 </div>
@@ -221,88 +259,11 @@
                         </div>
                     </div>
 
-                    <!-- OTROS MÉTODOS DE PAGO -->
-                    <div class="row">
-                        <div class="col-12">
-                            <h6 class="text-muted mb-3">
-                                <i class="fas fa-credit-card me-2"></i>
-                                Otros Métodos de Pago Acumulados
-                            </h6>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="card border-primary">
-                                <div class="card-body text-center">
-                                    <i class="fas fa-mobile-alt fa-2x text-primary mb-2"></i>
-                                    <h6 class="text-muted">MercadoPago</h6>
-                                    <h4 class="text-primary mb-0">
-                                        ${{ "{:,.2f}".format(stats.cash_info.accumulated_mercadopago).replace(',', 'X').replace('.', ',').replace('X', '.') }}
-                                    </h4>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="card border-info">
-                                <div class="card-body text-center">
-                                    <i class="fas fa-credit-card fa-2x text-info mb-2"></i>
-                                    <h6 class="text-muted">Tarjeta de Débito</h6>
-                                    <h4 class="text-info mb-0">
-                                        ${{ "{:,.2f}".format(stats.cash_info.accumulated_debit).replace(',', 'X').replace('.', ',').replace('X', '.') }}
-                                    </h4>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="card border-warning">
-                                <div class="card-body text-center">
-                                    <i class="fas fa-credit-card fa-2x text-warning mb-2"></i>
-                                    <h6 class="text-muted">Tarjeta de Crédito</h6>
-                                    <h4 class="text-warning mb-0">
-                                        ${{ "{:,.2f}".format(stats.cash_info.accumulated_credit).replace(',', 'X').replace('.', ',').replace('X', '.') }}
-                                    </h4>
-                                </div>
-                            </div>
-                        </div>
+                    <!-- Error message -->
+                    <div id="cashError" style="display: none;" class="text-center py-4">
+                        <i class="fas fa-exclamation-triangle text-warning fa-3x mb-3"></i>
+                        <p class="text-muted" id="cashErrorMessage">No se pudo cargar la información</p>
                     </div>
-
-                    <!-- TOTAL GENERAL -->
-                    <div class="row mt-3">
-                        <div class="col-12">
-                            <div class="card bg-primary text-white">
-                                <div class="card-body">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div>
-                                            <h6 class="mb-0">
-                                                <i class="fas fa-calculator me-2"></i>
-                                                TOTAL ACUMULADO EN LA SUCURSAL
-                                            </h6>
-                                            <small class="opacity-75">
-                                                (Efectivo disponible + Todos los medios de pago)
-                                            </small>
-                                        </div>
-                                        <h2 class="mb-0">
-                                            ${{ "{:,.2f}".format(stats.cash_info.total_accumulated).replace(',', 'X').replace('.', ',').replace('X', '.') }}
-                                        </h2>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {% else %}
-                    <!-- NO HAY DATOS -->
-                    <div class="text-center py-5">
-                        <i class="fas fa-inbox fa-4x text-muted mb-3"></i>
-                        <h5 class="text-muted">No hay información disponible</h5>
-                        <p class="text-muted">
-                            Esto puede suceder porque:<br>
-                            • No se han cargado registros todavía<br>
-                            • No hay datos acumulados en la bandeja
-                        </p>
-                        <a href="{{ url_for('daily_records.create') }}" class="btn btn-primary mt-2">
-                            <i class="fas fa-plus me-2"></i>Cargar Primer Registro
-                        </a>
-                    </div>
-                    {% endif %}
                 </div>
             </div>
         </div>
@@ -322,7 +283,7 @@
                     <div class="row g-3 centrar">
                         <div class="col-md-3">
                             <a href="{{ url_for('daily_records.create') }}" 
-                               class="quick-action-btn btn btn-primary h-100 d-flex align-items-center">
+                               class="quick-action-btn btn btn-primary h-100 d-flex align-items-center" style="border-radius: 12px; padding: 1rem; text-decoration: none; display: block;">
                                 <div class="text-center w-100">
                                     <i class="fas fa-plus fa-2x mb-2"></i>
                                     <div class="fw-bold">Cargar Nuevo Registro Diario</div>
@@ -337,7 +298,7 @@
     </div>
 
     {% if stats and stats.recent_records %}
-    <!-- Registros recientes: solo mostrar el registro de HOY y AYER, sin opción de editar -->
+    <!-- Registros recientes -->
     <div class="row">
         <div class="col-12">
             <div class="card dashboard-card">
@@ -360,7 +321,6 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {# Calculamos la fecha de hoy y ayer en Python y las pasamos como today_date y yesterday_date #}
                                 {% for record in stats.recent_records %}
                                     {% if record.record_date|string == today_date or record.record_date|string == yesterday_date %}
                                     <tr>
@@ -399,7 +359,6 @@
                                                    title="Ver">
                                                     <i class="fas fa-eye"></i>
                                                 </a>
-                                                {# Opción de editar eliminada #}
                                             </div>
                                         </td>
                                     </tr>
@@ -417,36 +376,82 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+// Función para formatear moneda en formato argentino
+function formatCurrencyArgentino(value) {
+    if (value === null || value === undefined) return '0,00';
+    const num = parseFloat(value);
+    if (isNaN(num)) return '0,00';
+    return num.toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&.').replace('.', ',').replace(/,(\d{2})$/, ',$1');
+}
+
+// Cargar información de efectivo desde el API
+async function loadCashInfo() {
+    const branchName = '{{ current_user.branch_name }}';
+    console.log('💰 Cargando info de efectivo para:', branchName);
+    
+    try {
+        // Llamar al mismo endpoint que usa el admin
+        const response = await fetch('/daily-records/api/integrated-dashboard?branch_filter=' + encodeURIComponent(branchName));
+        
+        if (!response.ok) {
+            throw new Error('Error al cargar datos');
+        }
+        
+        const data = await response.json();
+        console.log('📦 Datos recibidos:', data);
+        
+        if (data.status === 'success' && data.data.branch_trays && data.data.branch_trays.length > 0) {
+            // Encontrar la bandeja de esta sucursal
+            const myTray = data.data.branch_trays.find(t => t.branch_name === branchName);
+            
+            if (myTray) {
+                console.log('✅ Bandeja encontrada:', myTray);
+                
+                // Calcular efectivo disponible (IGUAL QUE EL ADMIN)
+                const availableCash = myTray.available_cash || (myTray.accumulated_cash - (myTray.accumulated_cash_expenses || 0));
+                
+                // Actualizar elementos
+                document.getElementById('efectivoDisponible').textContent = '$' + formatCurrencyArgentino(availableCash);
+                document.getElementById('ventasEfectivo').textContent = '+$' + formatCurrencyArgentino(myTray.accumulated_cash);
+                document.getElementById('gastosEfectivo').textContent = '$' + formatCurrencyArgentino(myTray.accumulated_cash_expenses);
+                document.getElementById('resultadoEfectivo').textContent = '$' + formatCurrencyArgentino(availableCash);
+                document.getElementById('mercadoPago').textContent = '$' + formatCurrencyArgentino(myTray.accumulated_mercadopago);
+                document.getElementById('debito').textContent = '$' + formatCurrencyArgentino(myTray.accumulated_debit);
+                document.getElementById('credito').textContent = '$' + formatCurrencyArgentino(myTray.accumulated_credit);
+                document.getElementById('totalAcumulado').textContent = '$' + formatCurrencyArgentino(myTray.total_accumulated);
+                
+                // Mostrar contenido y ocultar loading
+                document.getElementById('cashLoading').classList.remove('active');
+                document.getElementById('cashContent').style.display = 'block';
+                
+                console.log('✅ Información actualizada correctamente');
+            } else {
+                throw new Error('No se encontró información para esta sucursal');
+            }
+        } else {
+            throw new Error('No hay datos disponibles');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error:', error);
+        document.getElementById('cashLoading').classList.remove('active');
+        document.getElementById('cashError').style.display = 'block';
+        document.getElementById('cashErrorMessage').textContent = 'No se pudo cargar la información. ' + error.message;
+    }
+}
+
+// Cargar al iniciar la página
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Iniciando carga de información...');
+    loadCashInfo();
+    
     // Inicializar tooltips
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
-    // Animaciones de entrada para las tarjetas
-    animateCards();
 });
-function animateCards() {
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach((entry, index) => {
-            if (entry.isIntersecting) {
-                setTimeout(() => {
-                    entry.target.style.opacity = '1';
-                    entry.target.style.transform = 'translateY(0)';
-                }, index * 100);
-                observer.unobserve(entry.target);
-            }
-        });
-    }, { threshold: 0.1 });
-    document.querySelectorAll('.dashboard-card').forEach((card, index) => {
-        card.style.opacity = '0';
-        card.style.transform = 'translateY(20px)';
-        card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
-        observer.observe(card);
-    });
-}
 </script>
 {% endblock %}
 
