@@ -1090,7 +1090,6 @@ function updateRecordsTable(records) {
         .some(th => th.textContent.trim() === 'Sucursal');
     
     console.log('🔍 ¿Tiene columna de sucursal?', hasBranchColumn);
-    
     // ✅ RENDERIZADO OPTIMIZADO: Crear HTML directamente
     let html = '';
     
@@ -1098,8 +1097,19 @@ function updateRecordsTable(records) {
         const netClass = record.net_profit >= 0 ? 'text-success' : 'text-danger';
         const statusBadge = record.is_withdrawn ? 
             '<span class="badge bg-secondary"><i class="fas fa-check-circle me-1"></i>Retirado</span>' : 
-            '<span class="badge bg-light text-muted">Disponible</span>';
+            '<span class="badge bg-success bg-opacity-10 text-success">Disponible</span>';
         
+        // Botón editar: visible si can_edit es true (viene del backend)
+        const editBtn = record.can_edit ? `
+            <a href="/daily-records/edit/${record.id}" class="btn btn-outline-secondary btn-sm" title="Editar registro">
+                <i class="fas fa-pencil-alt"></i>
+            </a>
+        ` : (record.is_withdrawn ? '' : `
+            <button class="btn btn-outline-secondary btn-sm" disabled title="Solo se pueden editar registros de los últimos 7 días">
+                <i class="fas fa-lock"></i>
+            </button>
+        `);
+
         html += `
             <tr ${record.is_withdrawn ? 'class="table-secondary"' : ''}>
                 <td><strong>${record.date}</strong></td>
@@ -1117,6 +1127,7 @@ function updateRecordsTable(records) {
                         <button class="btn btn-outline-primary" onclick="viewRecord(${record.id})" title="Ver">
                             <i class="fas fa-eye"></i>
                         </button>
+                        ${editBtn}
                         ${!record.is_withdrawn && !isFiltered() ? `
                             <button class="btn btn-outline-warning" 
                                     onclick="emptyRecord(${record.id}, '${record.date}', '${record.branch_name}')" 
@@ -1128,8 +1139,9 @@ function updateRecordsTable(records) {
                 </td>
             </tr>
         `;
+
     });
-    
+
     // Una sola operación DOM
     tableBody.innerHTML = html;
     

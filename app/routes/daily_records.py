@@ -98,7 +98,7 @@ def index():
         query = DailyRecord.query
         print(f"👤 Usuario admin: viendo todos los registros")
     else:
-        query = current_user.daily_records
+        query = DailyRecord.query.filter_by(branch_name=current_user.branch_name)
         print(f"👤 Usuario sucursal: viendo registros de {current_user.branch_name}")
     
     # Aplicar filtros
@@ -334,15 +334,6 @@ def edit(id):
             
             # Recalcular total
             record.calculate_total_sales()
-            
-            # Si era verificado y se editó, desverificar
-            if record.is_verified and not current_user.is_admin_user():
-                record.unverify_record()
-                flash(
-                    'El registro ha sido editado y ya no está verificado. '
-                    'Un administrador deberá verificarlo nuevamente.',
-                    'info'
-                )
             
             db.session.commit()
             
@@ -1143,12 +1134,12 @@ def get_accumulated_dashboard_data():
         
         # Lista de registros recientes - versión simplificada
         try:
-            recent_query = DailyRecord.query
-            if not current_user.is_admin_user():
-                recent_query = recent_query.filter(DailyRecord.user_id == current_user.id)
-            
             # Solo los últimos 50 registros para evitar problemas
-            recent_records = recent_query.order_by(desc(DailyRecord.record_date)).limit(50).all()
+            query_recent = DailyRecord.query
+            if not current_user.is_admin_user():
+                query_recent = query_recent.filter(DailyRecord.branch_name == current_user.branch_name)
+            
+            recent_records = query_recent.order_by(desc(DailyRecord.record_date)).limit(50).all()
             print(f"📋 [DEBUG] Registros recientes: {len(recent_records)}")
             
             records_data = []
@@ -1157,7 +1148,8 @@ def get_accumulated_dashboard_data():
                     records_data.append({
                         'id': r.id,
                         'date': r.record_date.strftime('%d/%m/%Y'),
-                        'branch_name': r.branch_name,
+                        'record_date_iso': r.record_date.isoformat(),
+                        'branch_name': normalize_branch_name(r.branch_name),
                         'total_sales': float(r.total_sales or 0),
                         'cash_sales': float(r.cash_sales or 0),
                         'mercadopago_sales': float(r.mercadopago_sales or 0),
@@ -1166,7 +1158,8 @@ def get_accumulated_dashboard_data():
                         'total_expenses': float(r.total_expenses or 0),
                         'net_profit': float(r.total_sales or 0) - float(r.total_expenses or 0),
                         'is_verified': r.is_verified,
-                        'is_withdrawn': r.is_withdrawn
+                        'is_withdrawn': r.is_withdrawn,
+                        'can_edit': current_user.can_edit_record(r)
                     })
                 except Exception as e:
                     print(f"❌ [DEBUG] Error procesando registro {r.id}: {e}")
@@ -1318,7 +1311,7 @@ def get_filtered_dashboard_data(start_date, end_date, branch_filter=None):
                     }
                     
             if not current_user.is_admin_user():
-                query = query.filter(DailyRecord.user_id == current_user.id)
+                query = query.filter(DailyRecord.branch_name == current_user.branch_name)
             
             # Obtener todos los registros filtrados
             records = query.order_by(desc(DailyRecord.record_date)).all()
@@ -1358,7 +1351,8 @@ def get_filtered_dashboard_data(start_date, end_date, branch_filter=None):
             records_data.append({
                 'id': r.id,
                 'date': r.record_date.strftime('%d/%m/%Y'),
-                'branch_name': normalize_branch_name(r.branch_name),  # Normalizar en salida
+                'record_date_iso': r.record_date.isoformat(),
+                'branch_name': normalize_branch_name(r.branch_name),
                 'total_sales': float(r.total_sales or 0),
                 'cash_sales': float(r.cash_sales or 0),
                 'mercadopago_sales': float(r.mercadopago_sales or 0),
@@ -1367,7 +1361,8 @@ def get_filtered_dashboard_data(start_date, end_date, branch_filter=None):
                 'total_expenses': float(r.total_expenses or 0),
                 'net_profit': float(r.total_sales or 0) - float(r.total_expenses or 0),
                 'is_verified': r.is_verified,
-                'is_withdrawn': r.is_withdrawn
+                'is_withdrawn': r.is_withdrawn,
+                'can_edit': current_user.can_edit_record(r)
             })
         
         return {

@@ -166,6 +166,20 @@ class User(UserMixin, db.Model):
             return daily_record.branch_name == self.branch_name
         return False
 
+    def can_edit_record_within_days(self, daily_record, days=7):
+        """
+        Verifica si el registro está dentro del límite de días permitidos para editar.
+
+        Args:
+            daily_record: Instancia de DailyRecord
+            days (int): Cantidad de días hacia atrás permitidos (default 7)
+
+        Returns:
+            bool: True si la fecha del registro está dentro del límite
+        """
+        limit_date = datetime.date.today() - datetime.timedelta(days=days)
+        return daily_record.record_date >= limit_date
+
     def is_admin_user(self):
         """
         Verifica si el usuario es administrador.
@@ -184,18 +198,14 @@ class User(UserMixin, db.Model):
         """
         return self.role == 'branch_user'
 
-    def can_verify_records(self):
-        """
-        Verifica si el usuario puede verificar registros.
-
-        Returns:
-            bool: True si puede verificar registros
-        """
-        return self.is_admin_user()
-
     def can_edit_record(self, daily_record):
         """
         Verifica si el usuario puede editar un registro específico.
+
+        Reglas:
+        - Admin: puede editar cualquier registro sin límite de fecha.
+        - Branch user: puede editar cualquier registro de su sucursal
+          que tenga fecha dentro de los últimos 7 días.
 
         Args:
             daily_record: Instancia de DailyRecord
@@ -207,9 +217,12 @@ class User(UserMixin, db.Model):
         if self.is_admin_user():
             return True
 
-        # Los usuarios de sucursal solo pueden editar sus propios registros
+        # Los usuarios de sucursal pueden editar registros de su sucursal
+        # solo dentro de los últimos 7 días
         if self.is_branch_user():
-            return daily_record.user_id == self.id
+            if daily_record.branch_name != self.branch_name:
+                return False
+            return self.can_edit_record_within_days(daily_record, days=7)
 
         return False
 
@@ -320,7 +333,6 @@ class User(UserMixin, db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'last_login': self.last_login.isoformat() if self.last_login else None,
             'total_records': self.daily_records.count(),
-            'verified_records_count': self.verified_records.count() if self.can_verify_records() else 0
         }
 
     @classmethod

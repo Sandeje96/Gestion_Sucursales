@@ -1,0 +1,375 @@
+{% extends "layout/base.html" %}
+
+{% block title %}
+    Editar Registro - {{ record.record_date.strftime('%d/%m/%Y') }} - {{ current_user.branch_name }}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        border: none;
+        border-radius: 15px;
+        overflow: hidden;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        background: white;
+    }
+    .form-section {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        border-left: 4px solid #fd7e14;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .form-section h6 {
+        color: #fd7e14;
+        margin-bottom: 1rem;
+        font-weight: 600;
+    }
+    .form-label {
+        color: #333;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+    .currency-input {
+        text-align: right;
+        font-weight: 500;
+        color: #333;
+    }
+    .form-control {
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+        color: #333;
+        background: white;
+    }
+    .form-control:focus {
+        border-color: #fd7e14;
+        box-shadow: 0 0 0 0.2rem rgba(253, 126, 20, 0.25);
+        color: #333;
+        background: white;
+    }
+    .input-group-text {
+        background: #f8f9fa;
+        border: 2px solid #e9ecef;
+        border-right: none;
+        color: #495057;
+        font-weight: 600;
+    }
+    .input-group .form-control {
+        border-left: none;
+    }
+    .input-group:focus-within .input-group-text {
+        border-color: #fd7e14;
+        background: rgba(253, 126, 20, 0.1);
+        color: #fd7e14;
+    }
+    .btn-submit {
+        background: linear-gradient(135deg, #fd7e14 0%, #e06c00 100%);
+        border: none;
+        padding: 12px 30px;
+        font-weight: 600;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+        color: white;
+    }
+    .btn-submit:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(253, 126, 20, 0.4);
+        color: white;
+    }
+    .card-header {
+        background: linear-gradient(135deg, #fd7e14 0%, #e06c00 100%);
+        color: white;
+        border: none;
+        font-weight: 600;
+    }
+    .card-body.bg-light {
+        background-color: #f8f9fa !important;
+        color: #333;
+    }
+    .record-info-bar {
+        background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+        border-radius: 10px;
+        padding: 1rem 1.5rem;
+        margin-bottom: 1.5rem;
+        border-left: 4px solid #fd7e14;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+
+            <!-- Aviso de edición -->
+            <div class="record-info-bar mb-4">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-1">
+                            <i class="fas fa-pencil-alt me-2 text-warning"></i>
+                            Editando registro del <strong>{{ record.record_date.strftime('%d/%m/%Y') }}</strong>
+                        </h5>
+                        <small class="text-muted">
+                            <i class="fas fa-store me-1"></i>{{ record.branch_name }}
+                            &nbsp;·&nbsp;
+                            <i class="fas fa-clock me-1"></i>Última modificación: {{ record.updated_at.strftime('%d/%m/%Y %H:%M') }}
+                            {% if record.is_withdrawn %}
+                            &nbsp;·&nbsp;
+                            <span class="badge bg-secondary"><i class="fas fa-check-circle me-1"></i>Retirado</span>
+                            {% endif %}
+                        </small>
+                    </div>
+                    <a href="{{ url_for('daily_records.index') }}" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-arrow-left me-1"></i>Volver
+                    </a>
+                </div>
+            </div>
+
+            <!-- Header -->
+            <div class="form-card mb-4">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h4 class="mb-0">
+                                <i class="fas fa-edit me-2"></i>Editar Registro Diario
+                            </h4>
+                            <small class="opacity-75">
+                                Sucursal: {{ current_user.branch_name }} — {{ record.record_date.strftime('%d/%m/%Y') }}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Info de valores anteriores -->
+                <div class="card-body bg-light py-3">
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <small class="text-muted d-block">Ventas actuales</small>
+                            <strong class="text-success">${{ record.total_sales | currency_ar }}</strong>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted d-block">Gastos actuales</small>
+                            <strong class="text-danger">${{ record.total_expenses | currency_ar }}</strong>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted d-block">Neto</small>
+                            <strong class="{{ 'text-success' if record.get_net_amount() >= 0 else 'text-danger' }}">
+                                ${{ record.get_net_amount() | currency_ar }}
+                            </strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Formulario principal -->
+            <form method="POST" novalidate id="dailyRecordForm">
+                {{ form.hidden_tag() }}
+
+                <!-- Información básica -->
+                <div class="form-section">
+                    <h6>
+                        <i class="fas fa-calendar-day me-2"></i>Información del Registro
+                    </h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            {{ form.record_date.label(class="form-label") }}
+                            {{ form.record_date(type="hidden") }}
+                            <div class="form-control-plaintext fw-bold">
+                                {{ record.record_date.strftime('%d/%m/%Y') }}
+                            </div>
+                            <div class="form-text">
+                                <i class="fas fa-info-circle me-1"></i>
+                                La fecha del registro no es editable
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ventas por método de pago -->
+                <div class="form-section">
+                    <h6>
+                        <i class="fas fa-credit-card me-2"></i>Ventas por Método de Pago
+                    </h6>
+                    <div class="row g-3">
+                        <!-- Efectivo -->
+                        <div class="col-md-6">
+                            {{ form.cash_sales.label(class="form-label") }}
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="fas fa-money-bill text-success"></i>
+                                </span>
+                                {{ form.cash_sales(class="form-control currency-input" + (' is-invalid' if form.cash_sales.errors else ''), type="text", **{'data-currency': 'true'}) }}
+                            </div>
+                            {% if form.cash_sales.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.cash_sales.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <!-- MercadoPago -->
+                        <div class="col-md-6">
+                            {{ form.mercadopago_sales.label(class="form-label") }}
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="fas fa-mobile-alt text-primary"></i>
+                                </span>
+                                {{ form.mercadopago_sales(class="form-control currency-input" + (' is-invalid' if form.mercadopago_sales.errors else ''), type="text", **{'data-currency': 'true'}) }}
+                            </div>
+                            {% if form.mercadopago_sales.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.mercadopago_sales.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <!-- Débito -->
+                        <div class="col-md-6">
+                            {{ form.debit_sales.label(class="form-label") }}
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="fas fa-credit-card text-warning"></i>
+                                </span>
+                                {{ form.debit_sales(class="form-control currency-input" + (' is-invalid' if form.debit_sales.errors else ''), type="text", **{'data-currency': 'true'}) }}
+                            </div>
+                            {% if form.debit_sales.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.debit_sales.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <!-- Crédito -->
+                        <div class="col-md-6">
+                            {{ form.credit_sales.label(class="form-label") }}
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="fas fa-credit-card text-info"></i>
+                                </span>
+                                {{ form.credit_sales(class="form-control currency-input" + (' is-invalid' if form.credit_sales.errors else ''), type="text", **{'data-currency': 'true'}) }}
+                            </div>
+                            {% if form.credit_sales.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.credit_sales.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notas adicionales -->
+                <div class="form-section">
+                    <h6>
+                        <i class="fas fa-sticky-note me-2"></i>Notas Adicionales
+                    </h6>
+                    {{ form.notes.label(class="form-label") }}
+                    {{ form.notes(class="form-control" + (' is-invalid' if form.notes.errors else ''), rows=3) }}
+                    {% if form.notes.errors %}
+                        <div class="invalid-feedback">
+                            {% for error in form.notes.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                    <div class="form-text">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Información adicional relevante del día (opcional)
+                    </div>
+                </div>
+
+                <!-- Botones de acción -->
+                <div class="form-section">
+                    <div class="d-flex gap-3 justify-content-center">
+                        <button type="submit" class="btn btn-warning btn-submit" id="submitBtn">
+                            <i class="fas fa-save me-2"></i>Actualizar Registro
+                        </button>
+                        <a href="{{ url_for('daily_records.index') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times me-2"></i>Cancelar
+                        </a>
+                    </div>
+                    <div class="text-center mt-3">
+                        <small class="text-muted">
+                            <i class="fas fa-save me-1"></i>
+                            Los cambios se guardarán y afectarán las bandejas de efectivo.
+                        </small>
+                    </div>
+                </div>
+            </form>
+
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function formatCurrencyArgentino(amount) {
+    const num = parseFloat(amount) || 0;
+    return new Intl.NumberFormat('es-AR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(num);
+}
+
+function parseArgentineCurrency(value) {
+    if (typeof value === 'number') return value;
+    if (!value || value === '') return 0;
+    let cleanValue = value.toString().replace(/[^\d,.-]/g, '');
+    if (cleanValue.includes('.') && cleanValue.includes(',')) {
+        cleanValue = cleanValue.replace(/\./g, '').replace(',', '.');
+    } else if (cleanValue.includes(',') && !cleanValue.includes('.')) {
+        cleanValue = cleanValue.replace(',', '.');
+    }
+    return parseFloat(cleanValue) || 0;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const currencyInputs = document.querySelectorAll('input[data-currency="true"]');
+
+    currencyInputs.forEach(input => {
+        if (input.value && input.value !== '0' && input.value !== '0.00') {
+            const numericValue = parseArgentineCurrency(input.value);
+            input.value = formatCurrencyArgentino(numericValue);
+        }
+        input.addEventListener('blur', function() {
+            if (!this.value || this.value.trim() === "") return;
+            if (this.value.match(/[0-9]/)) {
+                const numericValue = parseArgentineCurrency(this.value);
+                if (isNaN(numericValue)) return;
+                this.value = formatCurrencyArgentino(numericValue);
+            }
+        });
+        input.addEventListener('focus', function() {
+            setTimeout(() => { this.select(); }, 50);
+        });
+        input.addEventListener('keypress', function(e) {
+            const char = String.fromCharCode(e.which);
+            if (!/[\d,.]/.test(char) && e.which !== 8 && e.which !== 9 && e.which !== 27 && e.which !== 13 && e.which !== 46) {
+                e.preventDefault();
+            }
+        });
+    });
+
+    const form = document.getElementById('dailyRecordForm');
+    const submitBtn = document.getElementById('submitBtn');
+    form.addEventListener('submit', function() {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Guardando...';
+        currencyInputs.forEach(input => {
+            const numericValue = parseArgentineCurrency(input.value);
+            input.value = numericValue.toFixed(2);
+        });
+        setTimeout(() => {
+            if (submitBtn.disabled) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-save me-2"></i>Actualizar Registro';
+            }
+        }, 10000);
+    });
+
+    // Focus al primer campo de ventas
+    const firstInput = form.querySelector('input[data-currency="true"]');
+    if (firstInput) {
+        setTimeout(() => { firstInput.focus(); }, 100);
+    }
+});
+</script>
+{% endblock %}

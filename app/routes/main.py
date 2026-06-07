@@ -166,8 +166,10 @@ def branch_dashboard():
     Muestra información específica de la sucursal del usuario.
     """
     try:
-        # Obtener registros de la sucursal del usuario
-        user_records = current_user.daily_records.order_by(
+        # Obtener registros de la sucursal (por branch_name, no por user_id)
+        user_records = DailyRecord.query.filter_by(
+            branch_name=current_user.branch_name
+        ).order_by(
             DailyRecord.record_date.desc()
         ).limit(10).all()
         
@@ -228,7 +230,7 @@ def branch_dashboard():
         
         stats = {
             'branch_name': current_user.branch_name,
-            'recent_records': [record.to_dict() for record in user_records],
+            'recent_records': user_records,  # Objetos ORM para can_edit_record en el template
             'today_record': today_record.to_dict() if today_record else None,
             'monthly': {
                 'records_count': len(monthly_records),
@@ -253,7 +255,8 @@ def branch_dashboard():
             stats=stats,
             today_date=today_date,
             yesterday_date=yesterday_date,
-            moment=now_arg     # <- para template
+            now=now_arg,
+            moment=now_arg
         )
         
     except Exception as e:
