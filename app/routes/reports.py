@@ -449,10 +449,10 @@ def get_payment_distribution_fixed(start_date, end_date, branch_filter=None):
         result = query.first()
         
         return {
-            'cash': float(result.cash or 0),
-            'mercadopago': float(result.mercadopago or 0),
-            'debit': float(result.debit or 0),
-            'credit': float(result.credit or 0)
+            'cash': float(result.cash or 0) if result else 0,
+            'mercadopago': float(result.mercadopago or 0) if result else 0,
+            'debit': float(result.debit or 0) if result else 0,
+            'credit': float(result.credit or 0) if result else 0
         }
         
     except Exception as e:
@@ -682,10 +682,10 @@ def api_payment_distribution():
     result = query.first()
     
     # Calcular totales y porcentajes
-    cash = float(result.cash or 0)
-    mercadopago = float(result.mercadopago or 0)
-    debit = float(result.debit or 0)
-    credit = float(result.credit or 0)
+    cash = float(result.cash or 0) if result else 0
+    mercadopago = float(result.mercadopago or 0) if result else 0
+    debit = float(result.debit or 0) if result else 0
+    credit = float(result.credit or 0) if result else 0
     total = cash + mercadopago + debit + credit
     
     if total > 0:

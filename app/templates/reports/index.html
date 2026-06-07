@@ -963,9 +963,12 @@ async function updateSalesChart(days, targetElement = null) {
 }
 
 function updateSalesChartTitle(title) {
-    const salesChartTitle = document.querySelector('.card-header h6 .fa-chart-area').closest('h6');
-    if (salesChartTitle) {
-        salesChartTitle.innerHTML = `<i class="fas fa-chart-area me-2"></i>${title}`;
+    const icon = document.querySelector('.card-header h6 .fa-chart-area');
+    if (icon) {
+        const salesChartTitle = icon.closest('h6');
+        if (salesChartTitle) {
+            salesChartTitle.innerHTML = `<i class="fas fa-chart-area me-2"></i>${title}`;
+        }
     }
 }
 
@@ -1121,25 +1124,31 @@ function updateChartTitles(branchFilter) {
     // se actualiza directamente en updateSalesChart para mayor precisión
     
     // Actualizar título del gráfico de métodos de pago
-    const paymentChartTitle = document.querySelector('.card-header h6 .fa-credit-card').closest('h6');
-    if (paymentChartTitle) {
-        const baseTitle = 'Métodos de Pago';
-        if (branchFilter) {
-            paymentChartTitle.innerHTML = `<i class="fas fa-credit-card me-2"></i>${baseTitle} - ${branchFilter}`;
-        } else {
-            paymentChartTitle.innerHTML = `<i class="fas fa-credit-card me-2"></i>${baseTitle}`;
+    const icon = document.querySelector('.card-header h6 .fa-credit-card');
+    if (icon) {
+        const paymentChartTitle = icon.closest('h6');
+        if (paymentChartTitle) {
+            const baseTitle = 'Métodos de Pago';
+            if (branchFilter) {
+                paymentChartTitle.innerHTML = `<i class="fas fa-credit-card me-2"></i>${baseTitle} - ${branchFilter}`;
+            } else {
+                paymentChartTitle.innerHTML = `<i class="fas fa-credit-card me-2"></i>${baseTitle}`;
+            }
         }
     }
 }
 
 // NUEVA FUNCIÓN: Actualizar título del gráfico de rendimiento por sucursal
 function updateBranchPerformanceTitle(branchFilter) {
-    const performanceChartTitle = document.querySelector('.card-header h6 .fa-building').closest('h6');
-    if (performanceChartTitle) {
-        if (branchFilter) {
-            performanceChartTitle.innerHTML = `<i class="fas fa-building me-2"></i>Rendimiento - ${branchFilter}`;
-        } else {
-            performanceChartTitle.innerHTML = `<i class="fas fa-building me-2"></i>Rendimiento por Sucursal`;
+    const icon = document.querySelector('.card-header h6 .fa-building');
+    if (icon) {
+        const performanceChartTitle = icon.closest('h6');
+        if (performanceChartTitle) {
+            if (branchFilter) {
+                performanceChartTitle.innerHTML = `<i class="fas fa-building me-2"></i>Rendimiento - ${branchFilter}`;
+            } else {
+                performanceChartTitle.innerHTML = `<i class="fas fa-building me-2"></i>Rendimiento por Sucursal`;
+            }
         }
     }
 }
