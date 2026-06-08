@@ -163,6 +163,8 @@
             <!-- Formulario principal -->
             <form method="POST" novalidate id="dailyRecordForm">
                 {{ form.hidden_tag() }}
+                {{ form.total_expenses(type="hidden") }}
+                {{ form.total_sales() }}
                 <!-- Información básica -->
                 <div class="form-section">
                     <h6>
