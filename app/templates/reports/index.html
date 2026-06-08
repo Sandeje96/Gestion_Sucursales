@@ -737,10 +737,7 @@ function showLoadingAndSubmitReports() {
 
 // Inicialización cuando se carga la página
 document.addEventListener('DOMContentLoaded', function() {
-    // Actualizar estado de botones al cargar
-    setTimeout(() => {
-        updateButtonStates();
-    }, 100);
+    // Función eliminada porque no está definida y causaba ReferenceError
     
     // Configurar event listener para cambio de período
     const periodSelect = document.querySelector('select[name="period"]');
