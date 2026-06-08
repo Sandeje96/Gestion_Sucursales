@@ -349,13 +349,18 @@ def edit(id):
             db.session.rollback()
             # Agregar más información de debug en el error
             print(f"ERROR DETALLADO al editar: {str(e)}")
-            print(f"Valores del formulario:")
-            print(f"  - cash_sales_float: {getattr(form, 'cash_sales_float', 'NO DISPONIBLE')}")
-            print(f"  - mercadopago_sales_float: {getattr(form, 'mercadopago_sales_float', 'NO DISPONIBLE')}")
-            print(f"  - debit_sales_float: {getattr(form, 'debit_sales_float', 'NO DISPONIBLE')}")
-            print(f"  - credit_sales_float: {getattr(form, 'credit_sales_float', 'NO DISPONIBLE')}")
-            print(f"  - total_expenses_float: {getattr(form, 'total_expenses_float', 'NO DISPONIBLE')}")
             flash(f'Error al actualizar el registro: {str(e)}', 'error')
+    else:
+        if request.method == 'POST':
+            print("❌ El formulario NO pasó la validación.")
+            print(f"Errores del formulario: {form.errors}")
+            # Mostrar errores al usuario en la interfaz para depurar
+            for field, errors in form.errors.items():
+                for error in errors:
+                    flash(f'Error en campo {getattr(form, field).label.text if hasattr(form, field) else field}: {error}', 'error')
+            
+            if not form.errors:
+                flash('El formulario no pasó la validación, pero no se registraron errores específicos.', 'error')
     
     return render_template(
         'daily_records/edit.html',
