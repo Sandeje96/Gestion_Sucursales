@@ -317,20 +317,6 @@ def mark_paid(expense_id):
     if row.is_paid:
         return jsonify({"status": "error", "message": "El gasto ya está pagado."}), 400
 
-    # NUEVA VALIDACIÓN: Verificar si existe el registro diario de hoy
-    if _is_branch():  # Solo aplicar esta validación a usuarios de sucursal
-        today = date.today()
-        daily_record_exists = DailyRecord.query.filter_by(
-            branch_name=current_user.branch_name,
-            record_date=today
-        ).first()
-        
-        if not daily_record_exists:
-            return jsonify({
-                "status": "error", 
-                "message": "⚠️ Debes crear el registro diario de hoy antes de marcar gastos como pagados. Por favor, carga primero las ventas del día.",
-                "redirect": "/daily-records/create"  # Opcional: para redirigir
-            }), 400
 
     try:
         row.mark_paid_for_today(getattr(current_user, "id", None))
@@ -371,21 +357,6 @@ def toggle_paid(expense_id: int):
         if row.is_paid:
             return jsonify({"status": "error", "message": "El gasto ya está pagado y no se puede desmarcar."}), 400
         else:
-            # NUEVA VALIDACIÓN: Verificar si existe el registro diario de hoy
-            if _is_branch():  # Solo aplicar esta validación a usuarios de sucursal
-                today = date.today()
-                daily_record_exists = DailyRecord.query.filter_by(
-                    branch_name=current_user.branch_name,
-                    record_date=today
-                ).first()
-                
-                if not daily_record_exists:
-                    return jsonify({
-                        "status": "error", 
-                        "message": "⚠️ Debes crear el registro diario de hoy antes de marcar gastos como pagados. Por favor, carga primero las ventas del día.",
-                        "redirect": "/daily-records/create"
-                    }), 400
-            
             row.mark_paid_for_today(getattr(current_user, "id", None))
             db.session.commit()
             return jsonify({"status": "ok", "is_paid": True})
