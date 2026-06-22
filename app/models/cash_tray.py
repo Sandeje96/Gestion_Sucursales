@@ -97,10 +97,10 @@ class CashTray(db.Model):
     
     def add_amounts(self, cash=0, mercadopago=0, debit=0, credit=0):
         """Agregar montos a la bandeja."""
-        self.accumulated_cash = float(self.accumulated_cash or 0) + float(cash)
-        self.accumulated_mercadopago = float(self.accumulated_mercadopago or 0) + float(mercadopago)
-        self.accumulated_debit = float(self.accumulated_debit or 0) + float(debit)
-        self.accumulated_credit = float(self.accumulated_credit or 0) + float(credit)
+        self.accumulated_cash = float(self.accumulated_cash or 0) + float(cash or 0)
+        self.accumulated_mercadopago = float(self.accumulated_mercadopago or 0) + float(mercadopago or 0)
+        self.accumulated_debit = float(self.accumulated_debit or 0) + float(debit or 0)
+        self.accumulated_credit = float(self.accumulated_credit or 0) + float(credit or 0)
         self.last_updated = datetime.datetime.now()
     
     def subtract_amounts(self, cash=0, mercadopago=0, debit=0, credit=0):
@@ -226,24 +226,18 @@ class CashTray(db.Model):
 
     def add_expense_amount(self, expense_amount=0):
         """Agregar monto de gastos en efectivo a la bandeja."""
-        if expense_amount > 0:
-            from decimal import Decimal
-            if self.accumulated_cash_expenses is None:
-                self.accumulated_cash_expenses = Decimal('0.00')
-            # Convertir a Decimal antes de sumar
-            self.accumulated_cash_expenses += Decimal(str(expense_amount))
+        amount = float(expense_amount or 0)
+        if amount > 0:
+            self.accumulated_cash_expenses = float(self.accumulated_cash_expenses or 0) + amount
             self.last_updated = datetime.datetime.now()
 
     def subtract_expense_amount(self, expense_amount=0):
         """Restar monto de gastos en efectivo de la bandeja (para reversiones)."""
-        if expense_amount > 0:
-            from decimal import Decimal
-            if self.accumulated_cash_expenses is None:
-                self.accumulated_cash_expenses = Decimal('0.00')
-            # Convertir a Decimal y usar max para evitar negativos
+        amount = float(expense_amount or 0)
+        if amount > 0:
             self.accumulated_cash_expenses = max(
-                Decimal('0.00'), 
-                self.accumulated_cash_expenses - Decimal(str(expense_amount))
+                0.0,
+                float(self.accumulated_cash_expenses or 0) - amount
             )
             self.last_updated = datetime.datetime.now()
 
