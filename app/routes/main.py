@@ -626,7 +626,13 @@ def api_branch_status():
     """
     try:
         today = datetime.date.today()
-        all_branches = ['Uruguay', 'Villa Cabello', 'Tacuari', 'Candelaria', 'Itaembe Mini']
+        # Obtener sucursales dinámicamente desde usuarios branch_user activos
+        from app.models.user import User as UserModel
+        all_branches = sorted(set(
+            u.branch_name for u in
+            UserModel.query.filter_by(role='branch_user', is_active=True).all()
+            if u.branch_name
+        ))
         
         # Obtener sucursales que han reportado hoy
         todays_records = DailyRecord.query.filter(

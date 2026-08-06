@@ -125,12 +125,9 @@
                             <label class="form-label fw-semibold">Sucursal:</label>
                             <select name="branch_filter" class="form-select" onchange="updateBranchFilter()">
                                 <option value="" {{ 'selected' if not request.args.get('branch_filter') else '' }}>Todas las sucursales</option>
-                                <option value="Uruguay" {{ 'selected' if request.args.get('branch_filter') == 'Uruguay' else '' }}>Uruguay</option>
-                                <option value="Villa Cabello" {{ 'selected' if request.args.get('branch_filter') == 'Villa Cabello' else '' }}>Villa Cabello</option>
-                                <option value="Tacuari" {{ 'selected' if request.args.get('branch_filter') == 'Tacuari' else '' }}>Tacuari</option>
-                                <option value="Candelaria" {{ 'selected' if request.args.get('branch_filter') == 'Candelaria' else '' }}>Candelaria</option>
-                                <option value="Itaembe" {{ 'selected' if request.args.get('branch_filter') == 'Itaembe' else '' }}>Itaembe</option>
-                                <option value="Garupa" {{ 'selected' if request.args.get('branch_filter') == 'Garupa' else '' }}>Garupa</option>
+                                {% for branch in available_branches %}
+                                    <option value="{{ branch }}" {{ 'selected' if request.args.get('branch_filter') == branch else '' }}>{{ branch }}</option>
+                                {% endfor %}
                             </select>
                         </div>
                         

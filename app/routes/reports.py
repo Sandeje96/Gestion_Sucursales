@@ -202,6 +202,13 @@ def index():
     days_in_period = (end_date - start_date).days + 1
     daily_trends = get_daily_trends_fixed(days_in_period, start_date, end_date, branch_filter)
     payment_distribution = get_payment_distribution_fixed(start_date, end_date, branch_filter)
+
+    # Obtener lista de sucursales DINÁMICAMENTE desde la BD (usuarios branch_user activos)
+    from app.models.user import User
+    branch_users = User.query.filter_by(role='branch_user', is_active=True).order_by(User.branch_name).all()
+    available_branches = sorted(set(
+        u.branch_name for u in branch_users if u.branch_name
+    ))
     
     return render_template(
         'reports/index.html',
@@ -211,7 +218,8 @@ def index():
         daily_trends=daily_trends,
         payment_distribution=payment_distribution,
         current_period={'start': start_date, 'end': end_date, 'type': period},
-        current_branch_filter=branch_filter
+        current_branch_filter=branch_filter,
+        available_branches=available_branches
     )
 
 
@@ -222,8 +230,13 @@ def branch_detail(branch_name):
     Reporte detallado de una sucursal específica.
     ACTUALIZADO para incluir las 6 sucursales reales.
     """
-    # ACTUALIZADO: Lista completa de sucursales válidas
-    valid_branches = ['Uruguay', 'Villa Cabello', 'Tacuari', 'Candelaria', 'Itaembe', 'Garupa']
+    # Obtener sucursales válidas dinámicamente desde la BD
+    from app.models.user import User
+    valid_branches = [
+        u.branch_name for u in
+        User.query.filter_by(role='branch_user', is_active=True).all()
+        if u.branch_name
+    ]
     if branch_name not in valid_branches:
         abort(404)
     
@@ -272,8 +285,13 @@ def get_branch_comparison(target_branch, start_date, end_date):
     Comparar una sucursal con las demás.
     ACTUALIZADO para las 6 sucursales reales.
     """
-    # ACTUALIZADO: Lista completa de sucursales
-    all_branches = ['Uruguay', 'Villa Cabello', 'Tacuari', 'Candelaria', 'Itaembe', 'Garupa']
+    # Obtener sucursales dinámicamente desde la BD
+    from app.models.user import User
+    all_branches = sorted(set(
+        u.branch_name for u in
+        User.query.filter_by(role='branch_user', is_active=True).all()
+        if u.branch_name
+    ))
     comparison = {}
     
     for branch in all_branches:
