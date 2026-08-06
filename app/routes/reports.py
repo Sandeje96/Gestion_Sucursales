@@ -906,6 +906,60 @@ def comparison():
     )
 
 
+@reports_bp.route('/export/pdf')
+@login_required
+def export_pdf():
+    """
+    Exportar el reporte actual como PDF (vista de impresion).
+    Respeta los mismos filtros de periodo y sucursal del index.
+    """
+    if not current_user.is_admin_user():
+        abort(403)
+
+    import pytz
+    import datetime as dt
+
+    # Obtener parametros (identicos al index)
+    period = request.args.get('period', 'month')
+    custom_start = request.args.get('start_date')
+    custom_end = request.args.get('end_date')
+    branch_filter = request.args.get('branch_filter') or None
+
+    start_date, end_date = get_period_dates(period, custom_start, custom_end)
+
+    # Mismas estadisticas que el index
+    general_stats = get_general_statistics_fixed(start_date, end_date, branch_filter)
+    branch_stats = get_branch_statistics_fixed(start_date, end_date, branch_filter)
+    payment_distribution = get_payment_distribution_fixed(start_date, end_date, branch_filter)
+
+    # Etiqueta legible del periodo
+    period_labels = {
+        'today': 'Hoy',
+        'week': 'Esta Semana',
+        'month': 'Este Mes',
+        'quarter': 'Este Trimestre',
+        'year': 'Este Año',
+        'custom': 'Personalizado',
+    }
+    period_label = period_labels.get(period, 'Este Mes')
+
+    # Fecha/hora de generacion en Argentina
+    tz_arg = pytz.timezone('America/Argentina/Buenos_Aires')
+    generated_at = dt.datetime.now(tz_arg).strftime('%d/%m/%Y %H:%M')
+
+    return render_template(
+        'reports/pdf_report.html',
+        general_stats=general_stats,
+        branch_stats=branch_stats,
+        payment_distribution=payment_distribution,
+        start_date=start_date,
+        end_date=end_date,
+        period_label=period_label,
+        branch_filter=branch_filter,
+        generated_at=generated_at,
+    )
+
+
 @reports_bp.route('/export/csv')
 @login_required
 def export_csv():

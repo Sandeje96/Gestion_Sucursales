@@ -91,8 +91,9 @@
                                 </a>
                             </li>
                             <li>
-                                <a class="dropdown-item" href="#" onclick="exportPDF()">
-                                    <i class="fas fa-file-pdf me-2"></i>Reporte PDF
+                                <a class="dropdown-item" id="pdfExportBtn" href="#" target="_blank"
+                                   onclick="openPdfReport(event)">
+                                    <i class="fas fa-file-pdf me-2 text-danger"></i>Reporte PDF
                                 </a>
                             </li>
                         </ul>
@@ -730,6 +731,28 @@ function showLoadingAndSubmitReports() {
     if (form) {
         form.submit();
     }
+}
+
+// Función para abrir el reporte PDF con los filtros actuales
+function openPdfReport(event) {
+    event.preventDefault();
+
+    // Leer los valores del formulario de filtros activos
+    const form = document.querySelector('#periodForm');
+    const period      = form ? (form.querySelector('[name="period"]')?.value || 'month') : 'month';
+    const startDate   = form ? (form.querySelector('[name="start_date"]')?.value || '') : '';
+    const endDate     = form ? (form.querySelector('[name="end_date"]')?.value || '') : '';
+    const branchFilter = form ? (form.querySelector('[name="branch_filter"]')?.value || '') : '';
+
+    // Construir URL con los mismos filtros
+    const params = new URLSearchParams();
+    params.set('period', period);
+    if (startDate) params.set('start_date', startDate);
+    if (endDate)   params.set('end_date', endDate);
+    if (branchFilter) params.set('branch_filter', branchFilter);
+
+    const pdfUrl = '/reports/export/pdf?' + params.toString();
+    window.open(pdfUrl, '_blank');
 }
 
 // Inicialización cuando se carga la página

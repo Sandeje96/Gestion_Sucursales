@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporte MundoLimp</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #1a1a2e; background: #fff; }
+
+        .report-header { background: linear-gradient(135deg, #0d6efd 0%, #0056b3 100%); color: #fff; padding: 24px 32px 20px; display: flex; justify-content: space-between; align-items: flex-start; }
+        .report-header .logo-area h1 { font-size: 20px; font-weight: 700; }
+        .report-header .logo-area p { font-size: 11px; opacity: .75; margin-top: 2px; }
+        .report-header .meta { text-align: right; font-size: 11px; opacity: .85; line-height: 1.7; }
+
+        .filter-bar { background: #f0f4ff; border-bottom: 2px solid #0d6efd; padding: 10px 32px; display: flex; gap: 28px; flex-wrap: wrap; font-size: 11px; color: #374151; }
+        .filter-bar strong { color: #0d6efd; }
+
+        .report-body { padding: 22px 32px; }
+
+        .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 26px; }
+        .metric-card { border-radius: 10px; padding: 15px 18px; color: #fff; }
+        .metric-card.blue   { background: linear-gradient(135deg, #0d6efd, #0056b3); }
+        .metric-card.green  { background: linear-gradient(135deg, #198754, #0f6642); }
+        .metric-card.teal   { background: linear-gradient(135deg, #0dcaf0, #0a9abf); }
+        .metric-card.orange { background: linear-gradient(135deg, #fd7e14, #c95e00); }
+        .metric-card .label { font-size: 10px; font-weight: 600; opacity: .8; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+        .metric-card .value { font-size: 19px; font-weight: 700; }
+        .metric-card .sub   { font-size: 10px; opacity: .75; margin-top: 3px; }
+
+        .section-title { font-size: 13px; font-weight: 700; color: #0d6efd; border-bottom: 2px solid #e5e7eb; padding-bottom: 6px; margin-bottom: 14px; margin-top: 24px; padding-left: 10px; border-left: 4px solid #0d6efd; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        thead th { background: #0d6efd; color: #fff; padding: 9px 10px; text-align: left; font-weight: 600; font-size: 10px; text-transform: uppercase; }
+        thead th:not(:first-child) { text-align: right; }
+        tbody tr:nth-child(even) { background: #f8f9ff; }
+        tbody tr:nth-child(odd)  { background: #fff; }
+        tbody td { padding: 9px 10px; border-bottom: 1px solid #e5e7eb; color: #374151; }
+        tbody td:not(:first-child) { text-align: right; font-weight: 500; }
+        .td-branch   { font-weight: 700; color: #1e40af; }
+        .td-positive { color: #059669; }
+        .td-negative { color: #dc2626; }
+        tfoot td { background: #1e3a8a; color: #fff; padding: 10px; font-weight: 700; font-size: 11px; }
+        tfoot td:not(:first-child) { text-align: right; }
+
+        .payment-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 8px; }
+        .payment-item { border-radius: 8px; padding: 12px 14px; border: 1px solid #e5e7eb; }
+        .pm-label { font-size: 10px; font-weight: 600; color: #6b7280; text-transform: uppercase; display: flex; align-items: center; gap: 5px; }
+        .pm-dot    { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        .pm-cash   { background: #10b981; }
+        .pm-mp     { background: #3b82f6; }
+        .pm-debit  { background: #f59e0b; }
+        .pm-credit { background: #ef4444; }
+        .pm-amount { font-size: 15px; font-weight: 700; color: #111827; margin-top: 5px; }
+        .pm-pct    { font-size: 10px; color: #6b7280; margin-top: 2px; }
+
+        .report-footer { margin-top: 30px; border-top: 1px solid #e5e7eb; padding-top: 12px; display: flex; justify-content: space-between; font-size: 9px; color: #9ca3af; }
+
+        .print-btn-area { position: fixed; top: 20px; right: 24px; display: flex; gap: 10px; z-index: 9999; }
+        .btn-print { background: linear-gradient(135deg, #0d6efd, #0056b3); color: #fff; border: none; padding: 10px 22px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(13,110,253,.35); }
+        .btn-close-print { background: #6b7280; color: #fff; border: none; padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+
+        @media print {
+            .print-btn-area { display: none !important; }
+            .report-header, .metric-card, thead th, tfoot td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            @page { size: A4 landscape; margin: 1cm 1.5cm; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="print-btn-area">
+    <button class="btn-print" onclick="window.print()">&#128438; Imprimir / Guardar PDF</button>
+    <button class="btn-close-print" onclick="window.close()">&#x2715; Cerrar</button>
+</div>
+
+<div class="report-header">
+    <div class="logo-area">
+        <h1>&#128202; MundoLimp &mdash; Reporte de Ventas</h1>
+        <p>Sistema de Control de Sucursales</p>
+    </div>
+    <div class="meta">
+        <div><strong>Período:</strong> {{ period_label }}</div>
+        <div><strong>Desde:</strong> {{ start_date.strftime('%d/%m/%Y') }}</div>
+        <div><strong>Hasta:</strong> {{ end_date.strftime('%d/%m/%Y') }}</div>
+        {% if branch_filter %}<div><strong>Sucursal:</strong> {{ branch_filter }}</div>{% else %}<div><strong>Sucursales:</strong> Todas</div>{% endif %}
+        <div style="margin-top:6px;font-size:10px;opacity:.65;">Generado: {{ generated_at }}</div>
+    </div>
+</div>
+
+<div class="filter-bar">
+    <div>&#128197; <strong>Período:</strong> {{ period_label }} ({{ start_date.strftime('%d/%m/%Y') }} &rarr; {{ end_date.strftime('%d/%m/%Y') }})</div>
+    {% if branch_filter %}<div>&#127970; <strong>Sucursal:</strong> {{ branch_filter }}</div>{% else %}<div>&#127970; <strong>Sucursales:</strong> Todas</div>{% endif %}
+    <div>&#128203; <strong>Registros:</strong> {{ general_stats.total_records }}</div>
+    {% if not branch_filter %}<div>&#9989; <strong>Sucursales activas:</strong> {{ general_stats.active_branches }}</div>{% endif %}
+</div>
+
+<div class="report-body">
+
+    <div class="section-title">Métricas del Período</div>
+    <div class="metrics-grid">
+        <div class="metric-card blue">
+            <div class="label">Ventas Totales</div>
+            <div class="value">{{ general_stats.total_sales | currency_ar }}</div>
+            <div class="sub">{{ general_stats.total_records }} registro{{ 's' if general_stats.total_records != 1 else '' }}</div>
+        </div>
+        <div class="metric-card green">
+            <div class="label">Ganancia Neta</div>
+            <div class="value">{{ general_stats.net_profit | currency_ar }}</div>
+            <div class="sub">Gastos: {{ general_stats.total_expenses | currency_ar }}</div>
+        </div>
+        <div class="metric-card teal">
+            <div class="label">Promedio Diario</div>
+            <div class="value">{{ general_stats.avg_daily_sales | currency_ar }}</div>
+            <div class="sub">por día del período</div>
+        </div>
+        <div class="metric-card orange">
+            <div class="label">Verificación</div>
+            <div class="value">{{ (general_stats.verification_rate | round(1)) }}%</div>
+            <div class="sub">{{ general_stats.verified_records }} de {{ general_stats.total_records }} verificados</div>
+        </div>
+    </div>
+
+    {% if branch_stats %}
+    <div class="section-title">Rendimiento por Sucursal</div>
+    <table>
+        <thead>
+            <tr>
+                <th>Sucursal</th>
+                <th>Registros</th>
+                <th>Efectivo</th>
+                <th>MercadoPago</th>
+                <th>Débito</th>
+                <th>Crédito</th>
+                <th>Total Ventas</th>
+                <th>Gastos</th>
+                <th>Ganancia Neta</th>
+                <th>Prom. Diario</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% set ns = namespace(tot_s=0, tot_e=0, tot_r=0) %}
+            {% for bname, data in branch_stats.items() | sort(attribute='1.total_sales', reverse=True) %}
+            {% set ns.tot_s = ns.tot_s + data.total_sales %}
+            {% set ns.tot_e = ns.tot_e + data.total_expenses %}
+            {% set ns.tot_r = ns.tot_r + data.records_count %}
+            <tr>
+                <td class="td-branch">{{ bname }}</td>
+                <td>{{ data.records_count }}</td>
+                <td>{{ data.payment_breakdown.cash | currency_ar }}</td>
+                <td>{{ data.payment_breakdown.mercadopago | currency_ar }}</td>
+                <td>{{ data.payment_breakdown.debit | currency_ar }}</td>
+                <td>{{ data.payment_breakdown.credit | currency_ar }}</td>
+                <td><strong>{{ data.total_sales | currency_ar }}</strong></td>
+                <td class="td-negative">{{ data.total_expenses | currency_ar }}</td>
+                <td class="{{ 'td-positive' if data.net_profit >= 0 else 'td-negative' }}"><strong>{{ data.net_profit | currency_ar }}</strong></td>
+                <td>{{ data.avg_sales | currency_ar }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td><strong>TOTAL GENERAL</strong></td>
+                <td>{{ ns.tot_r }}</td>
+                <td colspan="4">&mdash;</td>
+                <td>{{ general_stats.total_sales | currency_ar }}</td>
+                <td>{{ general_stats.total_expenses | currency_ar }}</td>
+                <td>{{ general_stats.net_profit | currency_ar }}</td>
+                <td>{{ general_stats.avg_daily_sales | currency_ar }}</td>
+            </tr>
+        </tfoot>
+    </table>
+    {% endif %}
+
+    {% if payment_distribution %}
+    {% set pm_total = payment_distribution.cash + payment_distribution.mercadopago + payment_distribution.debit + payment_distribution.credit %}
+    <div class="section-title">Distribución de Métodos de Pago</div>
+    <div class="payment-grid">
+        <div class="payment-item">
+            <div class="pm-label"><span class="pm-dot pm-cash"></span>Efectivo</div>
+            <div class="pm-amount">{{ payment_distribution.cash | currency_ar }}</div>
+            <div class="pm-pct">{{ ((payment_distribution.cash / pm_total * 100) | round(1)) if pm_total > 0 else 0 }}% del total</div>
+        </div>
+        <div class="payment-item">
+            <div class="pm-label"><span class="pm-dot pm-mp"></span>MercadoPago</div>
+            <div class="pm-amount">{{ payment_distribution.mercadopago | currency_ar }}</div>
+            <div class="pm-pct">{{ ((payment_distribution.mercadopago / pm_total * 100) | round(1)) if pm_total > 0 else 0 }}% del total</div>
+        </div>
+        <div class="payment-item">
+            <div class="pm-label"><span class="pm-dot pm-debit"></span>Débito</div>
+            <div class="pm-amount">{{ payment_distribution.debit | currency_ar }}</div>
+            <div class="pm-pct">{{ ((payment_distribution.debit / pm_total * 100) | round(1)) if pm_total > 0 else 0 }}% del total</div>
+        </div>
+        <div class="payment-item">
+            <div class="pm-label"><span class="pm-dot pm-credit"></span>Crédito</div>
+            <div class="pm-amount">{{ payment_distribution.credit | currency_ar }}</div>
+            <div class="pm-pct">{{ ((payment_distribution.credit / pm_total * 100) | round(1)) if pm_total > 0 else 0 }}% del total</div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="report-footer">
+        <div>MundoLimp &mdash; Sistema de Control de Sucursales</div>
+        <div>Generado el {{ generated_at }} | Período: {{ start_date.strftime('%d/%m/%Y') }} al {{ end_date.strftime('%d/%m/%Y') }}</div>
+        <div>Documento confidencial &mdash; Solo uso interno</div>
+    </div>
+</div>
+
+<script>
+    window.addEventListener('load', function() {
+        var params = new URLSearchParams(window.location.search);
+        if (params.get('autoprint') === '1') {
+            setTimeout(function() { window.print(); }, 800);
+        }
+    });
+</script>
+</body>
+</html>
+
