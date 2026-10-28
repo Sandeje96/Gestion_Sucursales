@@ -263,6 +263,16 @@ class DailyRecordForm(FlaskForm):
             'class': 'btn btn-primary w-100'
         }
     )
+
+    def __init__(self, *args, **kwargs):
+        super(DailyRecordForm, self).__init__(*args, **kwargs)
+        import pytz
+        tz_arg = pytz.timezone('America/Argentina/Buenos_Aires')
+        today_arg = datetime.now(tz_arg).date()
+        self.record_date.render_kw = {
+            'class': 'form-control',
+            'max': today_arg.isoformat()
+        }
     
     def validate(self, extra_validators=None):
         """

@@ -1,7 +1,7 @@
 {% extends "layout/base.html" %}
 
 {% block title %}
-    {{ 'Editar Registro' if record else 'Crear Registro Diario' }} - {{ current_user.branch_name }}
+    Cargar Registro Diario - {{ current_user.branch_name }}
 {% endblock %}
 
 {% block extra_css %}
@@ -14,17 +14,20 @@
         box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         background: white;
     }
-    .form-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-    }
     .form-section {
         background: white;
-        border-radius: 10px;
+        border-radius: 12px;
         padding: 1.5rem;
         margin-bottom: 1.5rem;
-        border-left: 4px solid #0d6efd;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        border-left: 5px solid #0d6efd;
+        box-shadow: 0 3px 12px rgba(0,0,0,0.06);
+        transition: all 0.2s ease;
+    }
+    .day-entry-card {
+        position: relative;
+    }
+    .day-entry-card.has-conflict {
+        border-left-color: #dc3545;
     }
     .form-section h6 {
         color: #0d6efd;
@@ -34,17 +37,17 @@
     .form-label {
         color: #333;
         font-weight: 600;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.4rem;
     }
     .currency-input {
         text-align: right;
-        font-weight: 500;
+        font-weight: 600;
         color: #333;
     }
     .form-control {
         border: 2px solid #e9ecef;
         border-radius: 8px;
-        padding: 0.75rem 1rem;
+        padding: 0.65rem 0.9rem;
         color: #333;
         background: white;
     }
@@ -72,7 +75,7 @@
     .btn-submit {
         background: linear-gradient(135deg, #0d6efd 0%, #0056b3 100%);
         border: none;
-        padding: 12px 30px;
+        padding: 12px 28px;
         font-weight: 600;
         border-radius: 8px;
         transition: all 0.3s ease;
@@ -84,28 +87,35 @@
         background: linear-gradient(135deg, #0056b3 0%, #003d82 100%);
         color: white;
     }
-    .status-indicator {
-        padding: 0.5rem 1rem;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        font-weight: 600;
-    }
-    .form-text {
-        color: #6c757d;
-        font-size: 0.875rem;
-    }
     .card-header {
         background: linear-gradient(135deg, #0d6efd 0%, #0056b3 100%);
         color: white;
         border: none;
         font-weight: 600;
     }
-    .card-body.bg-light {
-        background-color: #f8f9fa !important;
-        color: #333;
+    .quick-date-btn {
+        font-size: 0.78rem;
+        padding: 0.2rem 0.6rem;
+        border-radius: 20px;
     }
-    .text-muted {
-        color: #6c757d !important;
+    .add-day-btn {
+        border: 2px dashed #0d6efd;
+        border-radius: 12px;
+        padding: 0.85rem 1.5rem;
+        font-weight: 600;
+        transition: all 0.2s ease;
+        background: rgba(13, 110, 253, 0.03);
+        color: #0d6efd;
+    }
+    .add-day-btn:hover {
+        background: rgba(13, 110, 253, 0.1);
+        transform: translateY(-1px);
+    }
+    .summary-bar {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 10px;
+        padding: 1rem 1.25rem;
+        border: 1px solid #dee2e6;
     }
 </style>
 {% endblock %}
@@ -113,21 +123,18 @@
 {% block content %}
 <div class="container my-4">
     <div class="row justify-content-center">
-        <div class="col-lg-8">
+        <div class="col-lg-9">
             <!-- Header -->
             <div class="form-card mb-4">
-                <div class="card-header">
+                <div class="card-header py-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h4 class="mb-0">
-                                <i class="fas {{ 'fa-edit' if record else 'fa-plus' }} me-2"></i>
-                                {{ 'Editar Registro Diario' if record else 'Crear Nuevo Registro' }}
+                                <i class="fas fa-calendar-check me-2"></i>
+                                Cargar Ventas Diarias
                             </h4>
                             <small class="opacity-75">
-                                Sucursal: {{ current_user.branch_name }}
-                                {% if record %}
-                                    - {{ record.record_date.strftime('%d/%m/%Y') }}
-                                {% endif %}
+                                Sucursal: <strong>{{ current_user.branch_name }}</strong> · Fecha actual: {{ today_formatted }}
                             </small>
                         </div>
                         <a href="{{ url_for('main.branch_dashboard') }}" class="btn btn-light btn-sm">
@@ -135,175 +142,214 @@
                         </a>
                     </div>
                 </div>
-                {% if record %}
-                <div class="card-body bg-light py-2">
-                    <div class="row align-items-center">
-                        <div class="col-md-6">
-                            <small class="text-muted">Estado actual:</small>
-                            {% if record.is_verified %}
-                                <span class="status-indicator bg-success text-white ms-2">
-                                    <i class="fas fa-check me-1"></i>Verificado
-                                </span>
-                            {% else %}
-                                <span class="status-indicator bg-warning text-dark ms-2">
-                                    <i class="fas fa-clock me-1"></i>Pendiente
-                                </span>
-                            {% endif %}
-                        </div>
-                        <div class="col-md-6 text-end">
-                            <small class="text-muted">
-                                Última modificación: {{ record.updated_at.strftime('%d/%m/%Y %H:%M') }}
-                            </small>
+                <div class="card-body bg-light py-3 border-bottom">
+                    <div class="d-flex align-items-center text-secondary small">
+                        <i class="fas fa-info-circle text-primary fs-5 me-3"></i>
+                        <div>
+                            <strong>Carga flexible por fecha:</strong> Puedes elegir el día exacto que estás cargando (hoy o días anteriores). Si necesitas cargar varios días pendientes de una sola vez, usa el botón <strong>"+ Agregar otro día"</strong> debajo del formulario.
                         </div>
                     </div>
                 </div>
-                {% endif %}
             </div>
 
             <!-- Formulario principal -->
             <form method="POST" novalidate id="dailyRecordForm">
                 {{ form.hidden_tag() }}
-                {{ form.total_expenses(type="hidden") }}
-                {{ form.total_sales() }}
-                <!-- Información básica -->
-                <div class="form-section">
-                    <h6>
-                        <i class="fas fa-calendar-day me-2"></i>Información del Registro
-                    </h6>
-                    <div class="row">
-                        <div class="col-md-6">
-                            {{ form.record_date.label(class="form-label") }}
-                            {# Solo muestra la fecha, no editable #}
-                            {{ form.record_date(type="hidden") }}
-                            <span class="form-control-plaintext">
-                                {{ form.record_date.data.strftime('%d/%m/%Y') if form.record_date.data else '' }}
-                            </span>
-                            {% if form.record_date.errors %}
-                                <div class="invalid-feedback">
-                                    {% for error in form.record_date.errors %}
-                                        {{ error }}
-                                    {% endfor %}
-                                </div>
-                            {% endif %}
-                            <div class="form-text">
-                                <i class="fas fa-info-circle me-1"></i>
-                                Fecha correspondiente al registro (no editable)
+                <input type="hidden" name="submit_action" id="submitActionInput" value="save">
+
+                <div id="daysContainer">
+                    {% for entry in entries %}
+                    <div class="form-section day-entry-card" data-day-index="{{ loop.index0 }}">
+                        <!-- Cabecera de cada bloque de día -->
+                        <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-primary px-3 py-2 day-number-badge">
+                                    <i class="fas fa-calendar-day me-1"></i>Día #<span class="day-index-num">{{ loop.index }}</span>
+                                </span>
+                                <span class="fw-semibold text-dark day-header-date-label"></span>
                             </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-3 py-2 fs-6">
+                                    Total del día: <strong class="day-subtotal-display">$0,00</strong>
+                                </span>
+                                <button type="button" class="btn btn-outline-danger btn-sm remove-day-btn" title="Quitar este día" {% if entries|length <= 1 %}style="display: none;"{% endif %}>
+                                    <i class="fas fa-trash-alt me-1"></i>Quitar
+                                </button>
+                            </div>
+                        </div>
+
+                        {% if entry.errors %}
+                        <div class="alert alert-danger py-2 mb-3">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Revisa este día:</strong>
+                            <ul class="mb-0 mt-1 small">
+                                {% for err in entry.errors %}
+                                <li>{{ err }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        <!-- Selección de Fecha -->
+                        <div class="row g-3 align-items-start mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label">
+                                    <i class="fas fa-calendar-alt text-primary me-1"></i>Fecha del Registro
+                                </label>
+                                <input type="date"
+                                       name="record_date"
+                                       class="form-control record-date-input"
+                                       value="{{ entry.record_date }}"
+                                       max="{{ today_iso }}"
+                                       required>
+                                <div class="d-flex flex-wrap gap-1 mt-2">
+                                    <button type="button" class="btn btn-outline-secondary quick-date-btn" data-set-date="{{ today_iso }}">
+                                        Hoy
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary quick-date-btn" data-set-date="{{ yesterday_iso }}">
+                                        Ayer
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary quick-date-btn" data-set-date="{{ two_days_ago_iso }}">
+                                        Antes de ayer
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label d-none d-md-block">&nbsp;</label>
+                                <div class="date-status-box p-2 rounded border bg-light small">
+                                    <i class="fas fa-check-circle text-success me-1"></i>
+                                    Selecciona la fecha correspondiente a la venta.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Ventas por método de pago -->
+                        <h6 class="mb-3">
+                            <i class="fas fa-credit-card me-2"></i>Ventas por Método de Pago
+                        </h6>
+                        <div class="row g-3 mb-3">
+                            <!-- Efectivo -->
+                            <div class="col-md-6">
+                                <label class="form-label">Ventas en Efectivo ($)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="fas fa-money-bill text-success"></i>
+                                    </span>
+                                    <input type="text"
+                                           name="cash_sales"
+                                           class="form-control currency-input cash-input"
+                                           value="{{ entry.cash_sales }}"
+                                           placeholder="0,00"
+                                           inputmode="decimal"
+                                           data-currency="true"
+                                           required>
+                                </div>
+                            </div>
+                            <!-- MercadoPago -->
+                            <div class="col-md-6">
+                                <label class="form-label">Ventas MercadoPago ($)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="fas fa-mobile-alt text-primary"></i>
+                                    </span>
+                                    <input type="text"
+                                           name="mercadopago_sales"
+                                           class="form-control currency-input mp-input"
+                                           value="{{ entry.mercadopago_sales }}"
+                                           placeholder="0,00"
+                                           inputmode="decimal"
+                                           data-currency="true"
+                                           required>
+                                </div>
+                            </div>
+                            <!-- Débito -->
+                            <div class="col-md-6">
+                                <label class="form-label">Ventas con Débito ($)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="fas fa-credit-card text-warning"></i>
+                                    </span>
+                                    <input type="text"
+                                           name="debit_sales"
+                                           class="form-control currency-input debit-input"
+                                           value="{{ entry.debit_sales }}"
+                                           placeholder="0,00"
+                                           inputmode="decimal"
+                                           data-currency="true"
+                                           required>
+                                </div>
+                            </div>
+                            <!-- Crédito -->
+                            <div class="col-md-6">
+                                <label class="form-label">Ventas con Crédito ($)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="fas fa-credit-card text-info"></i>
+                                    </span>
+                                    <input type="text"
+                                           name="credit_sales"
+                                           class="form-control currency-input credit-input"
+                                           value="{{ entry.credit_sales }}"
+                                           placeholder="0,00"
+                                           inputmode="decimal"
+                                           data-currency="true"
+                                           required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Notas adicionales -->
+                        <div class="mt-3">
+                            <label class="form-label small text-muted mb-1">
+                                <i class="fas fa-sticky-note me-1"></i>Notas Adicionales del Día (opcional)
+                            </label>
+                            <textarea name="notes"
+                                      class="form-control notes-input"
+                                      rows="2"
+                                      maxlength="500"
+                                      placeholder="Observaciones o notas relevantes de esta fecha (opcional)">{{ entry.notes }}</textarea>
                         </div>
                     </div>
-                </div>
-                <!-- Ventas por método de pago -->
-                <div class="form-section">
-                    <h6>
-                        <i class="fas fa-credit-card me-2"></i>Ventas por Método de Pago
-                    </h6>
-                    <div class="row g-3">
-                        <!-- Efectivo -->
-                        <div class="col-md-6">
-                            {{ form.cash_sales.label(class="form-label") }}
-                            <div class="input-group">
-                                <span class="input-group-text">
-                                    <i class="fas fa-money-bill text-success"></i>
-                                </span>
-                                {{ form.cash_sales(class="form-control currency-input" + (' is-invalid' if form.cash_sales.errors else ''), type="text", **{'data-currency': 'true'}) }}
-                            </div>
-                            {% if form.cash_sales.errors %}
-                                <div class="invalid-feedback d-block">
-                                    {% for error in form.cash_sales.errors %}
-                                        {{ error }}
-                                    {% endfor %}
-                                </div>
-                            {% endif %}
-                        </div>
-                        <!-- MercadoPago -->
-                        <div class="col-md-6">
-                            {{ form.mercadopago_sales.label(class="form-label") }}
-                            <div class="input-group">
-                                <span class="input-group-text">
-                                    <i class="fas fa-mobile-alt text-primary"></i>
-                                </span>
-                                {{ form.mercadopago_sales(class="form-control currency-input" + (' is-invalid' if form.mercadopago_sales.errors else ''), type="text", **{'data-currency': 'true'}) }}
-                            </div>
-                            {% if form.mercadopago_sales.errors %}
-                                <div class="invalid-feedback d-block">
-                                    {% for error in form.mercadopago_sales.errors %}
-                                        {{ error }}
-                                    {% endfor %}
-                                </div>
-                            {% endif %}
-                        </div>
-                        <!-- Débito -->
-                        <div class="col-md-6">
-                            {{ form.debit_sales.label(class="form-label") }}
-                            <div class="input-group">
-                                <span class="input-group-text">
-                                    <i class="fas fa-credit-card text-warning"></i>
-                                </span>
-                                {{ form.debit_sales(class="form-control currency-input" + (' is-invalid' if form.debit_sales.errors else ''), type="text", **{'data-currency': 'true'}) }}
-                            </div>
-                            {% if form.debit_sales.errors %}
-                                <div class="invalid-feedback d-block">
-                                    {% for error in form.debit_sales.errors %}
-                                        {{ error }}
-                                    {% endfor %}
-                                </div>
-                            {% endif %}
-                        </div>
-                        <!-- Crédito -->
-                        <div class="col-md-6">
-                            {{ form.credit_sales.label(class="form-label") }}
-                            <div class="input-group">
-                                <span class="input-group-text">
-                                    <i class="fas fa-credit-card text-info"></i>
-                                </span>
-                                {{ form.credit_sales(class="form-control currency-input" + (' is-invalid' if form.credit_sales.errors else ''), type="text", **{'data-currency': 'true'}) }}
-                            </div>
-                            {% if form.credit_sales.errors %}
-                                <div class="invalid-feedback d-block">
-                                    {% for error in form.credit_sales.errors %}
-                                        {{ error }}
-                                    {% endfor %}
-                                </div>
-                            {% endif %}
-                        </div>
-                    </div>
+                    {% endfor %}
                 </div>
 
-                <!-- Notas adicionales -->
-                <div class="form-section">
-                    <h6>
-                        <i class="fas fa-sticky-note me-2"></i>Notas Adicionales
-                    </h6>
-                    {{ form.notes.label(class="form-label") }}
-                    {{ form.notes(class="form-control" + (' is-invalid' if form.notes.errors else ''), type="text") }}
-                    {% if form.notes.errors %}
-                        <div class="invalid-feedback">
-                            {% for error in form.notes.errors %}
-                                {{ error }}
-                            {% endfor %}
-                        </div>
-                    {% endif %}
-                    <div class="form-text">
-                        <i class="fas fa-info-circle me-1"></i>
-                        Información adicional relevante del día (opcional)
-                    </div>
+                <!-- Botón para agregar más días en una sola carga -->
+                <div class="text-center mb-4">
+                    <button type="button" id="addDayBtn" class="btn add-day-btn w-100">
+                        <i class="fas fa-plus-circle me-2"></i>Agregar otro día para cargar en simultáneo
+                    </button>
                 </div>
-                <!-- Botones de acción -->
+
+                <!-- Resumen general y botones de acción -->
                 <div class="form-section">
-                    <div class="d-flex gap-3 justify-content-center">
-                        {{ form.submit(class="btn btn-primary btn-submit", id="submitBtn") }}
-                        <a href="{{ url_for('main.branch_dashboard') }}" class="btn btn-outline-secondary">
+                    <div class="summary-bar mb-3">
+                        <div class="row align-items-center text-center text-md-start">
+                            <div class="col-md-6 mb-2 mb-md-0">
+                                <span class="text-muted small d-block">Días listos para guardar</span>
+                                <strong class="fs-5 text-primary" id="summaryDaysCount">1 día</strong>
+                            </div>
+                            <div class="col-md-6 text-md-end">
+                                <span class="text-muted small d-block">Total general de ventas a registrar</span>
+                                <strong class="fs-4 text-success" id="summaryGrandTotal">$0,00</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-3 justify-content-center">
+                        <button type="submit" class="btn btn-primary btn-submit" id="submitBtn" data-action="save">
+                            <i class="fas fa-save me-2"></i><span id="submitBtnText">Guardar Registro</span>
+                        </button>
+                        <button type="submit" class="btn btn-outline-primary fw-semibold px-4" id="submitAndNewBtn" data-action="save_and_new">
+                            <i class="fas fa-calendar-plus me-2"></i>Guardar y seguir cargando otros días
+                        </button>
+                        <a href="{{ url_for('main.branch_dashboard') }}" class="btn btn-outline-secondary px-4 d-flex align-items-center">
                             <i class="fas fa-times me-2"></i>Cancelar
                         </a>
                     </div>
                     <div class="text-center mt-3">
                         <small class="text-muted">
-                            <i class="fas fa-save me-1"></i>
-                            Los datos se guardarán y serás redirigido al panel principal
-                            {% if record and record.is_verified %}
-                            <br><i class="fas fa-exclamation-triangle text-warning me-1"></i>
-                            Al editar un registro verificado, se marcará como pendiente
-                            {% endif %}
+                            <i class="fas fa-check-circle text-success me-1"></i>
+                            Cada día se guardará con su fecha correspondiente y actualizará automáticamente el efectivo en caja y los reportes.
                         </small>
                     </div>
                 </div>
@@ -315,6 +361,11 @@
 
 {% block scripts %}
 <script>
+const EXISTING_RECORDS_MAP = {{ existing_records_map | tojson | safe }};
+const TODAY_ISO = "{{ today_iso }}";
+const YESTERDAY_ISO = "{{ yesterday_iso }}";
+const TWO_DAYS_AGO_ISO = "{{ two_days_ago_iso }}";
+
 function formatCurrencyArgentino(amount) {
     const num = parseFloat(amount) || 0;
     return new Intl.NumberFormat('es-AR', {
@@ -322,70 +373,428 @@ function formatCurrencyArgentino(amount) {
         maximumFractionDigits: 2
     }).format(num);
 }
+
 function parseArgentineCurrency(value) {
     if (typeof value === 'number') return value;
     if (!value || value === '') return 0;
     let cleanValue = value.toString().replace(/[^\d,.-]/g, '');
     if (cleanValue.includes('.') && cleanValue.includes(',')) {
-        cleanValue = cleanValue.replace(/\./g, '').replace(',', '.');
+        if (cleanValue.lastIndexOf('.') < cleanValue.lastIndexOf(',')) {
+            cleanValue = cleanValue.replace(/\./g, '').replace(',', '.');
+        } else {
+            cleanValue = cleanValue.replace(/,/g, '');
+        }
     } else if (cleanValue.includes(',') && !cleanValue.includes('.')) {
         cleanValue = cleanValue.replace(',', '.');
     }
     return parseFloat(cleanValue) || 0;
 }
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('📝 Inicializando formulario de registro diario');
-    const currencyInputs = document.querySelectorAll('input[data-currency="true"]');
-    currencyInputs.forEach(input => {
-        if (input.value && input.value !== '0' && input.value !== '0.00') {
-            const numericValue = parseArgentineCurrency(input.value);
-            input.value = formatCurrencyArgentino(numericValue);
+
+function formatIsoToAr(isoStr) {
+    if (!isoStr || !isoStr.includes('-')) return '';
+    const parts = isoStr.split('-');
+    if (parts.length !== 3) return isoStr;
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
+function subtractDaysIso(isoStr, days) {
+    if (!isoStr) return TODAY_ISO;
+    const parts = isoStr.split('-').map(Number);
+    const dt = new Date(parts[0], parts[1] - 1, parts[2]);
+    dt.setDate(dt.getDate() - days);
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, '0');
+    const d = String(dt.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+function findNextAvailablePreviousDate(referenceDateIso) {
+    const usedInForm = new Set(
+        Array.from(document.querySelectorAll('.record-date-input'))
+            .map(inp => inp.value)
+            .filter(Boolean)
+    );
+    let candidate = subtractDaysIso(referenceDateIso || TODAY_ISO, 1);
+    for (let i = 0; i < 90; i++) {
+        const existing = EXISTING_RECORDS_MAP[candidate];
+        const hasSales = existing && existing.has_sales;
+        if (!usedInForm.has(candidate) && !hasSales) {
+            return candidate;
         }
-        input.addEventListener('input', function() {
-            // No formatear aquí
-        });
-        input.addEventListener('blur', function() {
-            if (!this.value || this.value.trim() === "") return;
-            if (this.value.match(/[0-9]/)) {
-                const numericValue = parseArgentineCurrency(this.value);
-                if (isNaN(numericValue)) return;
+        candidate = subtractDaysIso(candidate, 1);
+    }
+    return subtractDaysIso(referenceDateIso || TODAY_ISO, 1);
+}
+
+function bindCurrencyInputEvents(input) {
+    if (input.value && input.value !== '0' && input.value !== '0.00' && input.value !== '0,00') {
+        const numericValue = parseArgentineCurrency(input.value);
+        input.value = formatCurrencyArgentino(numericValue);
+    }
+    input.addEventListener('input', function() {
+        updateAllTotalsAndStatuses();
+    });
+    input.addEventListener('blur', function() {
+        if (!this.value || this.value.trim() === '') {
+            this.value = '0,00';
+        } else if (this.value.match(/[0-9]/)) {
+            const numericValue = parseArgentineCurrency(this.value);
+            if (!isNaN(numericValue)) {
                 this.value = formatCurrencyArgentino(numericValue);
             }
+        }
+        updateAllTotalsAndStatuses();
+    });
+    input.addEventListener('focus', function() {
+        setTimeout(() => {
+            this.select();
+        }, 50);
+    });
+    input.addEventListener('keypress', function(e) {
+        const char = String.fromCharCode(e.which);
+        if (!/[\d,.]/.test(char) && e.which !== 8 && e.which !== 9 && e.which !== 27 && e.which !== 13 && e.which !== 46) {
+            e.preventDefault();
+        }
+    });
+}
+
+function bindCardEvents(card) {
+    card.querySelectorAll('input[data-currency="true"]').forEach(bindCurrencyInputEvents);
+
+    const dateInput = card.querySelector('.record-date-input');
+    if (dateInput) {
+        dateInput.addEventListener('change', function() {
+            updateAllTotalsAndStatuses();
         });
-        input.addEventListener('focus', function() {
-            setTimeout(() => {
-                this.select();
-            }, 50);
-        });
-        input.addEventListener('keypress', function(e) {
-            const char = String.fromCharCode(e.which);
-            if (!/[\d,.]/.test(char) && e.which !== 8 && e.which !== 9 && e.which !== 27 && e.which !== 13 && e.which !== 46) {
-                e.preventDefault();
+    }
+
+    card.querySelectorAll('.quick-date-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const targetDate = this.getAttribute('data-set-date');
+            if (dateInput && targetDate) {
+                dateInput.value = targetDate;
+                updateAllTotalsAndStatuses();
             }
         });
     });
+
+    const removeBtn = card.querySelector('.remove-day-btn');
+    if (removeBtn) {
+        removeBtn.addEventListener('click', function() {
+            const allCards = document.querySelectorAll('.day-entry-card');
+            if (allCards.length > 1) {
+                card.remove();
+                renumberCards();
+                updateAllTotalsAndStatuses();
+            }
+        });
+    }
+}
+
+function renumberCards() {
+    const cards = document.querySelectorAll('.day-entry-card');
+    cards.forEach((card, idx) => {
+        card.setAttribute('data-day-index', idx);
+        const numSpan = card.querySelector('.day-index-num');
+        if (numSpan) numSpan.textContent = idx + 1;
+
+        const removeBtn = card.querySelector('.remove-day-btn');
+        if (removeBtn) {
+            removeBtn.style.display = cards.length > 1 ? 'inline-block' : 'none';
+        }
+    });
+}
+
+function updateAllTotalsAndStatuses() {
+    const cards = Array.from(document.querySelectorAll('.day-entry-card'));
+    let grandTotal = 0;
+
+    // Contar ocurrencias de fechas en el formulario para detectar duplicados
+    const dateCounts = {};
+    cards.forEach(card => {
+        const dVal = (card.querySelector('.record-date-input')?.value || '').trim();
+        if (dVal) {
+            dateCounts[dVal] = (dateCounts[dVal] || 0) + 1;
+        }
+    });
+
+    cards.forEach(card => {
+        const cashVal = parseArgentineCurrency(card.querySelector('.cash-input')?.value);
+        const mpVal = parseArgentineCurrency(card.querySelector('.mp-input')?.value);
+        const debitVal = parseArgentineCurrency(card.querySelector('.debit-input')?.value);
+        const creditVal = parseArgentineCurrency(card.querySelector('.credit-input')?.value);
+
+        const daySubtotal = cashVal + mpVal + debitVal + creditVal;
+        grandTotal += daySubtotal;
+
+        const subtotalEl = card.querySelector('.day-subtotal-display');
+        if (subtotalEl) {
+            subtotalEl.textContent = '$' + formatCurrencyArgentino(daySubtotal);
+        }
+
+        const dateInput = card.querySelector('.record-date-input');
+        const dateVal = (dateInput?.value || '').trim();
+        const headerDateLabel = card.querySelector('.day-header-date-label');
+        if (headerDateLabel) {
+            headerDateLabel.textContent = dateVal ? `(${formatIsoToAr(dateVal)})` : '';
+        }
+
+        // Actualizar botones rápidos activos
+        card.querySelectorAll('.quick-date-btn').forEach(btn => {
+            if (btn.getAttribute('data-set-date') === dateVal) {
+                btn.classList.remove('btn-outline-secondary');
+                btn.classList.add('btn-primary');
+            } else {
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-outline-secondary');
+            }
+        });
+
+        // Actualizar estado de la fecha seleccionada
+        const statusBox = card.querySelector('.date-status-box');
+        card.classList.remove('has-conflict');
+        if (statusBox) {
+            if (!dateVal) {
+                statusBox.className = 'date-status-box p-2 rounded border border-warning bg-warning bg-opacity-10 text-dark small';
+                statusBox.innerHTML = '<i class="fas fa-exclamation-circle text-warning me-1"></i>Selecciona una fecha para este registro.';
+            } else if (dateVal > TODAY_ISO) {
+                card.classList.add('has-conflict');
+                statusBox.className = 'date-status-box p-2 rounded border border-danger bg-danger bg-opacity-10 text-danger small';
+                statusBox.innerHTML = '<i class="fas fa-times-circle me-1"></i><strong>Fecha inválida:</strong> No se pueden cargar fechas futuras.';
+            } else if (dateCounts[dateVal] > 1) {
+                card.classList.add('has-conflict');
+                statusBox.className = 'date-status-box p-2 rounded border border-danger bg-danger bg-opacity-10 text-danger small';
+                statusBox.innerHTML = `<i class="fas fa-clone me-1"></i><strong>Fecha repetida:</strong> Ya seleccionaste el <strong>${formatIsoToAr(dateVal)}</strong> en otro bloque de este formulario.`;
+            } else if (EXISTING_RECORDS_MAP[dateVal] && EXISTING_RECORDS_MAP[dateVal].has_sales) {
+                const info = EXISTING_RECORDS_MAP[dateVal];
+                card.classList.add('has-conflict');
+                statusBox.className = 'date-status-box p-2 rounded border border-warning bg-warning bg-opacity-10 text-dark small';
+                statusBox.innerHTML = `
+                    <i class="fas fa-exclamation-triangle text-warning me-1"></i>
+                    Ya existe una venta cargada el <strong>${info.date_formatted}</strong> ($${formatCurrencyArgentino(info.total_sales)}).
+                    <a href="${info.edit_url}" class="fw-bold text-primary ms-1">Editar ese día</a>
+                `;
+            } else if (EXISTING_RECORDS_MAP[dateVal] && !EXISTING_RECORDS_MAP[dateVal].has_sales && EXISTING_RECORDS_MAP[dateVal].total_expenses > 0) {
+                const info = EXISTING_RECORDS_MAP[dateVal];
+                statusBox.className = 'date-status-box p-2 rounded border border-info bg-info bg-opacity-10 text-dark small';
+                statusBox.innerHTML = `
+                    <i class="fas fa-info-circle text-info me-1"></i>
+                    El <strong>${info.date_formatted}</strong> tiene gastos registrados ($${formatCurrencyArgentino(info.total_expenses)}). Las ventas se sumarán a ese día.
+                `;
+            } else {
+                statusBox.className = 'date-status-box p-2 rounded border border-success bg-success bg-opacity-10 text-success small';
+                statusBox.innerHTML = `<i class="fas fa-check-circle me-1"></i>Día <strong>${formatIsoToAr(dateVal)}</strong> disponible para cargar.`;
+            }
+        }
+    });
+
+    const daysCountEl = document.getElementById('summaryDaysCount');
+    if (daysCountEl) {
+        daysCountEl.textContent = cards.length === 1 ? '1 día' : `${cards.length} días`;
+    }
+
+    const grandTotalEl = document.getElementById('summaryGrandTotal');
+    if (grandTotalEl) {
+        grandTotalEl.textContent = '$' + formatCurrencyArgentino(grandTotal);
+    }
+
+    const submitBtnText = document.getElementById('submitBtnText');
+    if (submitBtnText) {
+        submitBtnText.textContent = cards.length === 1 ? 'Guardar Registro' : `Guardar ${cards.length} Registros`;
+    }
+}
+
+function createNewDayCard(suggestedDateIso) {
+    const card = document.createElement('div');
+    card.className = 'form-section day-entry-card';
+    card.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-primary px-3 py-2 day-number-badge">
+                    <i class="fas fa-calendar-day me-1"></i>Día #<span class="day-index-num">1</span>
+                </span>
+                <span class="fw-semibold text-dark day-header-date-label"></span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-3 py-2 fs-6">
+                    Total del día: <strong class="day-subtotal-display">$0,00</strong>
+                </span>
+                <button type="button" class="btn btn-outline-danger btn-sm remove-day-btn" title="Quitar este día">
+                    <i class="fas fa-trash-alt me-1"></i>Quitar
+                </button>
+            </div>
+        </div>
+
+        <div class="row g-3 align-items-start mb-4">
+            <div class="col-md-6">
+                <label class="form-label">
+                    <i class="fas fa-calendar-alt text-primary me-1"></i>Fecha del Registro
+                </label>
+                <input type="date"
+                       name="record_date"
+                       class="form-control record-date-input"
+                       value="${suggestedDateIso}"
+                       max="${TODAY_ISO}"
+                       required>
+                <div class="d-flex flex-wrap gap-1 mt-2">
+                    <button type="button" class="btn btn-outline-secondary quick-date-btn" data-set-date="${TODAY_ISO}">
+                        Hoy
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary quick-date-btn" data-set-date="${YESTERDAY_ISO}">
+                        Ayer
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary quick-date-btn" data-set-date="${TWO_DAYS_AGO_ISO}">
+                        Antes de ayer
+                    </button>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label d-none d-md-block">&nbsp;</label>
+                <div class="date-status-box p-2 rounded border bg-light small">
+                    <i class="fas fa-check-circle text-success me-1"></i>
+                    Selecciona la fecha correspondiente a la venta.
+                </div>
+            </div>
+        </div>
+
+        <h6 class="mb-3">
+            <i class="fas fa-credit-card me-2"></i>Ventas por Método de Pago
+        </h6>
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <label class="form-label">Ventas en Efectivo ($)</label>
+                <div class="input-group">
+                    <span class="input-group-text">
+                        <i class="fas fa-money-bill text-success"></i>
+                    </span>
+                    <input type="text"
+                           name="cash_sales"
+                           class="form-control currency-input cash-input"
+                           value="0,00"
+                           placeholder="0,00"
+                           inputmode="decimal"
+                           data-currency="true"
+                           required>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Ventas MercadoPago ($)</label>
+                <div class="input-group">
+                    <span class="input-group-text">
+                        <i class="fas fa-mobile-alt text-primary"></i>
+                    </span>
+                    <input type="text"
+                           name="mercadopago_sales"
+                           class="form-control currency-input mp-input"
+                           value="0,00"
+                           placeholder="0,00"
+                           inputmode="decimal"
+                           data-currency="true"
+                           required>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Ventas con Débito ($)</label>
+                <div class="input-group">
+                    <span class="input-group-text">
+                        <i class="fas fa-credit-card text-warning"></i>
+                    </span>
+                    <input type="text"
+                           name="debit_sales"
+                           class="form-control currency-input debit-input"
+                           value="0,00"
+                           placeholder="0,00"
+                           inputmode="decimal"
+                           data-currency="true"
+                           required>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Ventas con Crédito ($)</label>
+                <div class="input-group">
+                    <span class="input-group-text">
+                        <i class="fas fa-credit-card text-info"></i>
+                    </span>
+                    <input type="text"
+                           name="credit_sales"
+                           class="form-control currency-input credit-input"
+                           value="0,00"
+                           placeholder="0,00"
+                           inputmode="decimal"
+                           data-currency="true"
+                           required>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-3">
+            <label class="form-label small text-muted mb-1">
+                <i class="fas fa-sticky-note me-1"></i>Notas Adicionales del Día (opcional)
+            </label>
+            <textarea name="notes"
+                      class="form-control notes-input"
+                      rows="2"
+                      maxlength="500"
+                      placeholder="Observaciones o notas relevantes de esta fecha (opcional)"></textarea>
+        </div>
+    `;
+    bindCardEvents(card);
+    return card;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('daysContainer');
+    const addDayBtn = document.getElementById('addDayBtn');
     const form = document.getElementById('dailyRecordForm');
+    const submitActionInput = document.getElementById('submitActionInput');
     const submitBtn = document.getElementById('submitBtn');
-    form.addEventListener('submit', function(e) {
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Guardando...';
-        currencyInputs.forEach(input => {
+    const submitAndNewBtn = document.getElementById('submitAndNewBtn');
+
+    // Inicializar tarjetas existentes
+    document.querySelectorAll('.day-entry-card').forEach(bindCardEvents);
+    renumberCards();
+    updateAllTotalsAndStatuses();
+
+    // Agregar nuevo bloque de día
+    if (addDayBtn) {
+        addDayBtn.addEventListener('click', function() {
+            const cards = document.querySelectorAll('.day-entry-card');
+            const lastCard = cards[cards.length - 1];
+            const lastDateVal = lastCard ? lastCard.querySelector('.record-date-input')?.value : TODAY_ISO;
+            const nextDateIso = findNextAvailablePreviousDate(lastDateVal);
+
+            const newCard = createNewDayCard(nextDateIso);
+            container.appendChild(newCard);
+            renumberCards();
+            updateAllTotalsAndStatuses();
+
+            newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const firstCash = newCard.querySelector('.cash-input');
+            if (firstCash) {
+                setTimeout(() => firstCash.focus(), 250);
+            }
+        });
+    }
+
+    // Detectar qué botón de submit se presionó
+    [submitBtn, submitAndNewBtn].forEach(btn => {
+        if (btn) {
+            btn.addEventListener('click', function() {
+                submitActionInput.value = this.getAttribute('data-action') || 'save';
+            });
+        }
+    });
+
+    form.addEventListener('submit', function() {
+        document.querySelectorAll('input[data-currency="true"]').forEach(input => {
             const numericValue = parseArgentineCurrency(input.value);
             input.value = numericValue.toFixed(2);
         });
-        setTimeout(() => {
-            if (submitBtn.disabled) {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '{{ "Actualizar Registro" if record else "Guardar Registro" }}';
-            }
-        }, 10000);
     });
-    // No permitir fecha editable, así que no buscamos ni manipulamos el dateInput aquí
-    const firstInput = form.querySelector('input:not([type="hidden"]):not([readonly])');
-    if (firstInput) {
-        setTimeout(() => {
-            firstInput.focus();
-        }, 100);
+
+    const firstCashInput = form.querySelector('.cash-input');
+    if (firstCashInput) {
+        setTimeout(() => firstCashInput.focus(), 100);
     }
 });
 </script>

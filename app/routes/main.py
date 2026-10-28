@@ -166,18 +166,26 @@ def branch_dashboard():
     Muestra información específica de la sucursal del usuario.
     """
     try:
+        # ==== FECHA Y HORA EN ARGENTINA ====
+        tz = pytz.timezone('America/Argentina/Buenos_Aires')
+        now_arg = datetime.datetime.now(tz)
+        today = now_arg.date()
+        today_date = today.isoformat()
+        yesterday_date = (today - datetime.timedelta(days=1)).isoformat()
+        # ===================================
+
         # Obtener registros de la sucursal (por branch_name, no por user_id)
         user_records = DailyRecord.query.filter_by(
             branch_name=current_user.branch_name
         ).order_by(
             DailyRecord.record_date.desc()
-        ).limit(10).all()
+        ).limit(15).all()
         
         # Estadísticas del mes actual
-        today = datetime.date.today()
         first_day_month = today.replace(day=1)
         
-        monthly_records = current_user.daily_records.filter(
+        monthly_records = DailyRecord.query.filter(
+            DailyRecord.branch_name == current_user.branch_name,
             DailyRecord.record_date >= first_day_month
         ).all()
         
@@ -194,7 +202,8 @@ def branch_dashboard():
         
         # Últimos 7 días de actividad
         week_ago = today - datetime.timedelta(days=6)
-        weekly_records = current_user.daily_records.filter(
+        weekly_records = DailyRecord.query.filter(
+            DailyRecord.branch_name == current_user.branch_name,
             DailyRecord.record_date >= week_ago,
             DailyRecord.record_date <= today
         ).order_by(DailyRecord.record_date.asc()).all()
@@ -241,13 +250,6 @@ def branch_dashboard():
             'weekly_records': [record.to_dict() for record in weekly_records],
             'cash_info': cash_info  # NUEVO: Información de efectivo disponible
         }
-
-        # ==== AGREGADO PARA LA PLANTILLA: FECHA Y HORA EN ARGENTINA ====
-        tz = pytz.timezone('America/Argentina/Buenos_Aires')
-        now_arg = datetime.datetime.now(tz)
-        today_date = now_arg.date().isoformat()
-        yesterday_date = (now_arg.date() - datetime.timedelta(days=1)).isoformat()
-        # ===============================================================
 
         return render_template(
             'main/branch_dashboard.html',

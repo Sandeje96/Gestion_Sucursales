@@ -219,81 +219,271 @@ def index():
 @login_required
 def create():
     """
-    Crear un nuevo registro diario.
-    CORREGIDO: Conversión adecuada de formato argentino.
+    Crear uno o varios registros diarios (día actual o días anteriores).
+    Permite a las sucursales elegir la fecha de cada registro y cargar múltiples días de una sola vez.
     """
-    form = DailyRecordForm()
+    from app.forms.daily_record_forms import currency_to_decimal
+    from wtforms.validators import ValidationError
 
-    # Siempre fijar la fecha de Argentina para nuevos registros en GET
-    if request.method == 'GET':
-        form.record_date.data = get_today_arg()
-    
-    if form.validate_on_submit():
-        # Convertir record_date a date si es string
-        record_date = form.record_date.data
-        if isinstance(record_date, str):
-            record_date = datetime.datetime.strptime(record_date, "%Y-%m-%d").date()
-        
-        # Verificar que no exista un registro para esta fecha y sucursal
-        existing_record = DailyRecord.get_by_branch_and_date(
-            current_user.branch_name,
-            record_date
-        )
-        
-        if existing_record:
-            flash(
-                f'Ya existe un registro para {current_user.branch_name} '
-                f'en la fecha {record_date.strftime("%d/%m/%Y")}. '
-                'Puedes editarlo desde la lista de registros.',
-                'warning'
-            )
-            return redirect(url_for('daily_records.edit', id=existing_record.id))
-        
+    form = DailyRecordForm()
+    today_arg = get_today_arg()
+    yesterday_arg = get_yesterday_arg()
+    two_days_ago_arg = today_arg - datetime.timedelta(days=2)
+
+    # Obtener registros existentes de la sucursal para informar en la interfaz
+    branch_records = DailyRecord.query.filter_by(
+        branch_name=current_user.branch_name
+    ).order_by(DailyRecord.record_date.desc()).all()
+
+    existing_records_map = {}
+    for r in branch_records:
+        if r.record_date:
+            iso_d = r.record_date.isoformat()
+            existing_records_map[iso_d] = {
+                'id': r.id,
+                'date_formatted': r.record_date.strftime('%d/%m/%Y'),
+                'total_sales': float(r.total_sales or 0),
+                'total_expenses': float(r.total_expenses or 0),
+                'has_sales': float(r.total_sales or 0) > 0,
+                'edit_url': url_for('daily_records.edit', id=r.id)
+            }
+
+    # Determinar fecha inicial sugerida en GET
+    requested_date_str = request.args.get('date', '').strip()
+    default_date = today_arg
+    if requested_date_str:
         try:
-            # CORRECCIÓN: Usar los valores float convertidos del formulario
-            # que ya fueron procesados en form.validate_on_submit()
-            record = DailyRecord(
-                user_id=current_user.id,
-                branch_name=current_user.branch_name,
-                record_date=record_date,
-                cash_sales=form.cash_sales_float,           # Usar valor convertido
-                mercadopago_sales=form.mercadopago_sales_float,  # Usar valor convertido
-                debit_sales=form.debit_sales_float,         # Usar valor convertido
-                credit_sales=form.credit_sales_float,       # Usar valor convertido
-                total_expenses=form.total_expenses_float,   # Usar valor convertido
-                notes=form.notes.data
-            )
-            
-            # El total de ventas se calcula automáticamente en el modelo
-            record.calculate_total_sales()
-            
-            db.session.add(record)
-            db.session.commit()
-            
-            flash(
-                f'Registro del {record.record_date.strftime("%d/%m/%Y")} '
-                f'creado exitosamente. Total de ventas: ${record.total_sales:.2f}',
-                'success'
-            )
-            
-            return redirect(url_for('main.branch_dashboard'))
-            
-        except Exception as e:
-            db.session.rollback()
-            # Agregar más información de debug en el error
-            print(f"ERROR DETALLADO: {str(e)}")
-            print(f"Valores del formulario:")
-            print(f"  - cash_sales_float: {getattr(form, 'cash_sales_float', 'NO DISPONIBLE')}")
-            print(f"  - mercadopago_sales_float: {getattr(form, 'mercadopago_sales_float', 'NO DISPONIBLE')}")
-            print(f"  - debit_sales_float: {getattr(form, 'debit_sales_float', 'NO DISPONIBLE')}")
-            print(f"  - credit_sales_float: {getattr(form, 'credit_sales_float', 'NO DISPONIBLE')}")
-            print(f"  - total_expenses_float: {getattr(form, 'total_expenses_float', 'NO DISPONIBLE')}")
-            flash(f'Error al crear el registro: {str(e)}', 'error')
-    
+            parsed_req = datetime.datetime.strptime(requested_date_str, '%Y-%m-%d').date()
+            if parsed_req <= today_arg:
+                default_date = parsed_req
+        except ValueError:
+            pass
+    else:
+        # Si hoy ya tiene ventas cargadas, sugerir el día más reciente sin ventas cargadas
+        if existing_records_map.get(today_arg.isoformat(), {}).get('has_sales', False):
+            candidate = today_arg - datetime.timedelta(days=1)
+            for _ in range(60):
+                if not existing_records_map.get(candidate.isoformat(), {}).get('has_sales', False):
+                    default_date = candidate
+                    break
+                candidate -= datetime.timedelta(days=1)
+
+    entries = [{
+        'record_date': default_date.isoformat(),
+        'cash_sales': '0,00',
+        'mercadopago_sales': '0,00',
+        'debit_sales': '0,00',
+        'credit_sales': '0,00',
+        'notes': '',
+        'errors': []
+    }]
+
+    if request.method == 'POST':
+        # Validar token CSRF
+        if not form.csrf_token.validate(form):
+            flash('La sesión del formulario expiró. Por favor, intenta nuevamente.', 'error')
+        else:
+            raw_dates = request.form.getlist('record_date')
+            raw_cash = request.form.getlist('cash_sales')
+            raw_mp = request.form.getlist('mercadopago_sales')
+            raw_debit = request.form.getlist('debit_sales')
+            raw_credit = request.form.getlist('credit_sales')
+            raw_notes = request.form.getlist('notes')
+
+            num_entries = len(raw_dates)
+            entries = []
+            validated_items = []
+            seen_dates = set()
+            has_errors = False
+
+            for i in range(num_entries):
+                d_str = (raw_dates[i] if i < len(raw_dates) else '').strip()
+                c_str = (raw_cash[i] if i < len(raw_cash) else '0,00').strip() or '0,00'
+                mp_str = (raw_mp[i] if i < len(raw_mp) else '0,00').strip() or '0,00'
+                deb_str = (raw_debit[i] if i < len(raw_debit) else '0,00').strip() or '0,00'
+                cred_str = (raw_credit[i] if i < len(raw_credit) else '0,00').strip() or '0,00'
+                note_str = (raw_notes[i] if i < len(raw_notes) else '').strip()
+
+                entry_errors = []
+                parsed_date = None
+
+                # 1. Validar fecha
+                if not d_str:
+                    entry_errors.append('La fecha del registro es obligatoria.')
+                else:
+                    try:
+                        parsed_date = datetime.datetime.strptime(d_str, '%Y-%m-%d').date()
+                        if parsed_date > today_arg:
+                            entry_errors.append(
+                                f'La fecha ({parsed_date.strftime("%d/%m/%Y")}) no puede ser futura.'
+                            )
+                        elif parsed_date in seen_dates:
+                            entry_errors.append(
+                                f'La fecha {parsed_date.strftime("%d/%m/%Y")} está repetida más de una vez en el formulario.'
+                            )
+                        else:
+                            seen_dates.add(parsed_date)
+                    except ValueError:
+                        entry_errors.append('Formato de fecha inválido.')
+
+                # 2. Validar montos monetarios
+                cash_val = mp_val = debit_val = credit_val = 0.0
+                try:
+                    cash_val = currency_to_decimal(c_str)
+                except ValidationError as e:
+                    entry_errors.append(f'Efectivo: {e}')
+
+                try:
+                    mp_val = currency_to_decimal(mp_str)
+                except ValidationError as e:
+                    entry_errors.append(f'MercadoPago: {e}')
+
+                try:
+                    debit_val = currency_to_decimal(deb_str)
+                except ValidationError as e:
+                    entry_errors.append(f'Débito: {e}')
+
+                try:
+                    credit_val = currency_to_decimal(cred_str)
+                except ValidationError as e:
+                    entry_errors.append(f'Crédito: {e}')
+
+                day_total_sales = cash_val + mp_val + debit_val + credit_val
+
+                # 3. Verificar existencia en base de datos para esa sucursal y fecha
+                existing_record = None
+                if parsed_date and not entry_errors:
+                    existing_record = DailyRecord.get_by_branch_and_date(
+                        current_user.branch_name,
+                        parsed_date
+                    )
+                    if existing_record and float(existing_record.total_sales or 0) > 0:
+                        if num_entries == 1:
+                            flash(
+                                f'Ya existe un registro para {current_user.branch_name} '
+                                f'en la fecha {parsed_date.strftime("%d/%m/%Y")}. '
+                                'Puedes editarlo a continuación.',
+                                'warning'
+                            )
+                            return redirect(url_for('daily_records.edit', id=existing_record.id))
+                        else:
+                            entry_errors.append(
+                                f'Ya existe un registro cargado para el día {parsed_date.strftime("%d/%m/%Y")} '
+                                f'(Ventas: ${float(existing_record.total_sales):,.2f}). '
+                                'Cambia la fecha o quita este bloque.'
+                            )
+
+                if not entry_errors and day_total_sales <= 0:
+                    if not (existing_record and float(existing_record.total_expenses or 0) > 0):
+                        entry_errors.append('Debe ingresar al menos un monto de venta mayor que cero.')
+
+                if len(note_str) > 500:
+                    entry_errors.append('Las notas no pueden superar los 500 caracteres.')
+
+                if entry_errors:
+                    has_errors = True
+
+                entries.append({
+                    'record_date': d_str,
+                    'cash_sales': c_str,
+                    'mercadopago_sales': mp_str,
+                    'debit_sales': deb_str,
+                    'credit_sales': cred_str,
+                    'notes': note_str,
+                    'errors': entry_errors
+                })
+
+                if not entry_errors and parsed_date:
+                    validated_items.append({
+                        'date': parsed_date,
+                        'cash': cash_val,
+                        'mp': mp_val,
+                        'debit': debit_val,
+                        'credit': credit_val,
+                        'notes': note_str or None,
+                        'existing_record': existing_record
+                    })
+
+            if not has_errors and validated_items:
+                try:
+                    saved_records = []
+                    for item in validated_items:
+                        if item['existing_record'] is not None:
+                            # Registro creado previamente solo por pago de gasto del día (ventas en 0)
+                            rec = item['existing_record']
+                            rec.cash_sales = item['cash']
+                            rec.mercadopago_sales = item['mp']
+                            rec.debit_sales = item['debit']
+                            rec.credit_sales = item['credit']
+                            if item['notes']:
+                                rec.notes = item['notes']
+                            rec.calculate_total_sales()
+                            saved_records.append(rec)
+                        else:
+                            rec = DailyRecord(
+                                user_id=current_user.id,
+                                branch_name=current_user.branch_name,
+                                record_date=item['date'],
+                                cash_sales=item['cash'],
+                                mercadopago_sales=item['mp'],
+                                debit_sales=item['debit'],
+                                credit_sales=item['credit'],
+                                total_expenses=0.0,
+                                notes=item['notes']
+                            )
+                            rec.calculate_total_sales()
+                            db.session.add(rec)
+                            saved_records.append(rec)
+
+                    db.session.commit()
+                    update_trays_from_records()
+
+                    total_batch_sales = sum(float(r.total_sales or 0) for r in saved_records)
+                    formatted_total = f"${total_batch_sales:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+
+                    if len(saved_records) == 1:
+                        r0 = saved_records[0]
+                        flash(
+                            f'Registro del {r0.record_date.strftime("%d/%m/%Y")} '
+                            f'guardado exitosamente. Total de ventas: {formatted_total}',
+                            'success'
+                        )
+                    else:
+                        dates_summary = ', '.join(
+                            r.record_date.strftime('%d/%m/%Y')
+                            for r in sorted(saved_records, key=lambda x: x.record_date)
+                        )
+                        flash(
+                            f'¡Se guardaron {len(saved_records)} días exitosamente ({dates_summary})! '
+                            f'Total de ventas registrado: {formatted_total}',
+                            'success'
+                        )
+
+                    submit_action = request.form.get('submit_action', 'save')
+                    if submit_action == 'save_and_new':
+                        return redirect(url_for('daily_records.create'))
+                    if current_user.is_admin_user():
+                        return redirect(url_for('daily_records.index'))
+                    return redirect(url_for('main.branch_dashboard'))
+
+                except Exception as e:
+                    db.session.rollback()
+                    print(f"ERROR DETALLADO al crear registro(s): {str(e)}")
+                    flash(f'Error al guardar los registros: {str(e)}', 'error')
+            else:
+                flash('Por favor revisa los errores marcados en el formulario.', 'error')
+
+    form.record_date.data = default_date
     return render_template(
         'daily_records/create.html',
-        title='Crear Registro Diario',
-        form=form
+        title='Cargar Registro Diario',
+        form=form,
+        entries=entries,
+        existing_records_map=existing_records_map,
+        today_iso=today_arg.isoformat(),
+        yesterday_iso=yesterday_arg.isoformat(),
+        two_days_ago_iso=two_days_ago_arg.isoformat(),
+        today_formatted=today_arg.strftime('%d/%m/%Y')
     )
 
 
@@ -302,7 +492,7 @@ def create():
 def edit(id):
     """
     Editar un registro diario existente.
-    CORREGIDO: Conversión adecuada de formato argentino.
+    CORREGIDO: Conversión adecuada de formato argentino y posibilidad de corregir la fecha.
     """
     record = DailyRecord.query.get_or_404(id)
     
@@ -311,10 +501,10 @@ def edit(id):
         abort(403)
     
     form = DailyRecordForm(obj=record)
+    today_arg = get_today_arg()
     
     # En GET, formatear los valores para mostrar en formato argentino
     if request.method == 'GET':
-        # Formatear los valores monetarios para el formulario
         form.cash_sales.data = f"{float(record.cash_sales or 0):.2f}".replace('.', ',')
         form.mercadopago_sales.data = f"{float(record.mercadopago_sales or 0):.2f}".replace('.', ',')
         form.debit_sales.data = f"{float(record.debit_sales or 0):.2f}".replace('.', ',')
@@ -323,19 +513,50 @@ def edit(id):
     
     if form.validate_on_submit():
         try:
-            # CORRECCIÓN: Usar los valores float convertidos del formulario
-            record.record_date = form.record_date.data
-            record.cash_sales = form.cash_sales_float           # Usar valor convertido
-            record.mercadopago_sales = form.mercadopago_sales_float  # Usar valor convertido
-            record.debit_sales = form.debit_sales_float         # Usar valor convertido
-            record.credit_sales = form.credit_sales_float       # Usar valor convertido
-            record.total_expenses = form.total_expenses_float   # Usar valor convertido
+            new_date = form.record_date.data
+            if isinstance(new_date, str):
+                new_date = datetime.datetime.strptime(new_date, "%Y-%m-%d").date()
+
+            if new_date > today_arg:
+                flash('La fecha del registro no puede ser futura.', 'error')
+                return render_template(
+                    'daily_records/edit.html',
+                    title='Editar Registro Diario',
+                    form=form,
+                    record=record,
+                    today_iso=today_arg.isoformat()
+                )
+
+            # Si cambió la fecha, verificar que no colisione con otro registro de la misma sucursal
+            if new_date != record.record_date:
+                collision = DailyRecord.get_by_branch_and_date(record.branch_name, new_date)
+                if collision and collision.id != record.id:
+                    flash(
+                        f'Ya existe otro registro de {record.branch_name} en la fecha '
+                        f'{new_date.strftime("%d/%m/%Y")}.',
+                        'error'
+                    )
+                    return render_template(
+                        'daily_records/edit.html',
+                        title='Editar Registro Diario',
+                        form=form,
+                        record=record,
+                        today_iso=today_arg.isoformat()
+                    )
+
+            record.record_date = new_date
+            record.cash_sales = form.cash_sales_float
+            record.mercadopago_sales = form.mercadopago_sales_float
+            record.debit_sales = form.debit_sales_float
+            record.credit_sales = form.credit_sales_float
+            record.total_expenses = form.total_expenses_float
             record.notes = form.notes.data
             
             # Recalcular total
             record.calculate_total_sales()
             
             db.session.commit()
+            update_trays_from_records()
             
             flash(
                 f'Registro del {record.record_date.strftime("%d/%m/%Y")} '
@@ -343,18 +564,18 @@ def edit(id):
                 'success'
             )
             
+            if current_user.is_branch_user():
+                return redirect(url_for('main.branch_dashboard'))
             return redirect(url_for('daily_records.index'))
             
         except Exception as e:
             db.session.rollback()
-            # Agregar más información de debug en el error
             print(f"ERROR DETALLADO al editar: {str(e)}")
             flash(f'Error al actualizar el registro: {str(e)}', 'error')
     else:
         if request.method == 'POST':
             print("❌ El formulario NO pasó la validación.")
             print(f"Errores del formulario: {form.errors}")
-            # Mostrar errores al usuario en la interfaz para depurar
             for field, errors in form.errors.items():
                 for error in errors:
                     flash(f'Error en campo {getattr(form, field).label.text if hasattr(form, field) else field}: {error}', 'error')
@@ -366,7 +587,8 @@ def edit(id):
         'daily_records/edit.html',
         title='Editar Registro Diario',
         form=form,
-        record=record
+        record=record,
+        today_iso=today_arg.isoformat()
     )
 
 @daily_records_bp.route('/view/<int:id>')
@@ -403,6 +625,7 @@ def delete(id):
     try:
         db.session.delete(record)
         db.session.commit()
+        update_trays_from_records()
         
         flash(
             f'Registro del {record.record_date.strftime("%d/%m/%Y")} '
@@ -1089,8 +1312,8 @@ def get_accumulated_dashboard_data():
             
             # Aplicar filtros de permisos
             if not current_user.is_admin_user():
-                query = query.filter(DailyRecord.user_id == current_user.id)
-                print(f"👤 [DEBUG] Filtrado por usuario: {current_user.branch_name}")
+                query = query.filter(DailyRecord.branch_name == current_user.branch_name)
+                print(f"👤 [DEBUG] Filtrado por sucursal: {current_user.branch_name}")
             
             # Obtener registros disponibles
             all_available_records = query.all()

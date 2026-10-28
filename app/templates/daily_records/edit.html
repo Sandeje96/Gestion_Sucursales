@@ -178,13 +178,15 @@
                     <div class="row">
                         <div class="col-md-6">
                             {{ form.record_date.label(class="form-label") }}
-                            {{ form.record_date(type="hidden") }}
-                            <div class="form-control-plaintext fw-bold">
-                                {{ record.record_date.strftime('%d/%m/%Y') }}
-                            </div>
+                            {{ form.record_date(class="form-control", type="date", max=today_iso) }}
+                            {% if form.record_date.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.record_date.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% endif %}
                             <div class="form-text">
                                 <i class="fas fa-info-circle me-1"></i>
-                                La fecha del registro no es editable
+                                Fecha correspondiente a la venta registrada
                             </div>
                         </div>
                     </div>

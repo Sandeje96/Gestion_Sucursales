@@ -169,16 +169,24 @@ class User(UserMixin, db.Model):
     def can_edit_record_within_days(self, daily_record, days=7):
         """
         Verifica si el registro está dentro del límite de días permitidos para editar.
+        Permite editar si la fecha del registro o su fecha de carga está dentro de los últimos `days` días.
 
         Args:
             daily_record: Instancia de DailyRecord
             days (int): Cantidad de días hacia atrás permitidos (default 7)
 
         Returns:
-            bool: True si la fecha del registro está dentro del límite
+            bool: True si la fecha del registro o de creación está dentro del límite
         """
-        limit_date = datetime.date.today() - datetime.timedelta(days=days)
-        return daily_record.record_date >= limit_date
+        import pytz
+        tz_arg = pytz.timezone('America/Argentina/Buenos_Aires')
+        today_arg = datetime.datetime.now(tz_arg).date()
+        limit_date = today_arg - datetime.timedelta(days=days)
+        if daily_record.record_date and daily_record.record_date >= limit_date:
+            return True
+        if daily_record.created_at and daily_record.created_at.date() >= limit_date:
+            return True
+        return False
 
     def is_admin_user(self):
         """

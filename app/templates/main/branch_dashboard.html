@@ -208,13 +208,13 @@
                 </div>
                 <div class="card-body">
                     <div class="row g-3 centrar">
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <a href="{{ url_for('daily_records.create') }}" 
                                class="quick-action-btn btn btn-primary h-100 d-flex align-items-center">
                                 <div class="text-center w-100">
-                                    <i class="fas fa-plus fa-2x mb-2"></i>
-                                    <div class="fw-bold">Cargar Nuevo Registro Diario</div>
-                                    <small class="opacity-75">Ingresa las ventas y gastos del día. Es importante mantener actualizada la información diaria.</small>
+                                    <i class="fas fa-calendar-plus fa-2x mb-2"></i>
+                                    <div class="fw-bold">Cargar Ventas (Hoy o Días Anteriores)</div>
+                                    <small class="opacity-75">Elige la fecha a cargar o registra varios días pendientes de una sola vez.</small>
                                 </div>
                             </a>
                         </div>
@@ -225,13 +225,13 @@
     </div>
 
     {% if stats and stats.recent_records %}
-    <!-- Registros recientes: últimos 7 días con opción de editar -->
+    <!-- Registros recientes con opción de editar -->
     <div class="row">
         <div class="col-12">
             <div class="card dashboard-card">
                 <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
                     <h6 class="mb-0">
-                        <i class="fas fa-list me-2"></i>Registros Recientes (últimos 7 días)
+                        <i class="fas fa-list me-2"></i>Registros Cargados Recientemente
                     </h6>
                     <a href="{{ url_for('daily_records.index') }}" class="btn btn-outline-secondary btn-sm">
                         <i class="fas fa-history me-1"></i>Ver todos

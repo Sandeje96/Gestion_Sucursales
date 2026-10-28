@@ -211,8 +211,12 @@ class DailyRecord(db.Model):
         Raises:
             ValueError: Si la fecha es futura
         """
-        if value and value > datetime.date.today():
-            raise ValueError('La fecha del registro no puede ser futura')
+        if value:
+            import pytz
+            tz_arg = pytz.timezone('America/Argentina/Buenos_Aires')
+            today_arg = datetime.datetime.now(tz_arg).date()
+            if value > today_arg:
+                raise ValueError('La fecha del registro no puede ser futura')
         return value
     
     def calculate_total_sales(self):

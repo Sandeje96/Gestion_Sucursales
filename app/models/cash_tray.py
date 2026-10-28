@@ -271,7 +271,11 @@ def update_cash_trays_on_commit(session):
             # Esto es más complejo porque necesitamos los valores anteriores
             # Por simplicidad, recalcularemos la bandeja específica
             tray = CashTray.get_or_create_for_branch(obj.branch_name)
-            tray.empty_tray()
+            tray.accumulated_cash = 0.00
+            tray.accumulated_mercadopago = 0.00
+            tray.accumulated_debit = 0.00
+            tray.accumulated_credit = 0.00
+            tray.accumulated_cash_expenses = 0.00
             
             # Recalcular basándose en todos los registros NO retirados de esa sucursal
             records = DailyRecord.query.filter_by(
