@@ -176,9 +176,14 @@
                                         <h1 class="display-3 text-success mb-2" id="efectivoDisponible" style="font-weight: bold;">
                                             $0,00
                                         </h1>
+                                        <p class="mb-2" id="efectivoDesglose" style="display: none;">
+                                            <span class="text-success">Ventas en efectivo: <strong id="efectivoVentas">$0,00</strong></span>
+                                            <span class="mx-2 text-muted">&minus;</span>
+                                            <span class="text-danger">Gastos: <strong id="efectivoGastos">$0,00</strong></span>
+                                        </p>
                                         <p class="text-muted mb-0">
                                             <i class="fas fa-info-circle me-1"></i>
-                                            Esta es la cantidad de dinero en efectivo que debe estar físicamente en tu caja
+                                            Esta es la cantidad de dinero en efectivo que debe estar físicamente en tu caja (ya descontados los gastos)
                                         </p>
                                     </div>
                                 </div>
@@ -245,6 +250,7 @@
                                     <th>Fecha</th>
                                     <th>Ventas</th>
                                     <th>Gastos</th>
+                                    <th title="Efectivo del día menos gastos del día">Efectivo neto</th>
                                     <th>Ganancia</th>
                                     <th>Estado</th>
                                     <th width="100">Acciones</th>
@@ -261,6 +267,13 @@
                                     </td>
                                     <td>
                                         <span class="text-danger">${{ "{:,.2f}".format(record.total_expenses or 0).replace(",", "X").replace(".", ",").replace("X", ".") }}</span>
+                                    </td>
+                                    <td>
+                                        {% set net_cash = record.get_net_cash() %}
+                                        <strong class="{{ 'text-success' if net_cash >= 0 else 'text-danger' }}"
+                                                title="Efectivo ${{ '{:,.2f}'.format(record.cash_sales or 0) }} - Gastos ${{ '{:,.2f}'.format(record.total_expenses or 0) }}">
+                                            ${{ "{:,.2f}".format(net_cash).replace(",", "X").replace(".", ",").replace("X", ".") }}
+                                        </strong>
                                     </td>
                                     <td>
                                         {% set net = (record.total_sales or 0) - (record.total_expenses or 0) %}
@@ -316,7 +329,7 @@ function formatCurrencyArgentino(value) {
     if (value === null || value === undefined) return '0,00';
     const num = parseFloat(value);
     if (isNaN(num)) return '0,00';
-    return num.toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&.').replace('.', ',').replace(/,(\d{2})$/, ',$1');
+    return new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
 }
 
 // Cargar información de efectivo desde el API (MISMO QUE USA EL ADMIN)
@@ -343,7 +356,12 @@ async function loadCashInfo() {
                 console.log('✅ Bandeja encontrada:', myTray);
                 
                 // Calcular efectivo disponible (IGUAL QUE EL ADMIN)
-                const availableCash = myTray.available_cash || (myTray.accumulated_cash - (myTray.accumulated_cash_expenses || 0));
+                const cashSales = parseFloat(myTray.accumulated_cash || 0);
+                const cashExpenses = parseFloat(myTray.accumulated_cash_expenses || 0);
+                const availableCash = cashSales - cashExpenses;
+                document.getElementById('efectivoVentas').textContent = '$' + formatCurrencyArgentino(cashSales);
+                document.getElementById('efectivoGastos').textContent = '$' + formatCurrencyArgentino(cashExpenses);
+                document.getElementById('efectivoDesglose').style.display = 'block';
                 
                 console.log('💵 Efectivo disponible:', availableCash);
                 console.log('   - Ventas efectivo:', myTray.accumulated_cash);

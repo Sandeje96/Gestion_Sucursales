@@ -242,6 +242,16 @@ class DailyRecord(db.Model):
             float: Monto neto del día
         """
         return float(self.total_sales) - float(self.total_expenses)
+
+    def get_net_cash(self):
+        """
+        Efectivo neto del día: ventas en efectivo menos los gastos del día
+        (los gastos se pagan con el efectivo de la caja).
+
+        Returns:
+            float: Efectivo que queda en caja por este día
+        """
+        return float(self.cash_sales or 0) - float(self.total_expenses or 0)
     
     def get_payment_breakdown(self):
         """

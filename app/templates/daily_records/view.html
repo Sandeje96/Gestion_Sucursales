@@ -188,6 +188,22 @@
                                         ${{ "{:,.2f}".format(record.total_sales).replace(",", "X").replace(".", ",").replace("X", ".") }}
                                     </div>
                                 </div>
+                                {% set net_cash = record.get_net_cash() %}
+                                <div class="payment-item mt-2" style="background: rgba(16,185,129,0.08); border-radius: 8px;">
+                                    <div>
+                                        <div class="fw-bold">
+                                            <i class="fas fa-cash-register me-2 text-success"></i>
+                                            Efectivo neto en caja
+                                        </div>
+                                        <small class="text-muted">
+                                            Efectivo ${{ "{:,.2f}".format(record.cash_sales|float).replace(",", "X").replace(".", ",").replace("X", ".") }}
+                                            &minus; Gastos ${{ "{:,.2f}".format(record.total_expenses|float).replace(",", "X").replace(".", ",").replace("X", ".") }}
+                                        </small>
+                                    </div>
+                                    <div class="fw-bold fs-5 {{ 'text-success' if net_cash >= 0 else 'text-danger' }}">
+                                        ${{ "{:,.2f}".format(net_cash).replace(",", "X").replace(".", ",").replace("X", ".") }}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

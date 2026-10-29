@@ -635,7 +635,7 @@
                                     <th>Sucursal</th>
                                     {% endif %}
                                     <th>Ventas Totales</th>
-                                    <th>Efectivo</th>
+                                    <th title="Efectivo del día menos gastos del día">Efectivo neto</th>
                                     <th>MercadoPago</th>
                                     <th>Débito</th>
                                     <th>Crédito</th>
@@ -1115,7 +1115,10 @@ function updateRecordsTable(records) {
                 <td><strong>${record.date}</strong></td>
                 ${hasBranchColumn ? `<td><span class="badge bg-info">${record.branch_name}</span></td>` : ''}
                 <td class="text-success fw-bold">$${formatCurrencyArgentino(record.total_sales)}</td>
-                <td>$${formatCurrencyArgentino(record.cash_sales)}</td>
+                <td title="Efectivo $${formatCurrencyArgentino(record.cash_sales)} - Gastos $${formatCurrencyArgentino(record.total_expenses)}">
+                    <strong>$${formatCurrencyArgentino((record.cash_sales || 0) - (record.total_expenses || 0))}</strong>
+                    ${(record.total_expenses || 0) > 0 ? `<br><small class="text-muted">bruto $${formatCurrencyArgentino(record.cash_sales)}</small>` : ''}
+                </td>
                 <td>$${formatCurrencyArgentino(record.mercadopago_sales)}</td>
                 <td>$${formatCurrencyArgentino(record.debit_sales)}</td>
                 <td>$${formatCurrencyArgentino(record.credit_sales)}</td>

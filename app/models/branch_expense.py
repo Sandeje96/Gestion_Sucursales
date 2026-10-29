@@ -93,7 +93,8 @@ class BranchExpense(db.Model):
         if user_id:
             user = User.query.get(user_id)
             if user and getattr(user, 'is_branch_user', lambda: False)() and user.branch_name == self.branch_name:
-                today = date.today()
+                import pytz
+                today = datetime.datetime.now(pytz.timezone('America/Argentina/Buenos_Aires')).date()
 
                 # Buscar/crear el registro diario por (sucursal, fecha) — NO filtrar por user_id
                 daily_record = DailyRecord.get_by_branch_and_date(self.branch_name, today)
