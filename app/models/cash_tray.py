@@ -86,14 +86,14 @@ class CashTray(db.Model):
         """Obtener el total acumulado en la bandeja."""
         return float(
             (self.get_available_cash() or 0) +
-            (self.accumulated_mercadopago or 0) +
-            (self.accumulated_debit or 0) +
-            (self.accumulated_credit or 0)
+            float(self.accumulated_mercadopago or 0) +
+            float(self.accumulated_debit or 0) +
+            float(self.accumulated_credit or 0)
         )
 
     def get_available_cash(self):
         """Obtener el efectivo disponible (ventas en efectivo - gastos en efectivo)."""
-        return float((self.accumulated_cash or 0) - (self.accumulated_cash_expenses or 0))
+        return float(self.accumulated_cash or 0) - float(self.accumulated_cash_expenses or 0)
     
     def add_amounts(self, cash=0, mercadopago=0, debit=0, credit=0):
         """Agregar montos a la bandeja."""
