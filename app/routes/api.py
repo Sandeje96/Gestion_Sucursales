@@ -7,6 +7,7 @@ from flask import Blueprint, request, jsonify
 from datetime import datetime, date
 import os
 from app.models.daily_record import DailyRecord
+from app.models.branch_expense import BranchExpense
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -47,14 +48,14 @@ def finanzas_resumen():
     if desde > hasta:
         desde, hasta = hasta, desde
 
-    # ── Consulta a DailyRecord ──
+    # 1. ── Consulta a DailyRecord (Ventas y Gastos diarios de caja chica) ──
     records = DailyRecord.query.filter(
         DailyRecord.record_date >= desde,
         DailyRecord.record_date <= hasta
     ).all()
 
     total_ventas = sum(float(r.total_sales or 0) for r in records)
-    total_gastos = sum(float(r.total_expenses or 0) for r in records)
+    total_gastos_caja = sum(float(r.total_expenses or 0) for r in records)
     ventas_efectivo = sum(float(r.cash_sales or 0) for r in records)
     ventas_mp = sum(float(r.mercadopago_sales or 0) for r in records)
     ventas_debito = sum(float(r.debit_sales or 0) for r in records)
@@ -67,15 +68,67 @@ def finanzas_resumen():
             sucursales_dict[b_name] = {
                 'sucursal': b_name,
                 'ventas': 0.0,
+                'gastos_caja': 0.0,
+                'gastos_fijos': 0.0,
                 'gastos': 0.0,
                 'registros': 0
             }
         sucursales_dict[b_name]['ventas'] += float(r.total_sales or 0)
-        sucursales_dict[b_name]['gastos'] += float(r.total_expenses or 0)
+        sucursales_dict[b_name]['gastos_caja'] += float(r.total_expenses or 0)
         sucursales_dict[b_name]['registros'] += 1
 
-    # Ordenar por ventas descendente
+    # 2. ── Consulta a BranchExpense (Gastos fijos: Alquiler, Luz, Agua, etc.) ──
+    # Excluimos categoría 'SUELDO' para evitar duplicar con mundolimp-web
+    gastos_fijos_query = BranchExpense.query.filter(
+        BranchExpense.category != 'SUELDO'
+    ).all()
+
+    gastos_fijos_periodo = []
+    desde_periodo_num = desde.year * 100 + desde.month
+    hasta_periodo_num = hasta.year * 100 + hasta.month
+
+    for exp in gastos_fijos_query:
+        if not exp.is_paid:
+            continue
+
+        exp_fecha = exp.paid_at.date() if exp.paid_at else None
+        incluir = False
+        if exp_fecha:
+            if desde <= exp_fecha <= hasta:
+                incluir = True
+        else:
+            exp_periodo = exp.year * 100 + exp.month
+            if desde_periodo_num <= exp_periodo <= hasta_periodo_num:
+                incluir = True
+
+        if incluir:
+            gastos_fijos_periodo.append(exp)
+            b_name = (exp.branch_name or 'Sin Nombre').strip().title()
+            if b_name not in sucursales_dict:
+                sucursales_dict[b_name] = {
+                    'sucursal': b_name,
+                    'ventas': 0.0,
+                    'gastos_caja': 0.0,
+                    'gastos_fijos': 0.0,
+                    'gastos': 0.0,
+                    'registros': 0
+                }
+            sucursales_dict[b_name]['gastos_fijos'] += float(exp.amount or 0)
+
+    total_gastos_fijos = sum(float(e.amount or 0) for e in gastos_fijos_periodo)
+    total_gastos = total_gastos_caja + total_gastos_fijos
+
+    # Calcular total gastos por sucursal
+    for b_data in sucursales_dict.values():
+        b_data['gastos'] = b_data['gastos_caja'] + b_data['gastos_fijos']
+
     detalle_por_sucursal = sorted(sucursales_dict.values(), key=lambda x: x['ventas'], reverse=True)
+
+    # Detalle de gastos fijos por categoría
+    gastos_fijos_por_categoria = {}
+    for e in gastos_fijos_periodo:
+        cat = e.category
+        gastos_fijos_por_categoria[cat] = gastos_fijos_por_categoria.get(cat, 0.0) + float(e.amount or 0)
 
     return jsonify({
         'success': True,
@@ -83,6 +136,9 @@ def finanzas_resumen():
         'hasta': hasta.isoformat(),
         'total_ventas': total_ventas,
         'total_gastos': total_gastos,
+        'total_gastos_caja': total_gastos_caja,
+        'total_gastos_fijos': total_gastos_fijos,
+        'gastos_fijos_por_categoria': gastos_fijos_por_categoria,
         'desglose_pagos': {
             'efectivo': ventas_efectivo,
             'mercadopago': ventas_mp,
@@ -90,5 +146,6 @@ def finanzas_resumen():
             'credito': ventas_credito
         },
         'detalle_por_sucursal': detalle_por_sucursal,
-        'total_registros': len(records)
+        'total_registros': len(records),
+        'total_gastos_fijos_items': len(gastos_fijos_periodo)
     })
