@@ -79,6 +79,10 @@ def create_app(config_name=None):
     from app.routes.reports import reports_bp
     app.register_blueprint(reports_bp, url_prefix='/reports')
 
+    from app.routes.api import api_bp
+    app.register_blueprint(api_bp)
+    csrf.exempt(api_bp)
+
     # Filtros personalizados
     register_template_filters(app)
 
