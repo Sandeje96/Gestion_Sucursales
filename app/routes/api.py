@@ -48,14 +48,14 @@ def finanzas_resumen():
     if desde > hasta:
         desde, hasta = hasta, desde
 
-    # 1. ── Consulta a DailyRecord (Ventas y Gastos diarios de caja chica) ──
+    # 1. ── Consulta a DailyRecord (Ventas y Gastos diarios de sucursales) ──
     records = DailyRecord.query.filter(
         DailyRecord.record_date >= desde,
         DailyRecord.record_date <= hasta
     ).all()
 
     total_ventas = sum(float(r.total_sales or 0) for r in records)
-    total_gastos_caja = sum(float(r.total_expenses or 0) for r in records)
+    total_gastos = sum(float(r.total_expenses or 0) for r in records)
     ventas_efectivo = sum(float(r.cash_sales or 0) for r in records)
     ventas_mp = sum(float(r.mercadopago_sales or 0) for r in records)
     ventas_debito = sum(float(r.debit_sales or 0) for r in records)
@@ -68,17 +68,16 @@ def finanzas_resumen():
             sucursales_dict[b_name] = {
                 'sucursal': b_name,
                 'ventas': 0.0,
-                'gastos_caja': 0.0,
-                'gastos_fijos': 0.0,
                 'gastos': 0.0,
                 'registros': 0
             }
         sucursales_dict[b_name]['ventas'] += float(r.total_sales or 0)
-        sucursales_dict[b_name]['gastos_caja'] += float(r.total_expenses or 0)
+        sucursales_dict[b_name]['gastos'] += float(r.total_expenses or 0)
         sucursales_dict[b_name]['registros'] += 1
 
-    # 2. ── Consulta a BranchExpense (Gastos fijos: Alquiler, Luz, Agua, etc.) ──
-    # Excluimos categoría 'SUELDO' para evitar duplicar con mundolimp-web
+    # 2. ── Detalle informativo de categorías en BranchExpense (excluyendo 'SUELDO') ──
+    # Nota: Los gastos de sucursales se registran en DailyRecord.total_expenses.
+    # BranchExpense brinda el desglose por rubro/categoría (Alquiler, Luz, etc.) sin sumarse doble.
     gastos_fijos_query = BranchExpense.query.filter(
         BranchExpense.category != 'SUELDO'
     ).all()
@@ -103,28 +102,10 @@ def finanzas_resumen():
 
         if incluir:
             gastos_fijos_periodo.append(exp)
-            b_name = (exp.branch_name or 'Sin Nombre').strip().title()
-            if b_name not in sucursales_dict:
-                sucursales_dict[b_name] = {
-                    'sucursal': b_name,
-                    'ventas': 0.0,
-                    'gastos_caja': 0.0,
-                    'gastos_fijos': 0.0,
-                    'gastos': 0.0,
-                    'registros': 0
-                }
-            sucursales_dict[b_name]['gastos_fijos'] += float(exp.amount or 0)
-
-    total_gastos_fijos = sum(float(e.amount or 0) for e in gastos_fijos_periodo)
-    total_gastos = total_gastos_caja + total_gastos_fijos
-
-    # Calcular total gastos por sucursal
-    for b_data in sucursales_dict.values():
-        b_data['gastos'] = b_data['gastos_caja'] + b_data['gastos_fijos']
 
     detalle_por_sucursal = sorted(sucursales_dict.values(), key=lambda x: x['ventas'], reverse=True)
 
-    # Detalle de gastos fijos por categoría
+    # Detalle informativo de categorías
     gastos_fijos_por_categoria = {}
     for e in gastos_fijos_periodo:
         cat = e.category
@@ -136,8 +117,6 @@ def finanzas_resumen():
         'hasta': hasta.isoformat(),
         'total_ventas': total_ventas,
         'total_gastos': total_gastos,
-        'total_gastos_caja': total_gastos_caja,
-        'total_gastos_fijos': total_gastos_fijos,
         'gastos_fijos_por_categoria': gastos_fijos_por_categoria,
         'desglose_pagos': {
             'efectivo': ventas_efectivo,
